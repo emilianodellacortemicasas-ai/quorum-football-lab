@@ -86,3 +86,9 @@ html,body{min-height:100%}
 body{background-attachment:fixed}
 .breadcrumb:before{content:'';background:#0e1b15 url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%20fill%3D%22none%22%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%2219%22%20stroke%3D%22%23C8F25A%22%20stroke-width%3D%225%22%20fill%3D%22none%22/%3E%3Cpath%20d%3D%22M11%2030h38%22%20stroke%3D%22%23C8F25A%22%20stroke-width%3D%221.6%22%20stroke-opacity%3D%22.45%22/%3E%3Ccircle%20cx%3D%2230%22%20cy%3D%2230%22%20r%3D%224.2%22%20fill%3D%22%23C8F25A%22/%3E%3Cpath%20d%3D%22M40%2040%20L51%2051%22%20stroke%3D%22%23C8F25A%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22/%3E%3Ccircle%20cx%3D%2256.5%22%20cy%3D%2256.5%22%20r%3D%222.6%22%20fill%3D%22%23C8F25A%22%20fill-opacity%3D%22.55%22/%3E%3C/svg%3E") center/20px no-repeat;box-shadow:inset 0 0 0 1px #c8f25a33}
 .club{background:color-mix(in srgb,var(--club) 26%,#0b1611);border-color:color-mix(in srgb,var(--club) 55%,#0b1611);color:color-mix(in srgb,var(--club) 45%,#ffffff);box-shadow:inset 0 0 0 3px #0b1611,0 8px 20px -10px var(--club)}
+@media(max-width:760px){
+.breadcrumb{gap:10px}
+.breadcrumb>strong{display:flex;flex-direction:column;line-height:1.15;font-size:11px;font-weight:500;color:#8fa498;letter-spacing:.2px}
+.breadcrumb>strong:before{content:'QUORUM';font-family:Manrope,var(--font);font-size:16px;font-weight:800;letter-spacing:2.5px;color:#eef7ea}
+.breadcrumb:before{width:34px;height:34px;background-size:24px}
+}
