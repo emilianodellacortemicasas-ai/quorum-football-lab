@@ -124,3 +124,10 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Quota di chiusura (CLV) in Risultati: quota alla prima proposta vs ultima quota prima del via.
 - Quote italiane (Lottomatica/Planetwin365): The Odds API non le copre. Opzioni trovate: odds-api.io (Solo $65/mese, 2 bookmaker; Lottomatica IT e Planetwin365 IT nell'elenco ADM), OddsPapi (free 250 richieste/mese, 350+ bookmaker, piani a pagamento da verificare), Sportmonks Premium Odds (Planetwin365 sì, Lottomatica no). Planetwin365 appartiene a Lottomatica dal 2024. In attesa di decisione di Emiliano.
 - Link con schedina precompilata sui bookmaker: non realizzabile (nessuna API pubblica di Lottomatica/Planetwin365 per login o schedina da terzi).
+
+## 20/11/2026 — Quote italiane e affidabilità misurata
+- OddsPapi (free, 250 req/mese): Lottomatica = Planetwin365 (stesse quote). Mercati 101/104/108/1010/1012. Max 5 tornei per chiamata: leghe ogni 12h, Coppa Italia ogni 24h (~190 req/mese). Nomi squadre da /participants (cache 7 giorni).
+- Valore, Pronostici e Schedine usano la quota italiana quando c'è; puntata calcolata su quella.
+- Calibrazione misurata (lib/calibration.ts): backtest walk-forward su 5.071 esiti (1X2, Over/Under, GG/NG), fasce 5 pt, shrinkage 40, monotona. Applicata al modello prima del blend; dopo il blend correzione con gli esiti reali chiusi (si attiva da sola man mano).
+- Backtest automatico ogni 7 giorni nel cron (limits.cpu_ms 300000).
+- Schedine: "Affidabilità misurata" con intervallo, al massimo metà esiti Over/Under quando esistono alternative, top 2 esiti per partita nei pool.
