@@ -15,15 +15,28 @@ const { d1, r2 } = hostingConfig;
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const managedLinux = readExecutionProfile() === "managed-linux";
 
+// QUORUM standalone deploy (own Cloudflare account). Values come from the build environment:
+// QUORUM_WORKER_NAME, QUORUM_D1_NAME, QUORUM_D1_ID, QUORUM_PLACEMENT_REGION. Without them the
+// local placeholder is used, exactly as before.
+const quorumD1Id = process.env.QUORUM_D1_ID;
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
+  ...(quorumD1Id
+    ? {
+        name: process.env.QUORUM_WORKER_NAME || "quorum-football-lab",
+        // Pin execution to the EU so OpenAI never sees requests from an unsupported region.
+        placement: { mode: "targeted" as const, region: process.env.QUORUM_PLACEMENT_REGION || "aws:eu-central-1" },
+        workers_dev: true,
+        observability: { enabled: true },
+      }
+    : {}),
   d1_databases: d1
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          database_name: quorumD1Id ? process.env.QUORUM_D1_NAME || "quorum-football-lab-db" : "site-creator-d1",
+          database_id: quorumD1Id || SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
         },
       ]
     : [],

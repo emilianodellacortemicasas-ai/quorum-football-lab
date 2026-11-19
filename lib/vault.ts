@@ -10,11 +10,8 @@ export function vaultPublicConfiguration(){
   if(!e.QUORUM_KEY_PRIVATE_JWK||!e.QUORUM_KEY_PUBLIC_JWK||!e.QUORUM_KEY_RECIPIENT_ID)return null;
   try{const p=JSON.parse(e.QUORUM_KEY_PUBLIC_JWK);return {recipientId:e.QUORUM_KEY_RECIPIENT_ID,publicKey:{kty:p.kty,n:p.n,e:p.e}};}catch{return null;}
 }
-export function isSetupAdmin(request:Request){
-  const expected=runtime().QUORUM_ADMIN_EMAIL;
-  return Boolean(expected&&request.headers.get('oai-authenticated-user-id')&&request.headers.get('oai-authenticated-user-email')?.toLowerCase()===expected.toLowerCase());
-}
-export const reportModel=()=>runtime().OPENAI_MODEL||'gpt-6.2-sol';
+// gpt-6.2-sol (previous default) is not in OpenAI's public catalog as of Nov 2026. The diagnosis confirms availability per project.
+export const reportModel=()=>runtime().OPENAI_MODEL||'gpt-6.1-sol';
 export async function credentialExists(provider:CredentialProvider){
   const e=runtime(),legacy=provider==='openai'?e.OPENAI_API_KEY:provider==='api-football'?e.API_FOOTBALL_KEY:provider==='sportmonks'?e.SPORTMONKS_API_KEY:e.ODDS_API_KEY;
   if(legacy)return true;

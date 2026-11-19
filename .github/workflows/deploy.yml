@@ -1,0 +1,30 @@
+name: Deploy QUORUM
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+concurrency: { group: deploy, cancel-in-progress: false }
+permissions: { contents: read }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.13.0, cache: npm }
+      - run: npm run install:ci
+      - run: node node_modules/typescript/bin/tsc --noEmit
+      - run: node --experimental-strip-types --test tests/math.test.mjs tests/key-crypto.test.mjs tests/providers.test.mjs tests/identity.test.mjs
+      - name: Deploy
+        if: env.HAS_CF == 'true'
+        run: bash scripts/quorum-deploy.sh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QUORUM_ADMIN_EMAIL: ${{ secrets.QUORUM_ADMIN_EMAIL }}
+          QUORUM_ALLOWED_EMAILS: ${{ secrets.QUORUM_ALLOWED_EMAILS }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ secrets.CF_ACCESS_TEAM_DOMAIN }}
+          CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}

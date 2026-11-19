@@ -4,10 +4,11 @@ import { getLiveMatch } from '../../../lib/provider';
 import { credentialValue, reportModel, reserveOperation } from '../../../lib/vault';
 import { reportFacts, reportInput, reportInstructions, reportJsonSchema, reportOutput } from '../../../lib/report-contract';
 import { openAiFailure } from '../../../lib/openai-errors';
+import { getIdentity } from '../../../lib/identity';
 
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function POST(request:Request){
-  if(!request.headers.get('oai-authenticated-user-id'))return reply({error:'Accedi al tuo spazio per usare l’analista AI.'},401);
+  if(!await getIdentity(request))return reply({error:'Accedi al tuo spazio per usare l’analista AI.'},401);
   if(request.headers.get('origin')!==new URL(request.url).origin)return reply({error:'Origine della richiesta non valida.'},403);
   try{
     const text=await request.text();if(text.length>2000)return reply({error:'Richiesta troppo grande.'},413);
