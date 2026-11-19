@@ -107,7 +107,8 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     // Best Italian price for a market, with edge and quarter Kelly (cap 2%) against QUORUM's probability.
     const itBest = (fx: ItalianFixture | null, key: string, p: number) => {
       const q = fx?.quotes[key]; if (!q) return null;
-      const [book, v] = Object.entries(q).sort((a, b) => b[1].odds - a[1].odds)[0];
+      const sorted = Object.entries(q).sort((a, b) => b[1].odds - a[1].odds), v = sorted[0][1];
+      const book = sorted.filter(x => x[1].odds === v.odds).map(x => x[0]).join(' = ');
       const edge = p * v.odds - 1, kelly = edge > 0 ? Math.min(0.02, 0.25 * edge / (v.odds - 1)) : 0;
       return { book, odds: v.odds, edge, kelly, all: Object.fromEntries(Object.entries(q).map(([b, x]) => [b, x.odds])) };
     };
