@@ -8,13 +8,16 @@ export function poisson(lambda: number, max = 24) {
   for (let k = 1; k <= max; k++) values.push(values[k - 1] * lambda / k);
   return values;
 }
-export function analyze(lambdaHome: number, lambdaAway: number) {
+export function analyze(lambdaHome: number, lambdaAway: number, rho = 0) {
   const h = poisson(lambdaHome), a = poisson(lambdaAway);
   const scores: { home: number; away: number; p: number }[] = [];
   const markets: Record<string, number> = { home: 0, draw: 0, away: 0, over15: 0, over25: 0, over35: 0, btts: 0 };
-  const mass = h.reduce((x, y) => x + y, 0) * a.reduce((x, y) => x + y, 0);
+  // Dixon–Coles correction on 0-0, 1-0, 0-1, 1-1 (rho = 0 gives independent Poisson).
+  const t = (i: number, j: number) => i === 0 && j === 0 ? 1 - lambdaHome * lambdaAway * rho : i === 0 && j === 1 ? 1 + lambdaHome * rho : i === 1 && j === 0 ? 1 + lambdaAway * rho : i === 1 && j === 1 ? 1 - rho : 1;
+  const raw: number[][] = h.map((ph, i) => a.map((pa, j) => Math.max(0, ph * pa * t(i, j))));
+  const mass = raw.reduce((s, row) => s + row.reduce((x, y) => x + y, 0), 0);
   for (let i = 0; i < h.length; i++) for (let j = 0; j < a.length; j++) {
-    const p = h[i] * a[j] / mass;
+    const p = raw[i][j] / mass;
     scores.push({ home: i, away: j, p });
     markets[i > j ? 'home' : i === j ? 'draw' : 'away'] += p;
     if (i + j >= 2) markets.over15 += p;
@@ -39,7 +42,7 @@ export function negativeBinomialCdf(mean:number,shape:number,max:number) {
 }
 export function analyzeMatch(m:Match){
   if(m.lambdaHome===null||m.lambdaAway===null)return null;
-  const a=analyze(m.lambdaHome,m.lambdaAway);
+  const a=analyze(m.lambdaHome,m.lambdaAway,m.context?.rho??0);
   for(const [index,lambda] of [m.lambdaHome,m.lambdaAway].entries()){
     const dist=poisson(lambda);
     for(const line of [.5,1.5,2.5,3.5,4.5]){

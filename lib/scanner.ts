@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
+import { getModel, getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
 import { oddsFeed } from './odds-provider';
 import { analyze, marketLabel } from './math';
 import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
@@ -33,6 +33,8 @@ export async function runScan(trigger: 'cron' | 'manual') {
   try {
     const remainingBefore = await lastOddsRemaining();
     if (remainingBefore !== null && remainingBefore < ODDS_RESERVE) throw new Error('Crediti The Odds API quasi esauriti (' + remainingBefore + '). Si rinnovano a inizio mese, oppure passa al piano a pagamento.');
+    // 0. Rebuild the v2 model once per scan (ratings, tables, form).
+    await getModel(true);
     // 1. Calendar: next 3 days, only matches not yet started (at least 15 minutes ahead).
     const now = Date.now(), horizon = now + 72 * 3600000;
     const days = [0, 1, 2, 3].map(d => romeDate(new Date(now + d * 86400000)));
@@ -53,19 +55,18 @@ export async function runScan(trigger: 'cron' | 'manual') {
     }
     // 3. Reconcile fixtures with odds events, then model only the matched ones.
     const paired = upcoming.map(f => ({ f, e: matchEvent(f, events.get(f.competition) || []) })).filter(x => x.e) as { f: Match; e: OddsEvent }[];
-    const modelled = await pool(paired, 4, async ({ f, e }) => {
-      try { const m = await getSportmonksMatch(f.id); return m.lambdaHome !== null && m.lambdaAway !== null ? { m, e } : null; } catch { return null; }
-    });
+    const fetched = await pool(paired, 4, async ({ f }) => { try { return await getSportmonksMatch(f.id); } catch { return null; } });
+    const modelled = fetched.map((m, i) => m && m.lambdaHome !== null && m.lambdaAway !== null ? { m, e: paired[i].e } : null);
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
     const matchRows: any[] = [];
     paired.forEach(({ f, e }, i) => {
-      const x = modelled[i], consensus = marketConsensus(e), probs = x ? analyze(x.m.lambdaHome!, x.m.lambdaAway!).markets : null, markets: Record<string, any> = {};
+      const x = modelled[i], consensus = marketConsensus(e), probs = x ? analyze(x.m.lambdaHome!, x.m.lambdaAway!, x.m.context?.rho ?? 0).markets : null, markets: Record<string, any> = {};
       for (const key of SCANNED_MARKETS) {
         const c = consensus[key]; if (!c) continue;
         const pModel = probs && Number.isFinite(probs[key]) ? probs[key] : null;
         markets[key] = { pModel, pMarket: c.pMarket, pBlend: pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books };
       }
-      if (x) markets.meta = { sampleHome: x.m.sampleHome, sampleAway: x.m.sampleAway };
+      const fm = fetched[i]; if (fm) markets.meta = { sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, ...fm.context };
       if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
     });
     const insertMatch = db().prepare('INSERT INTO scanner_matches (id,run_id,fixture_id,fixture,competition,kickoff,modelled,lambda_home,lambda_away,markets,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
@@ -74,7 +75,7 @@ export async function runScan(trigger: 'cron' | 'manual') {
     const created = new Date().toISOString(), rows: any[] = [];
     for (const x of modelled) {
       if (!x) continue;
-      const probs = analyze(x.m.lambdaHome!, x.m.lambdaAway!).markets, consensus = marketConsensus(x.e);
+      const probs = analyze(x.m.lambdaHome!, x.m.lambdaAway!, x.m.context?.rho ?? 0).markets, consensus = marketConsensus(x.e);
       for (const key of SCANNED_MARKETS) {
         const c = consensus[key]; if (!c || !Number.isFinite(probs[key])) continue;
         const v = evaluateOutcome(probs[key], c);

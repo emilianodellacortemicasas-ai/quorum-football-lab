@@ -124,3 +124,11 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .day-title{font-size:15px;text-transform:capitalize;color:var(--muted);margin:18px 0 4px;font-weight:700}
 .small-note{font-size:12px;color:var(--muted);margin:0}
 .value-card.muted{opacity:.75}
+.ctx{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px;font-size:12px}
+.ctx>div{display:grid;grid-template-columns:96px 1fr 1fr;gap:8px;align-items:start}
+.ctx span{color:var(--muted)}
+.ctx b{font-weight:600;color:var(--ink)}
+.ctx b.out{font-weight:500;font-size:11px;line-height:1.35}
+.form-dots{display:inline-flex;gap:3px}
+.form-dots i{font-style:normal;font-size:10px;font-weight:800;width:17px;height:17px;border-radius:5px;display:grid;place-items:center;color:#fff}
+.form-dots i.w{background:#2f8a4f}.form-dots i.d{background:#a3aca6}.form-dots i.l{background:#c8553d}

@@ -51,3 +51,4 @@ export const scannerMatches = sqliteTable('scanner_matches', {
   modelled: integer('modelled').notNull().default(0), lambdaHome: real('lambda_home'), lambdaAway: real('lambda_away'),
   markets: text('markets').notNull(), createdAt: text('created_at').notNull(),
 }, t => [index('scanner_matches_run').on(t.runId, t.kickoff)]);
+export const modelState = sqliteTable('model_state', { id: text('id').primaryKey(), builtAt: text('built_at').notNull(), payload: text('payload').notNull() });
