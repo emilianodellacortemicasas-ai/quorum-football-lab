@@ -76,3 +76,10 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Stima QUORUM = 35% modello + 65% mercato. Giocata proposta se: valore ≥ 3%, quota ≤ 4,50, ≥ 5 bookmaker, quota migliore entro il 6% della mediana, scarto modello/mercato ≤ max(6 punti, 25% del mercato). Puntata indicativa = ¼ Kelly, max 2%.
 - Tutti gli esiti valutati sono salvati in `scanner_rows` (base per regolamento automatico e backtest). Esecuzioni in `scanner_runs`.
 - Protezione crediti The Odds API: stop sotto 40 crediti residui (piano free 500/mese).
+
+## 19/11/2026 · Pronostici + modello v2
+- Nuova vista iniziale "Pronostici": per ogni partita segno, doppia chance, O/U 2,5, GG/NG, risultato più probabile, gol attesi, classifica, forma (ultime 5), indisponibili.
+- Modello v2 (lib/model-v2.ts): rating attacco/difesa per campionato su ~13 mesi (4 finestre Sportmonks da 99 giorni), emivita 120 giorni, shrinkage 4 gol, fattore campo per lega, rho Dixon–Coles per lega. Coppa Italia usa i rating di Serie A. Stato salvato in D1 `model_state` e ricostruito a ogni scansione.
+- Indisponibili: include `sidelined.player;sidelined.type` disponibile nel piano Starter. Mostrati, non ancora pesati nel calcolo.
+- Prima verifica (42 partite): scarto medio dal mercato 4,8 punti su 1X2, 8,5 su Over/Under 2,5 con il modello che sottostima l'Over di 5,4 punti → da correggere col backtest.
+- Le limitazioni dello scanner sono state tolte su richiesta: tutte le giocate con valore > 0 sono visibili, i controlli QUORUM sono un'etichetta. Unico freno: riserva crediti The Odds API (12).
