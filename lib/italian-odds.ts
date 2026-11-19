@@ -130,3 +130,11 @@ export async function italianDebug() {
     fixtureKeys: f ? Object.keys(f) : null, books: f?.bookmakerOdds ? Object.keys(f.bookmakerOdds) : null,
     teams: Object.keys(m.teams).length, home: m.teams[String(f?.participant1Id)], away: m.teams[String(f?.participant2Id)], btts: board?.markets?.['104'] ? Object.keys(board.markets['104'].outcomes ?? {}) : null };
 }
+
+// Owner diagnostic: soccer markets whose name matches a pattern (one request).
+export async function italianMarkets(q: string) {
+  const key = await credentialValue('oddspapi'); if (!key) return { connected: false };
+  const re = new RegExp(q, 'i');
+  return list(await api('markets?sportId=' + SOCCER, key)).filter(m => re.test(String(m.marketName ?? m.name ?? ''))).slice(0, 60)
+    .map(m => ({ id: m.marketId ?? m.id, name: m.marketName ?? m.name, period: m.period, line: m.handicap ?? m.line, outcomes: list(m.outcomes).map(o => [o.outcomeId ?? o.id, o.outcomeName ?? o.name]) }));
+}
