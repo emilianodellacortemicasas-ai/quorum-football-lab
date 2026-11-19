@@ -41,6 +41,12 @@ function perMatch(c: Leg[], ok: (l: Leg) => boolean, score: (l: Leg) => number) 
   for (const l of c) if (ok(l)) { const b = best.get(l.fixtureId); if (!b || score(l) > score(b)) best.set(l.fixtureId, l); }
   return [...best.values()].sort((a, b) => score(b) - score(a));
 }
+// Top n legs per match (different markets), so the search can trade an Under for a 1X2 on the same match.
+function perMatchTop(c: Leg[], ok: (l: Leg) => boolean, score: (l: Leg) => number, n = 2) {
+  const by = new Map<string, Leg[]>();
+  for (const l of c) if (ok(l)) by.set(l.fixtureId, [...(by.get(l.fixtureId) ?? []), l]);
+  return [...by.values()].flatMap(ls => ls.sort((a, b) => score(b) - score(a)).slice(0, n)).sort((a, b) => score(b) - score(a));
+}
 // Exhaustive search over small pools: best combination by probability within an odds window.
 // Variety first; if no varied combination fits the odds window, the best unconstrained one.
 function bestCombo(pool: Leg[], sizes: number[], minOdds: number, maxOdds: number, score: (legs: Leg[]) => number): Leg[] | null {
@@ -67,7 +73,7 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
     .map(l => ticket('raddoppio-singola', 'Raddoppio · singola', 'Una sola partita a quota circa 2: se vince raddoppi la puntata.', [l]));
   const tickets: Ticket[] = [];
   // 2. Raddoppio in multipla: 2–3 esiti molto probabili, quota totale 1,90–2,30, massima probabilità.
-  const safe = perMatch(c, l => l.p >= 0.68 && l.odds >= 1.15 && l.odds <= 1.65, l => l.p).slice(0, 18);
+  const safe = perMatchTop(c, l => l.p >= 0.68 && l.odds >= 1.15 && l.odds <= 1.65, l => l.p).slice(0, 22);
   const r = bestCombo(safe, [2, 3], 1.9, 2.3, prob);
   if (r) tickets.push(ticket('raddoppio-multipla', 'Raddoppio · multipla', '2–3 esiti ad alta probabilità che insieme fanno circa quota 2.', r));
   // 3. Multipla prudente: 3–4 esiti, quota 2,5–4.
@@ -106,7 +112,7 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const probable = [3, 4, 5].map(k => [k, pickVaried(k)] as const).filter(([, legs]) => legs).map(([k, legs]) => ticket('probabile-' + k, 'Multipla più probabile · ' + k + ' eventi', 'Gli ' + k + ' esiti con la probabilità misurata più alta della settimana, su partite diverse, con mercati vari (non solo Over/Under).', legs!));
   // 7. Bomba della settimana: 5–8 eventi su tutta la settimana, quota 50–200.
   // Solo esiti con probabilità ≥ 45% e mai contro il mercato: preferiti quelli con valore positivo.
-  const bombPool = perMatch(c, l => l.p >= 0.45 && l.odds >= 1.55 && l.odds <= 3.6 && l.edge > -0.03, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 18);
+  const bombPool = perMatchTop(c, l => l.p >= 0.45 && l.odds >= 1.55 && l.odds <= 3.6 && l.edge > -0.03, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 22);
   const b = bestCombo(bombPool, [5, 6, 7, 8], 50, 200, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
   const bomb = b ? ticket('bomba', 'Bomba della settimana', 'Quota altissima per sbancare: 5–8 esiti scelti tra le partite della settimana con la probabilità più alta per quella quota. Vince di rado: punta solo una piccola cifra.', b) : null;
   return { singles, tickets, bomb, probable, candidates: c.length };
