@@ -91,3 +91,9 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Calibrazione pronostici principali: 56%→59% presi, 65%→62%, 74%→72%, 84%→95% (20 casi).
 - Scarto Over 2,5 dal mercato sulle partite in programma: bias da −5,4 a −1,7 punti.
 - Il backtest salvato è mostrato nella pagina Pronostici ("Affidabilità misurata").
+
+## 19/11/2026 · Schedine automatiche
+- Vista "Schedine" (lib/tickets.ts): raddoppi con la singola (quota 1,80–2,40), raddoppio in multipla (2–3 esiti, quota 1,90–2,30), multipla prudente (3–4, quota 2,5–4), multipla di valore (solo esiti con valore > 1%), multipla ambiziosa (4–6, quota 10–25), Bomba della settimana (5–8 esiti, quota 50–200, p ≥ 45%, mai contro il mercato).
+- Sempre un solo esito per partita. Probabilità = stima QUORUM (35% modello + 65% mercato). "Analizza nel Laboratorio" carica la schedina nel calcolatore di sistemi.
+- Orizzonte scanner esteso a 7 giorni (48 partite al 19/11).
+- Nota: il valore atteso delle multiple è calcolato sulle quote migliori di bookmaker diversi, quindi è ottimistico rispetto a un solo bookmaker.
