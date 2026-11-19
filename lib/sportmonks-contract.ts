@@ -4,11 +4,12 @@ export function sportmonksCompetition(league:any):{id:number;name:string;group:s
  const n=norm(league?.name||''),country=norm(league?.country?.name||'');
  const domestic:Record<string,Record<string,[number,string,string]>>={
   england:{premierleague:[39,'Premier League','Inghilterra']},
-  italy:{seriea:[135,'Serie A','Italia'],serieb:[136,'Serie B','Italia']},
+  italy:{seriea:[135,'Serie A','Italia'],coppaitalia:[137,'Coppa Italia','Italia']},
+  germany:{bundesliga:[78,'Bundesliga','Germania']},
   spain:{laliga:[140,'La Liga','Spagna'],laligaeasports:[140,'La Liga','Spagna']},
   france:{ligue1:[61,'Ligue 1','Francia'],ligue1mcdonalds:[61,'Ligue 1','Francia']}
  };
- const international:Record<string,[number,string,string]>={}; // Coppe e nazionali fuori perimetro (Starter, 5 leghe).
+ const international:Record<string,[number,string,string]>={}; // Coppe europee e nazionali fuori perimetro (Starter + 1 lega extra).
  const v=domestic[country]?.[n]||((country==='europe'||country==='world')?international[n]:undefined);
  return v?{id:v[0],name:v[1],group:v[2]}:null;
 }
