@@ -26,7 +26,7 @@ export function backtest(results: Result[], cfg: BtConfig, testDays = 150, now =
       if (!test.length) continue;
       const m: LeagueModel | null = fitLeague(train, t, cfg);
       if (!m) continue;
-      m.scale = cfg.scale ?? 1;
+      if (cfg.scale !== undefined) m.scale = cfg.scale;
       // baseline: league frequencies of 1/X/2 in the training window
       const recent = train.filter(r => r.ts > t - 365 * 86400000), bn = recent.length || 1;
       const bh = recent.filter(r => r.hg > r.ag).length / bn, bd = recent.filter(r => r.hg === r.ag).length / bn, ba = 1 - bh - bd;

@@ -34,6 +34,19 @@ function Context({ meta }: { meta: any }) {
     <div><span>Indisponibili</span><b className="out">{out(meta.homeOut)}</b><b className="out">{out(meta.awayOut)}</b></div></div>;
 }
 
+function Reliability() {
+  const [b, setB] = useState<any>(null);
+  useEffect(() => { fetch('/api/backtest', { cache: 'no-store' }).then(r => r.json()).then((d: any) => d.metrics && setB(d)).catch(() => {}); }, []);
+  if (!b) return null;
+  const m = b.metrics, pct = (x: number) => Math.round(x * 100) + '%';
+  return <section className="reliability"><div className="rel-head"><strong>Affidabilità misurata</strong><span>Backtest su {m.n} partite già giocate (ultimi {b.testDays} giorni), rifacendo ogni settimana il modello solo con i dati disponibili prima.</span></div>
+    <div className="rel-grid">
+      {m.buckets.filter((x: any) => x.n >= 5).map((x: any) => <div key={x.from}><span>Pronostici dati al {pct(x.from)}–{x.to > 1 ? '100%' : pct(x.to)}</span><b>{pct(x.hit)} presi</b><small>su {x.n}</small></div>)}
+      <div><span>Segno 1X2 più probabile</span><b>{pct(m.acc1x2)} presi</b><small>gol previsti {m.predGoals.toFixed(2)} · reali {m.realGoals.toFixed(2)}</small></div>
+      <div><span>Over/Under 2,5</span><b>{pct(m.accOU)} presi</b><small>Over previsto {pct(m.predOver)} · reale {pct(m.realOver)}</small></div>
+    </div></section>;
+}
+
 export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string) => void; notify: (m: string) => void }) {
   const [data, setData] = useState<{ run: any; matches: Row[] } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false), [league, setLeague] = useState('Tutte');
   async function load() {
@@ -54,6 +67,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
     <div className="page-heading"><div><p className="eyebrow">PRONOSTICI</p><h1>Le partite, lette dai numeri<span>.</span></h1><p>Pronostico per ogni partita dei prossimi 3 giorni: forza di attacco e difesa pesata sugli avversari, stato di forma, fattore campo, classifica e indisponibili.</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Aggiornamento…' : 'Aggiorna ora'}</button></div>
     {data?.run && <p className="value-note"><Info size={15} />Aggiornati {when(data.run.started_at)} · {data.matches.length} partite · {data.matches.filter(m => m.modelled).length} con statistiche sufficienti.</p>}
+    <Reliability />
     <div className="filters">{leagues.map(l => <button key={l} className={league === l ? 'selected' : ''} onClick={() => setLeague(l)}>{l}</button>)}</div>
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Carico i pronostici…</h3></div>
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Pronostici non disponibili</h3><p>{error}</p></div>
@@ -84,6 +98,6 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
           <button className="text-button" onClick={() => onOpen(r.fixture_id)}>Tutti i mercati della partita<ArrowRight size={15} /></button>
         </article>;
       })}</div></section>)}
-    <p className="footnote">Modello v2: rating di attacco e difesa su ~13 mesi di partite del campionato (più peso alle recenti), fattore campo, correzione Dixon–Coles. Classifica, forma e indisponibili sono mostrati; gli indisponibili non sono ancora nel calcolo. Fiducia: Alta ≥ 60%, Media ≥ 48%, Bassa sotto. Il backtest misurerà quanto è affidabile.</p>
+    <p className="footnote">Modello v2.1: rating di attacco e difesa su ~13 mesi di partite del campionato (più peso alle recenti), fattore campo, correzione Dixon–Coles e calibrazione dei gol da backtest. Classifica, forma e indisponibili sono mostrati; gli indisponibili non sono ancora nel calcolo. Fiducia: Alta ≥ 60%, Media ≥ 48%, Bassa sotto.</p>
   </>;
 }

@@ -68,7 +68,7 @@ export async function getSportmonksMatch(id:string):Promise<Match>{
  const tbl=state.tables[m.competition==='Coppa Italia'?'Serie A':m.competition]||[],ph=tbl.find(r=>r.teamId===h.id),pa=tbl.find(r=>r.teamId===a.id);
  const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0};
  return {...m,sampleHome:context.homeN,sampleAway:context.awayN,lambdaHome:l?l.lh:null,lambdaAway:l?l.la:null,context,notes:[
-  'Modello v2: forza di attacco e difesa di ogni squadra stimata su tutte le partite del campionato degli ultimi 13 mesi circa ('+state.results+' risultati), con peso maggiore alle più recenti (metà peso dopo 120 giorni).',
+  'Modello v2: forza di attacco e difesa di ogni squadra stimata su tutte le partite del campionato degli ultimi 13 mesi circa ('+state.results+' risultati), con peso maggiore alle più recenti (metà peso dopo 250 giorni), calibrato con backtest.',
   'Include fattore campo del campionato e correzione Dixon–Coles sui risultati bassi. Punteggio dopo i 90 minuti.',
   l?'Stima basata su '+context.homeN+' e '+context.awayN+' partite delle due squadre.':'Dati insufficienti per una delle due squadre: nessuna probabilità generata.',
   context.homeOut===null?'Indisponibili: dato non fornito dal piano dati.':'Indisponibili mostrati a titolo informativo: il loro peso non è ancora nel calcolo.']};

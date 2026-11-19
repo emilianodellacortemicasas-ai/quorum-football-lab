@@ -2,9 +2,12 @@
 // Team strength (attack/defence) fitted per league on all its matches, weighted by recency,
 // with league home advantage, shrinkage for teams with little data and Dixon–Coles low-score correction.
 
-export const MODEL_V2 = 'quorum-v2 · rating att/dif + forma + campo + Dixon–Coles';
-export const HALF_LIFE_DAYS = 120;   // a match 120 days old counts half
-export const PRIOR_GOALS = 4;        // shrinkage: pseudo-goals toward the league average
+export const MODEL_V2 = 'quorum-v2.1 · rating att/dif + forma + campo + Dixon–Coles + calibrazione gol';
+// Parameters chosen by walk-forward backtest (19/11/2026, 461 matches, 150 days).
+export const HALF_LIFE_DAYS = 250;   // a match 250 days old counts half
+export const PRIOR_GOALS = 3;        // shrinkage: pseudo-goals toward the league average
+// Goal calibration: without it the model under-predicted goals (2.85 vs 3.02 per match) and Over 2.5 (53% vs 58%).
+export const GOAL_SCALE = 1.07;
 
 export type Result = { id: number; ts: number; comp: string; season: number | null; homeId: number; awayId: number; home: string; away: string; hg: number; ag: number };
 export type TeamRating = { name: string; att: number; def: number; n: number };
@@ -93,7 +96,7 @@ export function fitLeague(results: Result[], now: number, opts: FitOptions = {})
 export function lambdas(m: LeagueModel, homeId: number, awayId: number, neutral = false) {
   const h = m.teams[homeId], a = m.teams[awayId];
   if (!h || !a || h.n < 3 || a.n < 3) return null;
-  const k = m.scale ?? 1, lh = k * Math.exp(m.mu + (neutral ? 0 : m.homeAdv) + h.att + a.def), la = k * Math.exp(m.mu + a.att + h.def);
+  const k = m.scale ?? GOAL_SCALE, lh = k * Math.exp(m.mu + (neutral ? 0 : m.homeAdv) + h.att + a.def), la = k * Math.exp(m.mu + a.att + h.def);
   return Number.isFinite(lh) && Number.isFinite(la) && lh > 0.05 && la > 0.05 && lh < 6 && la < 6 ? { lh, la } : null;
 }
 

@@ -132,3 +132,9 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .form-dots{display:inline-flex;gap:3px}
 .form-dots i{font-style:normal;font-size:10px;font-weight:800;width:17px;height:17px;border-radius:5px;display:grid;place-items:center;color:#fff}
 .form-dots i.w{background:#2f8a4f}.form-dots i.d{background:#a3aca6}.form-dots i.l{background:#c8553d}
+.reliability{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin:0 0 16px}
+.rel-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-bottom:12px}
+.rel-head strong{font-size:15px;color:#1f5c3f}.rel-head span{font-size:12px;color:var(--muted)}
+.rel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.rel-grid>div{background:#f6faf3;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.rel-grid span{font-size:11px;color:var(--muted)}.rel-grid b{font-size:18px;color:var(--ink)}.rel-grid small{font-size:11px;color:var(--muted)}
