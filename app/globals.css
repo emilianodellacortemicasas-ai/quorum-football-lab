@@ -205,3 +205,4 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .guide-zoom .icon-button{position:absolute;top:16px;right:16px;background:#fff}
 @media(max-width:900px){.guide-slide{grid-template-columns:1fr;min-height:0}.guide-text h2{font-size:21px}.guide{padding:12px}}
 .lab-head-actions{display:flex;gap:12px;align-items:center}.lab-head-actions .text-button{display:flex;gap:4px;align-items:center}
+.probable-list .value-card{border:2px solid #9fd36a}

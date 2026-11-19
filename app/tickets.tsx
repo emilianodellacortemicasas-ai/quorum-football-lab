@@ -20,7 +20,7 @@ function TicketCard({ t, equityCents, onLab }: { t: Ticket; equityCents: number;
 }
 
 export function TicketsView({ equityCents, onLab, notify }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void }) {
-  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[] } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=tickets', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -40,6 +40,7 @@ export function TicketsView({ equityCents, onLab, notify }: { equityCents: numbe
       : !data?.run ? <div className="empty"><span className="empty-icon"><TicketIcon /></span><h3>Nessun dato ancora.</h3><p>Premi “Aggiorna ora”.</p></div>
       : <>
         {data.bomb && <><h3 className="day-title">💣 Bomba della settimana</h3><div className="value-list bomb-list"><TicketCard t={data.bomb} equityCents={equityCents} onLab={onLab} /></div></>}
+        {data.probable && data.probable.length > 0 && <><h3 className="day-title">🎯 La multipla più probabile</h3><p className="small-note">La combinazione con la probabilità statistica di successo più alta: più eventi aggiungi, più sale la quota e scende la probabilità.</p><div className="value-list probable-list">{data.probable.map(t => <TicketCard key={t.kind} t={t} equityCents={equityCents} onLab={onLab} />)}</div></>}
         <h3 className="day-title">Multiple</h3>
         {data.tickets.length ? <div className="value-list">{data.tickets.map(t => <TicketCard key={t.kind} t={t} equityCents={equityCents} onLab={onLab} />)}</div> : <p className="small-note">Nessuna combinazione rispetta i criteri con le partite di oggi.</p>}
         <h3 className="day-title">Raddoppi con la singola</h3>

@@ -68,10 +68,14 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const wide = perMatch(c, l => l.p >= 0.5 && l.odds >= 1.3 && l.odds <= 2.6, l => l.p + Math.max(0, l.edge)).slice(0, 16);
   const a = bestCombo(wide, [4, 5, 6], 10, 25, prob);
   if (a) tickets.push(ticket('ambiziosa', 'Multipla ambiziosa', 'Quota alta: vince raramente, punta poco.', a));
-  // 6. Bomba della settimana: 5–8 eventi su tutta la settimana, quota 50–200.
+  // 6. La multipla più probabile: per 3, 4 e 5 eventi, gli esiti con la probabilità più alta (uno per partita).
+  // Il prodotto delle probabilità è massimo prendendo i k esiti più probabili su partite diverse. Quota minima 1,10 per esito.
+  const surest = perMatch(c, l => l.odds >= 1.1 && l.p >= 0.6, l => l.p);
+  const probable = [3, 4, 5].filter(k => surest.length >= k).map(k => ticket('probabile-' + k, 'Multipla più probabile · ' + k + ' eventi', 'Gli ' + k + ' esiti con la probabilità statistica più alta della settimana, su partite diverse.', surest.slice(0, k)));
+  // 7. Bomba della settimana: 5–8 eventi su tutta la settimana, quota 50–200.
   // Solo esiti con probabilità ≥ 45% e mai contro il mercato: preferiti quelli con valore positivo.
   const bombPool = perMatch(c, l => l.p >= 0.45 && l.odds >= 1.55 && l.odds <= 3.6 && l.edge > -0.03, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 18);
   const b = bestCombo(bombPool, [5, 6, 7, 8], 50, 200, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
   const bomb = b ? ticket('bomba', 'Bomba della settimana', 'Quota altissima per sbancare: 5–8 esiti scelti tra le partite della settimana con la probabilità più alta per quella quota. Vince di rado: punta solo una piccola cifra.', b) : null;
-  return { singles, tickets, bomb, candidates: c.length };
+  return { singles, tickets, bomb, probable, candidates: c.length };
 }

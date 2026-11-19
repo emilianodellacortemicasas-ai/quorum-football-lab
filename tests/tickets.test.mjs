@@ -15,3 +15,9 @@ test('bomba: high odds, 5–8 legs, distinct matches',()=>{
   const {bomb}=buildTickets(ms);assert.ok(bomb);assert.ok(bomb.odds>=50&&bomb.odds<=200);
   assert.ok(bomb.legs.length>=5&&bomb.legs.length<=8);assert.equal(new Set(bomb.legs.map(l=>l.fixtureId)).size,bomb.legs.length);
 });
+test('multipla più probabile: top-k probabilities on distinct matches',()=>{
+  const {probable}=buildTickets(matches);assert.equal(probable.length,3);
+  const p4=probable.find(t=>t.kind==='probabile-4');assert.equal(p4.legs.length,4);
+  assert.equal(new Set(p4.legs.map(l=>l.fixtureId)).size,4);
+  assert.ok(probable[0].p>=probable[1].p&&probable[1].p>=probable[2].p);
+});
