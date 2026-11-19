@@ -73,7 +73,7 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
     .map(l => ticket('raddoppio-singola', 'Raddoppio · singola', 'Una sola partita a quota circa 2: se vince raddoppi la puntata.', [l]));
   const tickets: Ticket[] = [];
   // 2. Raddoppio in multipla: 2–3 esiti molto probabili, quota totale 1,90–2,30, massima probabilità.
-  const safe = perMatchTop(c, l => l.p >= 0.68 && l.odds >= 1.15 && l.odds <= 1.65, l => l.p).slice(0, 22);
+  const safe = perMatchTop(c, l => l.p >= 0.68 && l.odds >= 1.15 && l.odds <= 1.65, l => l.p, 3).slice(0, 40);
   const r = bestCombo(safe, [2, 3], 1.9, 2.3, prob);
   if (r) tickets.push(ticket('raddoppio-multipla', 'Raddoppio · multipla', '2–3 esiti ad alta probabilità che insieme fanno circa quota 2.', r));
   // 3. Multipla prudente: 3–4 esiti, quota 2,5–4.
