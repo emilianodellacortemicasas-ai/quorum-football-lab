@@ -8,7 +8,7 @@ import type { Match } from './types';
 const db = () => { if (!env.DB) throw new Error('Database non disponibile.'); return env.DB; };
 const romeDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 // Free The Odds API plan: 500 credits/month. Below this reserve the scanner stops calling it.
-const ODDS_RESERVE = 40;
+const ODDS_RESERVE = 12;
 
 async function lastOddsRemaining() {
   const r = await db().prepare("SELECT odds_remaining FROM scanner_runs WHERE odds_remaining IS NOT NULL ORDER BY started_at DESC LIMIT 1").first<{ odds_remaining: number }>();
@@ -32,7 +32,7 @@ export async function runScan(trigger: 'cron' | 'manual') {
   const notes: string[] = [];
   try {
     const remainingBefore = await lastOddsRemaining();
-    if (remainingBefore !== null && remainingBefore < ODDS_RESERVE) throw new Error('Crediti The Odds API quasi esauriti (' + remainingBefore + '). Scansione sospesa fino al rinnovo del piano.');
+    if (remainingBefore !== null && remainingBefore < ODDS_RESERVE) throw new Error('Crediti The Odds API quasi esauriti (' + remainingBefore + '). Si rinnovano a inizio mese, oppure passa al piano a pagamento.');
     // 1. Calendar: next 3 days, only matches not yet started (at least 15 minutes ahead).
     const now = Date.now(), horizon = now + 72 * 3600000;
     const days = [0, 1, 2, 3].map(d => romeDate(new Date(now + d * 86400000)));
@@ -86,7 +86,7 @@ export async function latestPicks() {
   const run = await db().prepare("SELECT * FROM scanner_runs WHERE status='ok' ORDER BY started_at DESC LIMIT 1").first<any>();
   const last = await lastRun();
   if (!run) return { run: null, last, picks: [], evaluated: 0 };
-  const picks = (await db().prepare('SELECT * FROM scanner_rows WHERE run_id=? AND is_pick=1 AND kickoff > ? ORDER BY edge DESC LIMIT 60').bind(run.id, new Date().toISOString()).all<any>()).results;
+  const picks = (await db().prepare('SELECT * FROM scanner_rows WHERE run_id=? AND edge > 0 AND kickoff > ? ORDER BY is_pick DESC, edge DESC LIMIT 200').bind(run.id, new Date().toISOString()).all<any>()).results;
   const evaluated = (await db().prepare('SELECT COUNT(*) AS n FROM scanner_rows WHERE run_id=?').bind(run.id).first<{ n: number }>())?.n ?? 0;
   return { run, last, picks, evaluated };
 }
