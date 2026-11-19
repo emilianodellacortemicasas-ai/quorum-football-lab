@@ -131,3 +131,7 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Calibrazione misurata (lib/calibration.ts): backtest walk-forward su 5.071 esiti (1X2, Over/Under, GG/NG), fasce 5 pt, shrinkage 40, monotona. Applicata al modello prima del blend; dopo il blend correzione con gli esiti reali chiusi (si attiva da sola man mano).
 - Backtest automatico ogni 7 giorni nel cron (limits.cpu_ms 300000).
 - Schedine: "Affidabilità misurata" con intervallo, al massimo metà esiti Over/Under quando esistono alternative, top 2 esiti per partita nei pool.
+- Doppia chance (homeDraw/drawAway/homeAway) da OddsPapi mercato 101902; probabilità = somma 1X2.
+- Backtest schedine con quote reali football-data.co.uk (I1, E0, SP1, D1, F1; cache 6 giorni): 1.897 partite abbinate, 19 settimane. Settimanale col backtest. Affidabilità mostrata = probabilità × fattore per tipo (vinte/attese, shrinkage 5).
+- Esito 20/11: probabilità attendibili (93 vinte vs 99 attese), rendimento negativo con quote medie (margine bookmaker); peso modello 0/0.15/0.35/0.5 non cambia: resta 0.35.
+- football-data.co.uk: verificare i termini prima della versione commerciale.
