@@ -68,3 +68,11 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Accesso: aggiunto login con codice via email (One-time PIN) e policy «QUORUM utenti autorizzati» (solo emilianodc.myedu@gmail.com).
 - Restyling «notte da stadio + tattico», nuovo logo (Q = cerchio di centrocampo), icone app, PWA installabile dietro Access (manifest con credenziali).
 - Collegamenti verificati: OpenAI, Sportmonks (Free), The Odds API (Free).
+
+## 19/11/2026 · Value scanner (v1)
+- Cloudflare Workers Paid attivo (5 $/mese, approvato da Emiliano).
+- Scansione automatica ogni giorno alle 06:40 (cron `40 5 * * *` UTC) + "Aggiorna ora" (solo admin, max 3/giorno, non entro 30 minuti dalla precedente).
+- Flusso: calendario Sportmonks (prossimi 3 giorni) → quote The Odds API (h2h + totals, regione EU, 2 crediti per lega) → abbinamento squadre/orario → modello Poisson → consenso di mercato senza margine.
+- Stima QUORUM = 35% modello + 65% mercato. Giocata proposta se: valore ≥ 3%, quota ≤ 4,50, ≥ 5 bookmaker, quota migliore entro il 6% della mediana, scarto modello/mercato ≤ max(6 punti, 25% del mercato). Puntata indicativa = ¼ Kelly, max 2%.
+- Tutti gli esiti valutati sono salvati in `scanner_rows` (base per regolamento automatico e backtest). Esecuzioni in `scanner_runs`.
+- Protezione crediti The Odds API: stop sotto 40 crediti residui (piano free 500/mese).
