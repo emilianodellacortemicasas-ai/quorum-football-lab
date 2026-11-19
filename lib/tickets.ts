@@ -66,10 +66,14 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   if (v) tickets.push(ticket('valore', 'Multipla di valore', 'Solo esiti dove la quota paga più della probabilità stimata.', v));
   // 5. Multiple a quota 10: 3 e 5 eventi, quota totale 9,5–13,5. Tra le combinazioni in quella fascia sceglie
   // la più probabile, con un piccolo premio al valore. Più esiti candidati per partita, ma mai due della stessa partita.
-  const q10pool = c.filter(l => l.p >= 0.4 && l.odds >= 1.4 && l.odds <= 3.6 && l.edge > -0.03)
-    .sort((a, b) => (b.p * (1 + Math.max(0, b.edge) * 2)) - (a.p * (1 + Math.max(0, a.edge) * 2))).slice(0, 26);
+  const score = (l: Leg) => l.p * (1 + Math.max(0, l.edge) * 2);
+  // 3 eventi: servono quote intorno a 2,1–2,4 per esito; 5 eventi: intorno a 1,5–1,7.
+  const q10pools: Record<number, Leg[]> = {
+    3: c.filter(l => l.p >= 0.35 && l.odds >= 1.9 && l.odds <= 3.6 && l.edge > -0.03).sort((a, b) => score(b) - score(a)).slice(0, 26),
+    5: c.filter(l => l.p >= 0.45 && l.odds >= 1.35 && l.odds <= 2.6 && l.edge > -0.03).sort((a, b) => score(b) - score(a)).slice(0, 26),
+  };
   for (const k of [3, 5]) {
-    const q = bestCombo(q10pool, [k], 9.5, 13.5, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
+    const q = bestCombo(q10pools[k], [k], 9.5, 13.5, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
     if (q) tickets.push(ticket('quota10-' + k, 'Multipla quota 10 · ' + k + ' eventi', k + ' esiti scelti per arrivare a quota 10–13 con la probabilità più alta possibile: un buon premio senza esagerare.', q));
   }
   // 6. La multipla più probabile: per 3, 4 e 5 eventi, gli esiti con la probabilità più alta (uno per partita).
