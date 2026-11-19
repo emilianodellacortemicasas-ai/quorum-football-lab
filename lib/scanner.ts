@@ -2,6 +2,8 @@ import { env } from 'cloudflare:workers';
 import { getModel, getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
 import { oddsFeed } from './odds-provider';
 import { analyzeMatch, marketLabel } from './math';
+import { calibrate, familyOf } from './calibration';
+import { loadCalibration } from './calibration-store';
 import { italianOdds, matchItalian, type ItalianFixture } from './italian-odds';
 import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
 import type { Match } from './types';
@@ -112,17 +114,23 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
       const edge = p * v.odds - 1, kelly = edge > 0 ? Math.min(0.02, 0.25 * edge / (v.odds - 1)) : 0;
       return { book, odds: v.odds, edge, kelly, all: Object.fromEntries(Object.entries(q).map(([b, x]) => [b, x.odds])) };
     };
+    // Measured calibration: model probabilities corrected with the backtest, final ones with settled results.
+    const cal = await loadCalibration().catch(() => null);
+    const calModel = (key: string, p: number) => { const f = familyOf(key); return f && cal?.model ? calibrate(p, f, cal.model).p : p; };
+    const calLive = (key: string) => { const f = familyOf(key); return f && cal?.live ? (p: number) => calibrate(p, f, cal.live).p : undefined; };
+    const measured = (key: string, p: number) => { const f = familyOf(key); return f && cal?.model ? calibrate(p, f, cal.model) : null; };
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
     const matchRows: any[] = [];
     paired.forEach(({ f, e }, i) => {
       const x = modelled[i], consensus = mapScorers(marketConsensus(e), fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {}, fit = itFor(f);
       for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c) continue;
-        const pModel = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;
-        const pBlend = pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, it = itBest(fit, key, pBlend);
-        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}) };
+        const raw = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;
+        const pModel = raw === null ? null : calModel(key, raw);
+        const pBlend = pModel === null ? c.pMarket : evaluateOutcome(pModel, c, calLive(key)).pBlend, it = itBest(fit, key, pBlend), ms = measured(key, pBlend);
+        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}), ...(ms ? { se: ms.se, calN: ms.n } : {}) };
       }
-      const fm = fetched[i]; if (fm) markets.meta = { sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
+      const fm = fetched[i]; if (fm) markets.meta = { calibration: cal ? { backtestSamples: cal.backtestSamples, liveSamples: cal.liveSamples, backtestAt: cal.backtestAt } : null, sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
       if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
     });
     const insertMatch = db().prepare('INSERT INTO scanner_matches (id,run_id,fixture_id,fixture,competition,kickoff,modelled,lambda_home,lambda_away,markets,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
@@ -133,8 +141,8 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
       if (!x) continue;
       const probs = analyzeMatch(x.m)!.markets, consensus = mapScorers(marketConsensus(x.e), x.m), fit = itFor(x.m);
       for (const key of marketKeys(consensus)) {
-        const c = consensus[key], pm = Number.isFinite(c?.pModel) ? c.pModel : probs[key]; if (!c || !Number.isFinite(pm)) continue;
-        const v = evaluateOutcome(pm, c), it = itBest(fit, key, v.pBlend);
+        const c = consensus[key], raw = Number.isFinite(c?.pModel) ? c.pModel : probs[key]; if (!c || !Number.isFinite(raw)) continue;
+        const pm = calModel(key, raw), v = evaluateOutcome(pm, c, calLive(key)), it = itBest(fit, key, v.pBlend);
         rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, c.label ?? marketLabel(key), pm, c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created, it?.odds ?? null, it?.book ?? null, it?.edge ?? null, it?.kelly ?? null]);
       }
     }

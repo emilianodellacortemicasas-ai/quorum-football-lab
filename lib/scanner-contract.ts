@@ -97,8 +97,9 @@ export function marketConsensus(event: OddsEvent) {
 
 export const SCANNED_MARKETS = ['home', 'draw', 'away', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35', 'btts', 'noGoal'] as const;
 
-export function evaluateOutcome(pModel: number, m: { pMarket: number; bestOdds: number; books: number }) {
-  const pBlend = MODEL_WEIGHT * pModel + (1 - MODEL_WEIGHT) * m.pMarket;
+// adjust: optional measured calibration of the final probability (from settled results).
+export function evaluateOutcome(pModel: number, m: { pMarket: number; bestOdds: number; books: number }, adjust?: (p: number) => number) {
+  const raw = MODEL_WEIGHT * pModel + (1 - MODEL_WEIGHT) * m.pMarket, pBlend = adjust ? adjust(raw) : raw;
   const edge = pBlend * m.bestOdds - 1;
   const fullKelly = edge > 0 ? edge / (m.bestOdds - 1) : 0;
   const kelly = Math.min(KELLY_CAP, fullKelly * KELLY_FRACTION);

@@ -1,3 +1,4 @@
+import { refreshBacktest } from "../lib/backtest-job";
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
@@ -30,7 +31,7 @@ const worker = {
   // "40 2-23/3 * * *": full scan every 3 hours. "10 * * * *": pre-kickoff refresh (line-ups, closing odds) only when a match is about to start.
   async scheduled(controller: ScheduledController, _env: Cloudflare.Env, ctx: ExecutionContext) {
     if (controller.cron === "10 * * * *") ctx.waitUntil(prematchDue().then(due => (due ? runScan("prematch") : undefined)).catch(() => undefined));
-    else ctx.waitUntil(runScan("cron").catch(() => undefined));
+    else ctx.waitUntil(refreshBacktest().catch(() => undefined).then(() => runScan("cron")).catch(() => undefined));
   },
 };
 

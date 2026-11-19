@@ -74,8 +74,8 @@ export async function settleAll(limit = 80) {
 export async function performance() {
   const value = (await db().prepare(`SELECT r.market,r.best_odds,r.result,r.edge,r.p_blend FROM scanner_rows r JOIN (SELECT fixture_id,market,MAX(created_at) AS c FROM scanner_rows WHERE result IS NOT NULL AND is_pick=1 GROUP BY fixture_id,market) l ON r.fixture_id=l.fixture_id AND r.market=l.market AND r.created_at=l.c`).all<any>()).results;
   const agg = (rows: any[]) => { const s = rows.filter(r => r.result !== 'void'), won = s.filter(r => r.result === 'won'); const profit = won.reduce((x, r) => x + r.best_odds - 1, 0) - (s.length - won.length); return { n: s.length, won: won.length, hit: s.length ? won.length / s.length : null, profit, roi: s.length ? profit / s.length : null, expectedHit: s.length ? s.reduce((x, r) => x + r.p_blend, 0) / s.length : null }; };
-  const tickets = (await db().prepare('SELECT kind,odds,result,created_at,title FROM scanner_tickets WHERE result IS NOT NULL').all<any>()).results;
-  const kinds = [...new Set(tickets.map((t: any) => t.kind))].map(kind => { const rows = tickets.filter((t: any) => t.kind === kind).map((t: any) => ({ ...t, best_odds: t.odds, p_blend: 0 })); const a = agg(rows); return { kind, title: rows[0].title, ...a }; });
+  const tickets = (await db().prepare('SELECT kind,odds,p,result,created_at,title FROM scanner_tickets WHERE result IS NOT NULL').all<any>()).results;
+  const kinds = [...new Set(tickets.map((t: any) => t.kind))].map(kind => { const rows = tickets.filter((t: any) => t.kind === kind).map((t: any) => ({ ...t, best_odds: t.odds, p_blend: t.p ?? 0 })); const a = agg(rows); return { kind, title: rows[0].title, ...a }; });
   const pending = (await db().prepare('SELECT COUNT(*) AS n FROM scanner_tickets WHERE result IS NULL').first<{ n: number }>())?.n ?? 0;
   const last = (await db().prepare('SELECT id,kind,title,odds,result,created_at,legs FROM scanner_tickets ORDER BY created_at DESC LIMIT 12').all<any>()).results.map((t: any) => ({ ...t, legs: JSON.parse(t.legs) }));
   // Closing line value: price when QUORUM first proposed the pick vs. the last price seen before kick-off.

@@ -26,3 +26,11 @@ test('multiple a quota 10: 3 e 5 eventi',()=>{
   const {tickets}=buildTickets(ms);
   for(const k of [3,5]){const t=tickets.find(x=>x.kind==='quota10-'+k);assert.ok(t,'manca '+k);assert.equal(t.legs.length,k);assert.ok(t.odds>=9.5&&t.odds<=13.5);assert.equal(new Set(t.legs.map(l=>l.fixtureId)).size,k);}
 });
+test('varietà: al massimo metà Over/Under quando esistono alternative, quote italiane preferite',()=>{
+  const ms=Array.from({length:10},(_,i)=>mk(i,{home:[0.66+(i%3)*0.02,1.45],over15:[0.82,1.22],under35:[0.75,1.3]}));
+  ms[0].markets.home.it={Lottomatica:1.5,Planetwin365:1.5};
+  const {probable}=buildTickets(ms);
+  for(const t of probable){const lines=t.legs.filter(l=>/^(over|under)/.test(l.market)).length;assert.ok(lines<=Math.ceil(t.legs.length/2),t.kind);assert.ok(t.low<=t.p&&t.p<=t.high);}
+  const all=probable.flatMap(t=>t.legs),it=all.find(l=>l.fixtureId==='sm-0'&&l.market==='home');
+  if(it){assert.equal(it.odds,1.5);assert.equal(it.bookmaker,'Lottomatica / Planetwin365');assert.ok(it.italian);}
+});

@@ -1,6 +1,7 @@
 // Walk-forward backtest: the model is refitted every week using only matches played before that week,
 // then scored on the following week's matches. No information from the future is used.
 import { analyze } from './math';
+import { buildTable, familyOf, type CalTable, type Sample } from './calibration.ts';
 import { fitLeague, lambdas, type FitOptions, type LeagueModel, type Result } from './model-v2';
 
 export type BtConfig = FitOptions & { scale?: number; label?: string };
@@ -11,6 +12,7 @@ export type BtMetrics = {
   logLossBTTS: number; accBTTS: number; predBTTS: number; realBTTS: number;
   predGoals: number; realGoals: number;
   buckets: { from: number; to: number; n: number; predicted: number; hit: number }[];
+  calibration: CalTable; samples: number;
 };
 const clamp = (p: number) => Math.min(1 - 1e-6, Math.max(1e-6, p));
 
@@ -19,7 +21,7 @@ export function backtest(results: Result[], cfg: BtConfig, testDays = 150, now =
   const comps = [...new Set(results.map(r => r.comp))].filter(c => c !== 'Coppa Italia');
   const start = now - testDays * 86400000;
   let n = 0, ll = 0, br = 0, acc = 0, base = 0, llOU = 0, accOU = 0, pO = 0, rO = 0, llB = 0, accB = 0, pB = 0, rB = 0, pG = 0, rG = 0;
-  const tips: { p: number; hit: boolean }[] = [];
+  const tips: { p: number; hit: boolean }[] = [], samples: Sample[] = [];
   for (let t = start; t < now; t += 7 * 86400000) {
     for (const comp of comps) {
       const rs = results.filter(r => r.comp === comp), train = rs.filter(r => r.ts < t), test = rs.filter(r => r.ts >= t && r.ts < t + 7 * 86400000);
@@ -43,6 +45,9 @@ export function backtest(results: Result[], cfg: BtConfig, testDays = 150, now =
         // calibration of the strongest single outcome among 1X2 / O-U 2.5 / GG-NG
         const cands: [number, boolean][] = [[k.home, out === 0], [k.draw, out === 1], [k.away, out === 2], [k.over25, over], [k.under25, !over], [k.btts, btts], [k.noGoal, !btts]];
         const best = cands.reduce((a, c) => c[0] > a[0] ? c : a); tips.push({ p: best[0], hit: best[1] });
+        // every outcome of every scanned market, for the per-family calibration
+        const tot = r.hg + r.ag, hits: Record<string, boolean> = { home: out === 0, draw: out === 1, away: out === 2, over15: tot >= 2, under15: tot < 2, over25: over, under25: !over, over35: tot >= 4, under35: tot < 4, btts, noGoal: !btts };
+        for (const [key, hit] of Object.entries(hits)) { const f = familyOf(key), pk = (k as any)[key]; if (f && Number.isFinite(pk)) samples.push({ f, p: pk, hit }); }
       }
     }
   }
@@ -51,5 +56,5 @@ export function backtest(results: Result[], cfg: BtConfig, testDays = 150, now =
     const b = tips.filter(x => x.p >= from && x.p < to);
     return { from, to, n: b.length, predicted: b.length ? b.reduce((s, x) => s + x.p, 0) / b.length : 0, hit: b.length ? b.filter(x => x.hit).length / b.length : 0 };
   });
-  return { label, n, logLoss1x2: ll / d, brier1x2: br / d, acc1x2: acc / d, baseLogLoss1x2: base / d, logLossOU: llOU / d, accOU: accOU / d, predOver: pO / d, realOver: rO / d, logLossBTTS: llB / d, accBTTS: accB / d, predBTTS: pB / d, realBTTS: rB / d, predGoals: pG / d, realGoals: rG / d, buckets };
+  return { label, n, logLoss1x2: ll / d, brier1x2: br / d, acc1x2: acc / d, baseLogLoss1x2: base / d, logLossOU: llOU / d, accOU: accOU / d, predOver: pO / d, realOver: rO / d, logLossBTTS: llB / d, accBTTS: accB / d, predBTTS: pB / d, realBTTS: rB / d, predGoals: pG / d, realGoals: rG / d, buckets, calibration: buildTable(samples), samples: samples.length };
 }

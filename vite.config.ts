@@ -29,6 +29,8 @@ const localBindingConfig = {
         placement: { mode: "targeted" as const, region: process.env.QUORUM_PLACEMENT_REGION || "aws:eu-central-1" },
         workers_dev: true,
         observability: { enabled: true },
+        // Weekly backtest + calibration needs more than the default 30 s of CPU.
+        limits: { cpu_ms: 300000 },
         // Value scan every 3 hours (first at 06:40 Rome in winter).
         triggers: { crons: ["40 2-23/3 * * *", "10 * * * *"] },
       }

@@ -1,9 +1,10 @@
 // Automatic tickets (singles that double the stake and accumulators) built from the latest predictions.
 // Pure logic: input = per-match markets with blended probability and best price.
+import { familyOf, ticketReliability } from './calibration.ts';
 const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5', btts: 'Goal', noGoal: 'No Goal' };
 
-export type Leg = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p: number; odds: number; bookmaker: string; edge: number };
-export type Ticket = { kind: string; title: string; description: string; legs: Leg[]; odds: number; p: number; ev: number; kelly: number };
+export type Leg = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p: number; odds: number; bookmaker: string; edge: number; se: number; italian: boolean };
+export type Ticket = { kind: string; title: string; description: string; legs: Leg[]; odds: number; p: number; ev: number; kelly: number; low: number; high: number; italian: boolean };
 type MatchRow = { fixture_id: string; fixture: string; competition: string; kickoff: string; markets: Record<string, any> };
 
 const extraLabel = (k: string) => { const [f, , ou, line] = k.split(':'); return (f === 'corners' ? 'Corner' : 'Cartellini') + ' ' + (ou === 'over' ? 'Over ' : 'Under ') + String(line).replace('.', ','); };
@@ -15,17 +16,25 @@ export function candidates(matches: MatchRow[], now = Date.now()): Leg[] {
     for (const k of [...KEYS, ...Object.keys(m.markets || {}).filter(x => x.startsWith('corners:') || x.startsWith('cards:') || x.startsWith('scorer:'))]) {
       const x = m.markets?.[k];
       if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds) || x.bestOdds <= 1 || (x.books ?? 0) < 3) continue;
-      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k] ?? x.label ?? extraLabel(k), p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
+      // The price you can actually play: Lottomatica / Planetwin365 when they quote the market.
+      const it = x.it && Object.keys(x.it).length ? Object.entries<number>(x.it).sort((a, b) => b[1] - a[1]) : null;
+      const odds = it ? it[0][1] : x.bestOdds, bookmaker = it ? it.filter(e => e[1] === it[0][1]).map(e => e[0]).join(' / ') : x.bookmaker;
+      const se = Number.isFinite(x.se) ? x.se : Math.sqrt(x.pBlend * (1 - x.pBlend) / 40);
+      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k] ?? x.label ?? extraLabel(k), p: x.pBlend, odds, bookmaker, edge: x.pBlend * odds - 1, se, italian: !!it });
     }
   }
   return out;
 }
 
 const ticket = (kind: string, title: string, description: string, legs: Leg[]): Ticket => {
-  const odds = legs.reduce((s, l) => s * l.odds, 1), p = legs.reduce((s, l) => s * l.p, 1), ev = p * odds - 1;
+  const odds = legs.reduce((s, l) => s * l.odds, 1), r = ticketReliability(legs), p = r.p, ev = p * odds - 1;
   const kelly = ev > 0 ? Math.min(0.02, (ev / (odds - 1)) * 0.25) : 0;
-  return { kind, title, description, legs: [...legs].sort((a, b) => a.kickoff.localeCompare(b.kickoff)), odds, p, ev, kelly };
+  return { kind, title, description, legs: [...legs].sort((a, b) => a.kickoff.localeCompare(b.kickoff)), odds, p, ev, kelly, low: r.low, high: r.high, italian: legs.every(l => l.italian) };
 };
+// Variety: at most half of the legs (rounded up) on goal lines (Over/Under), so 1X2 and Goal/No Goal get space.
+const isLine = (l: Leg) => familyOf(l.market) === 'gol';
+const lineCap = (n: number) => Math.ceil(n / 2);
+const varied = (legs: Leg[]) => legs.length < 3 || legs.filter(isLine).length <= lineCap(legs.length);
 // Best leg per match under a filter (one leg per match: same-match legs are correlated).
 function perMatch(c: Leg[], ok: (l: Leg) => boolean, score: (l: Leg) => number) {
   const best = new Map<string, Leg>();
@@ -33,11 +42,15 @@ function perMatch(c: Leg[], ok: (l: Leg) => boolean, score: (l: Leg) => number) 
   return [...best.values()].sort((a, b) => score(b) - score(a));
 }
 // Exhaustive search over small pools: best combination by probability within an odds window.
-function bestCombo(pool: Leg[], sizes: number[], minOdds: number, maxOdds: number, score: (legs: Leg[]) => number) {
+// Variety first; if no varied combination fits the odds window, the best unconstrained one.
+function bestCombo(pool: Leg[], sizes: number[], minOdds: number, maxOdds: number, score: (legs: Leg[]) => number): Leg[] | null {
+  return combo(pool, sizes, minOdds, maxOdds, score, true) ?? combo(pool, sizes, minOdds, maxOdds, score, false);
+}
+function combo(pool: Leg[], sizes: number[], minOdds: number, maxOdds: number, score: (legs: Leg[]) => number, vary: boolean) {
   let best: Leg[] | null = null, bestScore = -Infinity;
   const visit = (start: number, legs: Leg[], odds: number) => {
-    if (odds > maxOdds) return;
-    if (sizes.includes(legs.length) && odds >= minOdds) { const s = score(legs); if (s > bestScore) { bestScore = s; best = [...legs]; } }
+    if (odds > maxOdds || (vary && legs.filter(isLine).length > lineCap(Math.max(...sizes)))) return;
+    if (sizes.includes(legs.length) && odds >= minOdds && (!vary || varied(legs))) { const s = score(legs); if (s > bestScore) { bestScore = s; best = [...legs]; } }
     if (legs.length >= Math.max(...sizes)) return;
     for (let i = start; i < pool.length; i++) if (!legs.some(l => l.fixtureId === pool[i].fixtureId)) visit(i + 1, [...legs, pool[i]], odds * pool[i].odds);
   };
@@ -78,8 +91,19 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   }
   // 6. La multipla più probabile: per 3, 4 e 5 eventi, gli esiti con la probabilità più alta (uno per partita).
   // Il prodotto delle probabilità è massimo prendendo i k esiti più probabili su partite diverse. Quota minima 1,10 per esito.
-  const surest = perMatch(c, l => l.odds >= 1.1 && l.p >= 0.6, l => l.p);
-  const probable = [3, 4, 5].filter(k => surest.length >= k).map(k => ticket('probabile-' + k, 'Multipla più probabile · ' + k + ' eventi', 'Gli ' + k + ' esiti con la probabilità statistica più alta della settimana, su partite diverse.', surest.slice(0, k)));
+  const surest = c.filter(l => l.odds >= 1.1 && l.p >= 0.6).sort((a, b) => b.p - a.p);
+  const pickVaried = (k: number) => {
+    const legs: Leg[] = [];
+    for (const l of surest) {
+      if (legs.length >= k) break;
+      if (legs.some(x => x.fixtureId === l.fixtureId) || (isLine(l) && legs.filter(isLine).length >= lineCap(k))) continue;
+      legs.push(l);
+    }
+    if (legs.length === k) return legs;
+    const plain = perMatch(surest, () => true, l => l.p).slice(0, k);
+    return plain.length === k ? plain : null;
+  };
+  const probable = [3, 4, 5].map(k => [k, pickVaried(k)] as const).filter(([, legs]) => legs).map(([k, legs]) => ticket('probabile-' + k, 'Multipla più probabile · ' + k + ' eventi', 'Gli ' + k + ' esiti con la probabilità misurata più alta della settimana, su partite diverse, con mercati vari (non solo Over/Under).', legs!));
   // 7. Bomba della settimana: 5–8 eventi su tutta la settimana, quota 50–200.
   // Solo esiti con probabilità ≥ 45% e mai contro il mercato: preferiti quelli con valore positivo.
   const bombPool = perMatch(c, l => l.p >= 0.45 && l.odds >= 1.55 && l.odds <= 3.6 && l.edge > -0.03, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 18);
