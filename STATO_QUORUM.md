@@ -38,9 +38,15 @@ OpenAI respinge con 403 (`unsupported_country_region_territory`) le richieste ch
 - `wrangler deploy --dry-run` con la configurazione autonoma: OK.
 - Build di produzione avviata in locale: pagine 200. Le API rifiutano gli header d'identità falsificati (401/403).
 
+## Verificato in produzione (19 nov 2026, 03:15)
+- URL: https://quorum-football-lab.emilianodc-myedu.workers.dev (Cloudflare Workers + D1 `quorum-football-lab-db`, Europa).
+- Accesso: Cloudflare Access (team `twilight-frost-2e90`, Zero Trust Free), policy «Cloudflare account members», tutto il traffico; JWT verificato dal server.
+- Deploy automatico a ogni push su `main` (GitHub Actions), 5 secret configurati.
+- **Causa del blocco OpenAI dimostrata:** credito API esaurito (HTTP 429 `insufficient_quota`) + permesso `List models: Read` assente (HTTP 403), che la versione precedente rendeva bloccante. Regione: OK (IT/FRA). Dopo la ricarica: Responses HTTP 200 con `gpt-6.1-sol`.
+- Spiegazione AI reale generata su scenario demo; puntata virtuale salvata in D1.
+
 ## Non ancora verificato
-- Nessuna chiamata reale a OpenAI, API-Football, Sportmonks o The Odds API: il workspace di sviluppo non raggiunge quei domini.
-- Deploy reale su Cloudflare e configurazione di Access.
+- API-Football, Sportmonks, The Odds API: account non ancora attivati.
 - Il test `tests/integration.mjs` resta da adattare.
 - Il modello statistico resta una baseline non calibrata. Nessun rendimento dimostrato.
 
