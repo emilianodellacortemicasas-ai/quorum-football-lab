@@ -12,7 +12,7 @@ const navigation=[{id:'overview',label:'Panoramica',icon:LayoutDashboard},{id:'m
 const initial:Workspace={authenticated:false,portfolios:previewPortfolios,bets:[],providerConnected:false,aiConnected:false};
 const todayRome=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 
-function Mark(){return <svg viewBox="0 0 36 36" fill="none" aria-hidden="true"><circle cx="17" cy="17" r="11" stroke="currentColor" strokeWidth="4.5"/><path d="m23 23 8 8" stroke="currentColor" strokeWidth="4.5"/><circle cx="17" cy="17" r="3" fill="currentColor"/></svg>;}
+function Mark(){return <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="30" cy="30" r="19" stroke="currentColor" strokeWidth="5"/><path d="M11 30h38" stroke="currentColor" strokeWidth="1.6" strokeOpacity=".45"/><circle cx="30" cy="30" r="4.2" fill="currentColor"/><path d="M40 40 51 51" stroke="currentColor" strokeWidth="6" strokeLinecap="round"/><circle cx="56.5" cy="56.5" r="2.6" fill="currentColor" fillOpacity=".55"/></svg>;}
 function Tag({children,tone='green'}:{children:React.ReactNode;tone?:string}){return <span className={'tag '+tone}>{children}</span>;}
 function Club({code,color,small=false}:{code:string;color:string;small?:boolean}){return <span className={'club '+(small?'small':'')} style={{'--club':color} as React.CSSProperties}>{code}</span>;}
 function Dialog({title,onClose,children,wide=false}:{title:string;onClose:()=>void;children:React.ReactNode;wide?:boolean}){

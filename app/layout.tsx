@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'QUORUM' },
   icons: { icon: '/favicon.svg', apple: '/apple-touch-icon.png' },
 };
-export const viewport: Viewport = { themeColor: '#172c20', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
+export const viewport: Viewport = { themeColor: '#07110D', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 // The site sits behind Cloudflare Access: the manifest must be fetched with the session cookie,
 // otherwise Access redirects it to the login page and the app cannot be installed.
 export default function RootLayout({children}:Readonly<{children:React.ReactNode}>) {
