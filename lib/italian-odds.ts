@@ -75,11 +75,25 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
   const m = await meta(key);
   const ids = Object.entries(m.tournaments); if (!ids.length) return [];
   const compOf = (tid: number) => ids.find(([, v]) => v === tid)?.[0] ?? '';
-  return cached<ItalianFixture[]>('oddspapi:odds', 10 * 3600000, async () => {
+  // The API accepts at most 5 tournaments per call: the 5 leagues every 12h, Coppa Italia every 24h.
+  // 2 bookmakers × (2 + 1) calls a day ≈ 180 requests a month, plus ~13 for the weekly catalogue.
+  const groups: [string, number, [string, number][]][] = [
+    ['oddspapi:odds', 12 * 3600000, ids.filter(([c]) => c !== 'Coppa Italia')],
+    ['oddspapi:odds:cup', 24 * 3600000, ids.filter(([c]) => c === 'Coppa Italia')],
+  ];
+  const out: ItalianFixture[] = [];
+  for (const [cacheId, age, group] of groups) {
+    if (!group.length) continue;
+    try { out.push(...await cached<ItalianFixture[]>(cacheId, age, () => fetchGroup(group.map(x => x[1])))); }
+    catch (e) { if (!out.length && cacheId === 'oddspapi:odds') throw e; }
+  }
+  return out;
+  async function fetchGroup(tids: number[]) {
     const byFixture = new Map<string, ItalianFixture>();
     for (const b of IT_BOOKS) {
       const slug = m.books[b.key]; if (!slug) continue;
-      const data = list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + ids.map(x => x[1]).join(',') + '&oddsFormat=decimal', key));
+      await new Promise(r => setTimeout(r, 1100));
+      const data = list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + tids.join(',') + '&oddsFormat=decimal', key!));
       for (const f of data) {
         const fid = String(f.fixtureId), board = f.bookmakerOdds?.[slug]; if (!board) continue;
         const fx: ItalianFixture = byFixture.get(fid) ?? { home: f.participant1Name, away: f.participant2Name, start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
@@ -95,7 +109,7 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
       }
     }
     return [...byFixture.values()].filter(f => f.home && f.away && Object.keys(f.quotes).length);
-  });
+  }
 }
 
 export function matchItalian(fix: { home: string; away: string; kickoff: string; competition: string }, list: ItalianFixture[]) {
