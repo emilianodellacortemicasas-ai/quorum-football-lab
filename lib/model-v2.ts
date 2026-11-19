@@ -8,7 +8,7 @@ export const PRIOR_GOALS = 4;        // shrinkage: pseudo-goals toward the leagu
 
 export type Result = { id: number; ts: number; comp: string; season: number | null; homeId: number; awayId: number; home: string; away: string; hg: number; ag: number };
 export type TeamRating = { name: string; att: number; def: number; n: number };
-export type LeagueModel = { mu: number; homeAdv: number; rho: number; teams: Record<string, TeamRating>; matches: number };
+export type LeagueModel = { mu: number; homeAdv: number; rho: number; teams: Record<string, TeamRating>; matches: number; scale?: number };
 export type TableRow = { teamId: number; name: string; played: number; points: number; gf: number; ga: number; position: number };
 
 // 90-minute score (2ND_HALF is cumulative; CURRENT may include extra time).
@@ -21,7 +21,6 @@ export function parseResult(f: any, comp: string | null): Result | null {
   return { id: f.id, ts: f.starting_at_timestamp * 1000, comp, season: Number.isInteger(f.season_id) ? f.season_id : null, homeId: h.id, awayId: a.id, home: h.name, away: a.name, hg, ag };
 }
 
-const weight = (ts: number, now: number) => Math.pow(0.5, Math.max(0, now - ts) / 86400000 / HALF_LIFE_DAYS);
 
 // Dixon–Coles dependence correction for low scores.
 export function tau(i: number, j: number, lh: number, la: number, rho: number) {
@@ -33,8 +32,10 @@ export function tau(i: number, j: number, lh: number, la: number, rho: number) {
 }
 
 // log λ_home = mu + homeAdv + att_home + def_away ; log λ_away = mu + att_away + def_home  (def = defensive weakness)
-export function fitLeague(results: Result[], now: number): LeagueModel | null {
-  const rows = results.filter(r => r.ts < now).map(r => ({ ...r, w: weight(r.ts, now) }));
+export type FitOptions = { halfLife?: number; prior?: number; fitRho?: boolean; windowDays?: number };
+export function fitLeague(results: Result[], now: number, opts: FitOptions = {}): LeagueModel | null {
+  const hl = opts.halfLife ?? HALF_LIFE_DAYS, PRIOR = opts.prior ?? PRIOR_GOALS, from = now - (opts.windowDays ?? 400) * 86400000;
+  const rows = results.filter(r => r.ts < now && r.ts >= from).map(r => ({ ...r, w: Math.pow(0.5, (now - r.ts) / 86400000 / hl) }));
   if (rows.length < 30) return null;
   const ids = [...new Set(rows.flatMap(r => [r.homeId, r.awayId]))].map(String);
   const att: Record<string, number> = {}, def: Record<string, number> = {}, n: Record<string, number> = {}, name: Record<string, string> = {};
@@ -65,8 +66,8 @@ export function fitLeague(results: Result[], now: number): LeagueModel | null {
       gA[r.homeId] += r.w * r.ag; eA[r.homeId] += r.w * la / Math.exp(def[r.homeId]);
     }
     for (const id of ids) {
-      att[id] = Math.log((gF[id] + PRIOR_GOALS * base) / (eF[id] + PRIOR_GOALS * base));
-      def[id] = Math.log((gA[id] + PRIOR_GOALS * base) / (eA[id] + PRIOR_GOALS * base));
+      att[id] = Math.log((gF[id] + PRIOR * base) / (eF[id] + PRIOR * base));
+      def[id] = Math.log((gA[id] + PRIOR * base) / (eA[id] + PRIOR * base));
     }
     const ma = ids.reduce((s, id) => s + att[id], 0) / ids.length, md = ids.reduce((s, id) => s + def[id], 0) / ids.length;
     for (const id of ids) { att[id] -= ma; def[id] -= md; }
@@ -74,7 +75,7 @@ export function fitLeague(results: Result[], now: number): LeagueModel | null {
   }
   // rho by grid search on the weighted likelihood of the low-score cells
   let rho = 0, best = -Infinity;
-  for (let r0 = -0.2; r0 <= 0.101; r0 += 0.01) {
+  if (opts.fitRho !== false) for (let r0 = -0.2; r0 <= 0.101; r0 += 0.01) {
     let ll = 0;
     for (const r of rows) {
       if (r.hg > 1 || r.ag > 1) continue;
@@ -92,7 +93,7 @@ export function fitLeague(results: Result[], now: number): LeagueModel | null {
 export function lambdas(m: LeagueModel, homeId: number, awayId: number, neutral = false) {
   const h = m.teams[homeId], a = m.teams[awayId];
   if (!h || !a || h.n < 3 || a.n < 3) return null;
-  const lh = Math.exp(m.mu + (neutral ? 0 : m.homeAdv) + h.att + a.def), la = Math.exp(m.mu + a.att + h.def);
+  const k = m.scale ?? 1, lh = k * Math.exp(m.mu + (neutral ? 0 : m.homeAdv) + h.att + a.def), la = k * Math.exp(m.mu + a.att + h.def);
   return Number.isFinite(lh) && Number.isFinite(la) && lh > 0.05 && la > 0.05 && lh < 6 && la < 6 ? { lh, la } : null;
 }
 

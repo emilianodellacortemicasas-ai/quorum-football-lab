@@ -38,6 +38,8 @@ export async function buildModel():Promise<ModelState>{
  const leagueOnly=unique.filter(r=>r.comp!=='Coppa Italia');
  for(const id of new Set(leagueOnly.flatMap(r=>[r.homeId,r.awayId])))forms[id]=form(leagueOnly,id,5);
  const state={builtAt:new Date().toISOString(),version:MODEL_V2,leagues,tables,forms,results:unique.length};
+ const comps=[...new Set(unique.map(r=>r.comp))],compact=unique.map(r=>[r.id,r.ts,comps.indexOf(r.comp),r.homeId,r.awayId,r.hg,r.ag,r.season]);
+ await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('results',state.builtAt,JSON.stringify({comps,rows:compact})).run();
  await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('v2',state.builtAt,JSON.stringify(state)).run();
  memo={at:Date.now(),state};return state;
 }
@@ -70,4 +72,12 @@ export async function getSportmonksMatch(id:string):Promise<Match>{
   'Include fattore campo del campionato e correzione Dixon–Coles sui risultati bassi. Punteggio dopo i 90 minuti.',
   l?'Stima basata su '+context.homeN+' e '+context.awayN+' partite delle due squadre.':'Dati insufficienti per una delle due squadre: nessuna probabilità generata.',
   context.homeOut===null?'Indisponibili: dato non fornito dal piano dati.':'Indisponibili mostrati a titolo informativo: il loro peso non è ancora nel calcolo.']};
+}
+
+// Stored results for the backtest (names are not needed there).
+export async function storedResults():Promise<Result[]>{
+ let row=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='results'").first<{payload:string}>();
+ if(!row){await buildModel();row=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='results'").first<{payload:string}>();}
+ const {comps,rows}=JSON.parse(row!.payload) as {comps:string[];rows:any[][]};
+ return rows.map(([id,ts,c,homeId,awayId,hg,ag,season])=>({id,ts,comp:comps[c],homeId,awayId,hg,ag,season,home:String(homeId),away:String(awayId)}));
 }
