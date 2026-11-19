@@ -5,10 +5,13 @@ export const SCANNER_VERSION = 'scanner-v1 · poisson-v0.1 + consenso mercato';
 // Model weight in the blended probability. The model is not validated yet, so the market dominates.
 export const MODEL_WEIGHT = 0.35;
 export const MIN_EDGE = 0.03;
-export const MAX_ODDS = 6;
-export const MIN_BOOKS = 3;
+export const MAX_ODDS = 4.5;
+export const MIN_BOOKS = 5;
+// The best price must be within 6% of the median price: isolated outliers are usually stale or errors.
+export const OUTLIER_RATIO = 1.06;
 // A model far from the market is far more often wrong than right: such outcomes are never proposed.
-export const MAX_DISAGREEMENT = 0.12;
+// Allowed gap: 6 points, or 25% of the market probability when that is larger.
+export const maxDisagreement = (pMarket: number) => Math.max(0.06, 0.25 * pMarket);
 export const KELLY_FRACTION = 0.25;
 export const KELLY_CAP = 0.02;
 
@@ -74,7 +77,9 @@ export function marketConsensus(event: OddsEvent) {
   }
   const out: Record<string, { pMarket: number; bestOdds: number; bookmaker: string; books: number }> = {};
   for (const key of new Set(quotes.map(q => q.key))) {
-    const rows = quotes.filter(q => q.key === key), best = rows.reduce((a, c) => c.price > a.price ? c : a);
+    const rows = quotes.filter(q => q.key === key), prices = rows.map(r => r.price).sort((a, b) => a - b);
+    const median = prices.length % 2 ? prices[(prices.length - 1) / 2] : (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2;
+    const best = rows.filter(r => r.price <= median * OUTLIER_RATIO).reduce((a, c) => c.price > a.price ? c : a);
     out[key] = { pMarket: rows.reduce((s, r) => s + r.pFair, 0) / rows.length, bestOdds: best.price, bookmaker: best.bookmaker, books: rows.length };
   }
   return out;
@@ -91,6 +96,6 @@ export function evaluateOutcome(pModel: number, m: { pMarket: number; bestOdds: 
   if (edge < MIN_EDGE) reasons.push('valore insufficiente');
   if (m.bestOdds > MAX_ODDS) reasons.push('quota troppo alta');
   if (m.books < MIN_BOOKS) reasons.push('pochi bookmaker');
-  if (Math.abs(pModel - m.pMarket) > MAX_DISAGREEMENT) reasons.push('modello troppo lontano dal mercato');
+  if (Math.abs(pModel - m.pMarket) > maxDisagreement(m.pMarket)) reasons.push('modello troppo lontano dal mercato');
   return { pBlend, edge, kelly, isPick: reasons.length === 0, reasons };
 }

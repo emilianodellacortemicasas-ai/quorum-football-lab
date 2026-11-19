@@ -43,7 +43,7 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Carico le giocate…</h3></div>
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Scanner non disponibile</h3><p>{error}</p></div>
       : !run ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna scansione ancora.</h3><p>La prima parte in automatico domattina. Puoi avviarla adesso con “Aggiorna ora”.</p></div>
-      : !picks.length ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna giocata supera i filtri.</h3><p>È un risultato normale: QUORUM propone solo esiti con almeno il 3% di valore stimato, quote fino a 6 e almeno 3 bookmaker.</p></div>
+      : !picks.length ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna giocata supera i filtri.</h3><p>È un risultato normale: QUORUM propone solo esiti con almeno il 3% di valore stimato, quote fino a 4,50, almeno 5 bookmaker e un modello non troppo lontano dal mercato.</p></div>
       : <div className="value-list">{picks.map(p => {
         const stake = Math.floor(equityCents * p.kelly / 100) * 100;
         return <article className="value-card" key={p.id}>
@@ -54,6 +54,6 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
           <button className="text-button" onClick={() => onOpen(p.fixture_id)}>Apri la partita<ArrowRight size={15} /></button>
         </article>;
       })}</div>}
-    <p className="footnote">Stima QUORUM = 35% modello + 65% consenso del mercato senza margine. Valore = stima × quota migliore − 1. Puntata indicativa = ¼ di Kelly, massimo 2% del capitale del portafoglio selezionato. Il modello non è ancora validato dal backtest: tratta queste giocate come segnali da verificare. Le quote cambiano: controlla quella del tuo bookmaker prima di giocare.</p>
+    <p className="footnote">Stima QUORUM = 35% modello + 65% consenso del mercato senza margine. Valore = stima × quota migliore − 1 (quota migliore entro il 6% della mediana: i prezzi isolati sono esclusi). Puntata indicativa = ¼ di Kelly, massimo 2% del capitale del portafoglio selezionato. Il modello non è ancora validato dal backtest: tratta queste giocate come segnali da verificare. Le quote cambiano: controlla quella del tuo bookmaker prima di giocare.</p>
   </>;
 }
