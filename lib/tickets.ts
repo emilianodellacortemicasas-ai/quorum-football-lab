@@ -39,7 +39,7 @@ function bestCombo(pool: Leg[], sizes: number[], minOdds: number, maxOdds: numbe
     if (odds > maxOdds) return;
     if (sizes.includes(legs.length) && odds >= minOdds) { const s = score(legs); if (s > bestScore) { bestScore = s; best = [...legs]; } }
     if (legs.length >= Math.max(...sizes)) return;
-    for (let i = start; i < pool.length; i++) visit(i + 1, [...legs, pool[i]], odds * pool[i].odds);
+    for (let i = start; i < pool.length; i++) if (!legs.some(l => l.fixtureId === pool[i].fixtureId)) visit(i + 1, [...legs, pool[i]], odds * pool[i].odds);
   };
   visit(0, [], 1);
   return best as Leg[] | null;
@@ -64,10 +64,14 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const value = perMatch(c, l => l.edge > 0.01 && l.odds >= 1.4 && l.odds <= 3.2, l => l.edge).slice(0, 14);
   const v = bestCombo(value, [3, 4], 3, 20, ev);
   if (v) tickets.push(ticket('valore', 'Multipla di valore', 'Solo esiti dove la quota paga più della probabilità stimata.', v));
-  // 5. Multipla ambiziosa: 4–6 eventi, quota 10–25, massima probabilità.
-  const wide = perMatch(c, l => l.p >= 0.5 && l.odds >= 1.3 && l.odds <= 2.6, l => l.p + Math.max(0, l.edge)).slice(0, 16);
-  const a = bestCombo(wide, [4, 5, 6], 10, 25, prob);
-  if (a) tickets.push(ticket('ambiziosa', 'Multipla ambiziosa', 'Quota alta: vince raramente, punta poco.', a));
+  // 5. Multiple a quota 10: 3 e 5 eventi, quota totale 9,5–13,5. Tra le combinazioni in quella fascia sceglie
+  // la più probabile, con un piccolo premio al valore. Più esiti candidati per partita, ma mai due della stessa partita.
+  const q10pool = c.filter(l => l.p >= 0.4 && l.odds >= 1.4 && l.odds <= 3.6 && l.edge > -0.03)
+    .sort((a, b) => (b.p * (1 + Math.max(0, b.edge) * 2)) - (a.p * (1 + Math.max(0, a.edge) * 2))).slice(0, 26);
+  for (const k of [3, 5]) {
+    const q = bestCombo(q10pool, [k], 9.5, 13.5, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
+    if (q) tickets.push(ticket('quota10-' + k, 'Multipla quota 10 · ' + k + ' eventi', k + ' esiti scelti per arrivare a quota 10–13 con la probabilità più alta possibile: un buon premio senza esagerare.', q));
+  }
   // 6. La multipla più probabile: per 3, 4 e 5 eventi, gli esiti con la probabilità più alta (uno per partita).
   // Il prodotto delle probabilità è massimo prendendo i k esiti più probabili su partite diverse. Quota minima 1,10 per esito.
   const surest = perMatch(c, l => l.odds >= 1.1 && l.p >= 0.6, l => l.p);

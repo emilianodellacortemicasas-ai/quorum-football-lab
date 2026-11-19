@@ -8,7 +8,7 @@ test('tickets: one leg per match, odds windows respected',()=>{
   assert.ok(singles.length>0);for(const s of singles)assert.ok(s.odds>=1.8&&s.odds<=2.4);
   const r=tickets.find(t=>t.kind==='raddoppio-multipla');assert.ok(r);assert.ok(r.odds>=1.9&&r.odds<=2.3);
   for(const t of tickets)assert.equal(new Set(t.legs.map(l=>l.fixtureId)).size,t.legs.length);
-  const a=tickets.find(t=>t.kind==='ambiziosa');if(a)assert.ok(a.odds>=10&&a.odds<=25);
+  for(const t of tickets.filter(t=>t.kind.startsWith('quota10-')))assert.ok(t.odds>=9.5&&t.odds<=13.5);
 });
 test('bomba: high odds, 5–8 legs, distinct matches',()=>{
   const ms=Array.from({length:16},(_,i)=>mk(i,{home:[0.5+(i%5)*0.02,2.1],over25:[0.55,1.85],under25:[0.45,2.05]}));
@@ -20,4 +20,9 @@ test('multipla più probabile: top-k probabilities on distinct matches',()=>{
   const p4=probable.find(t=>t.kind==='probabile-4');assert.equal(p4.legs.length,4);
   assert.equal(new Set(p4.legs.map(l=>l.fixtureId)).size,4);
   assert.ok(probable[0].p>=probable[1].p&&probable[1].p>=probable[2].p);
+});
+test('multiple a quota 10: 3 e 5 eventi',()=>{
+  const ms=Array.from({length:14},(_,i)=>mk(i,{home:[0.47+(i%4)*0.02,2.15],over25:[0.56,1.8],under25:[0.44,2.2],btts:[0.6,1.62]}));
+  const {tickets}=buildTickets(ms);
+  for(const k of [3,5]){const t=tickets.find(x=>x.kind==='quota10-'+k);assert.ok(t,'manca '+k);assert.equal(t.legs.length,k);assert.ok(t.odds>=9.5&&t.odds<=13.5);assert.equal(new Set(t.legs.map(l=>l.fixtureId)).size,k);}
 });
