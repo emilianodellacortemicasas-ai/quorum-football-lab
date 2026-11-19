@@ -15,10 +15,10 @@ const pc = (p: number) => percent(p, p < 0.1 ? 1 : 0);
 const verdict = (p: number) => p >= 0.6 ? 'alta' : p >= 0.35 ? 'media' : p >= 0.12 ? 'bassa' : 'molto bassa';
 const oneIn = (p: number) => p >= 0.5 ? 'vince circa ' + Math.round(p * 10) + ' volte su 10' : 'vince circa 1 volta su ' + Math.max(2, Math.round(1 / p));
 
-function TicketCard({ t, equityCents, onLab, cal, track, history }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void; cal?: Cal; track?: Track; history?: Hist }) {
+function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core' }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void; cal?: Cal; track?: Track; history?: Hist; role?: 'core' | 'min' }) {
   const h = history?.byKind.find(x => x.kind === t.kind);
   const kindBase = t.kind.replace(/-\d+$/, ''), real = track?.filter(x => x.kind === t.kind || x.kind.replace(/-\d+$/, '') === kindBase).reduce((a, x) => ({ n: a.n + x.n, won: a.won + x.won, exp: a.exp + (x.expectedHit ?? 0) * x.n }), { n: 0, won: 0, exp: 0 });
-  const raw = Math.floor(equityCents * (t.kind === 'bomba' ? 0.002 : t.kelly) / 100) * 100, stake = t.kind === 'bomba' || t.kelly > 0 ? Math.max(200, raw) : 0;
+  const raw = Math.floor(equityCents * t.kelly / 100) * 100, stake = role === 'min' ? 200 : t.kelly > 0 ? Math.max(200, raw) : 0, started = (t as any).started;
   return <article className={'value-card ticket ' + t.kind}>
     <div className="value-head"><span>{t.title}</span><b className={t.ev > 0 ? 'edge' : 'edge neutral'}>{t.ev > 0 ? '+' + percent(t.ev) + ' valore' : 'valore ' + percent(t.ev)}</b></div>
     <div className={'reliability r-' + verdict(t.p).replace(' ', '-')}>
@@ -29,7 +29,8 @@ function TicketCard({ t, equityCents, onLab, cal, track, history }: { t: Ticket;
     <p className="small-note">{t.description}</p>
     <ul className="legs">{t.legs.map(l => <li key={l.fixtureId + l.market}><div><strong>{l.fixture}</strong><small>{l.competition} · {when(l.kickoff)}</small></div><div className="leg-pick"><b>{l.label}</b><span>{l.odds.toFixed(2)}</span><small>{percent(l.p, 0)}{l.italian ? '' : ' · estera'}</small></div></li>)}</ul>
     <div className="value-pick"><strong>Quota totale</strong><span className="odds">{t.odds.toFixed(2)}</span><small>{t.italian ? 'su Lottomatica / Planetwin365' : 'quote migliori (anche estere)'}</small></div>
-    <p className="small-note">{t.kind === 'bomba' ? 'Puntata indicativa ' + money(stake) + ': piccola, è una giocata da sogno.' : stake > 0 ? 'Puntata indicativa ' + money(stake) + ' (' + percent(t.kelly) + ' del capitale).' : 'Valore atteso non positivo: se la giochi, punta il minimo.'} {t.italian ? 'Tutte le quote sono di Lottomatica / Planetwin365.' : 'Quote: ' + [...new Set(t.legs.map(l => l.bookmaker))].join(', ') + (t.legs.some(l => !l.italian) ? ' (alcuni esiti non sono quotati da Lottomatica / Planetwin365).' : '.')} Il valore misura quanto paga la quota rispetto alla probabilità: conta, ma leggi prima l’affidabilità.</p>
+    <p className={'stake-line ' + (role === 'min' ? 'min' : stake > 0 ? 'go' : 'skip')}>{started ? 'Già iniziata: non più giocabile, la vedi per seguirne l’esito.' : role === 'min' ? 'Puntata minima: ' + money(stake) + '. Giocata da sogno, non serve a far crescere il capitale.' : stake > 0 ? 'Puntata consigliata: ' + money(stake) + ' (' + percent(Math.max(t.kelly, 200 / Math.max(equityCents, 1))) + ' del capitale).' : 'Oggi la quota non ripaga il rischio: per far crescere il capitale meglio saltarla.'}</p>
+    <p className="small-note">{t.italian ? 'Tutte le quote sono di Lottomatica / Planetwin365.' : 'Quote: ' + [...new Set(t.legs.map(l => l.bookmaker))].join(', ') + (t.legs.some(l => !l.italian) ? ' (alcuni esiti non sono quotati da Lottomatica / Planetwin365).' : '.')} Gioca solo se la quota sul tuo conto è uguale o più alta.</p>
     <button className="text-button" onClick={() => onLab(t.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds })))}><FlaskConical size={15} />Analizza nel Laboratorio</button>
   </article>;
 }
@@ -48,7 +49,7 @@ export function TicketsView({ equityCents, onLab, notify }: { equityCents: numbe
     catch (e) { notify(e instanceof Error ? e.message : 'Aggiornamento non riuscito.'); } finally { setScanning(false); }
   }
   return <>
-    <div className="page-heading"><div><p className="eyebrow">SCHEDINE</p><h1>Pronte da giocare<span>.</span></h1><p>Raddoppi e multiple composti in automatico dai pronostici della settimana. Un solo esito per partita.</p></div>
+    <div className="page-heading"><div><p className="eyebrow">SCHEDINE</p><h1>Pronte da giocare<span>.</span></h1><p>Obiettivo: far crescere il capitale. Prima le schedine con lo storico migliore, poi le giocate da sogno a puntata minima.</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Aggiornamento…' : 'Aggiorna ora'}</button></div>
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Compongo le schedine…</h3></div>
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Schedine non disponibili</h3><p>{error}</p></div>
@@ -57,12 +58,22 @@ export function TicketsView({ equityCents, onLab, notify }: { equityCents: numbe
         {data.history && data.history.byKind.length > 0 && <section className="panel history-panel"><h3>Come sarebbero andate queste schedine nel passato</h3><p className="small-note">Backtest con quote reali (media dei bookmaker, football-data.co.uk): {data.history.weeks} settimane, {data.history.matches} partite, stesse regole di oggi e solo dati disponibili prima di ogni partita. Mercati del backtest: 1X2, doppia chance, Over/Under 2,5.</p>
           <table><thead><tr><th>Schedina</th><th>Giocate</th><th>Vinte</th><th>Prevista</th><th>Rendimento</th></tr></thead><tbody>{[...data.history.byKind].sort((a, b) => b.hit - a.hit).map(k => <tr key={k.kind}><td>{k.title}<small> · quota media {k.avgOdds.toFixed(2)}</small></td><td>{k.n}</td><td><b>{percent(k.hit, 0)}</b></td><td>{percent(k.expected, 0)}</td><td className={k.roi >= 0 ? 'pos' : 'neg'}>{k.roi >= 0 ? '+' : ''}{percent(k.roi, 0)}</td></tr>)}</tbody></table>
           <p className="small-note">“Vinte” è la percentuale reale, “Prevista” quella che QUORUM stimava. Se sono vicine, l’affidabilità è credibile. Rendimento = guadagno medio per euro puntato.</p></section>}
-        {data.bomb && <><h3 className="day-title">💣 Bomba della settimana</h3><div className="value-list bomb-list"><TicketCard t={data.bomb} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} /></div></>}
-        {data.probable && data.probable.length > 0 && <><h3 className="day-title">🎯 La multipla più probabile</h3><p className="small-note">La combinazione con la probabilità statistica di successo più alta: più eventi aggiungi, più sale la quota e scende la probabilità.</p><div className="value-list probable-list">{data.probable.map(t => <TicketCard key={t.kind} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} />)}</div></>}
-        <h3 className="day-title">Multiple</h3>
-        {data.tickets.length ? <div className="value-list">{data.tickets.map(t => <TicketCard key={t.kind} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} />)}</div> : <p className="small-note">Nessuna combinazione rispetta i criteri con le partite di oggi.</p>}
-        <h3 className="day-title">Raddoppi con la singola</h3>
-        {data.singles.length ? <div className="value-list">{data.singles.map((t, i) => <TicketCard key={i} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} />)}</div> : <p className="small-note">Nessuna singola a quota 2 con probabilità sufficiente.</p>}
+        {(() => {
+          const p3 = data.probable?.find(t => t.kind === 'probabile-3'), rm = data.tickets.find(t => t.kind === 'raddoppio-multipla'), q3 = data.tickets.find(t => t.kind === 'quota10-3');
+          const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} />;
+          return <>
+            <h3 className="day-title">📈 Per far crescere il capitale</h3>
+            <p className="small-note">Le schedine con lo storico migliore. Giocale con la puntata consigliata, calcolata sul tuo capitale: quando una non ripaga il rischio, QUORUM ti dice di saltarla.</p>
+            <div className="value-list">{p3 && card(p3)}{rm && card(rm)}</div>
+            {!p3 && !rm && <p className="small-note">Oggi nessuna combinazione rispetta i criteri.</p>}
+            <h3 className="day-title">🎯 Raddoppi singoli di valore</h3>
+            <p className="small-note">Una sola partita a quota circa 2, scelta tra le più probabili dove la quota di Lottomatica / Planetwin365 paga più del dovuto.</p>
+            {data.singles.length ? <div className="value-list">{data.singles.map(t => card(t))}</div> : <p className="small-note">Oggi nessuna partita a quota 2 con valore e probabilità sufficienti.</p>}
+            <h3 className="day-title">🎲 A puntata minima</h3>
+            <p className="small-note">Per sognare, non per costruire il capitale: sempre la giocata minima.</p>
+            <div className="value-list bomb-list">{data.bomb && card(data.bomb, 'min')}{q3 && card(q3, 'min')}</div>
+          </>;
+        })()}
       </>}
     <p className="footnote">Affidabilità misurata = probabilità che la schedina vinca, corretta con il backtest (ogni settimana QUORUM riverifica il modello su circa 150 giorni di partite) e, man mano che le partite finiscono, con i risultati reali delle sue previsioni. L’intervallo indica l’incertezza della misura. Probabilità = stima QUORUM (modello + mercato). Le probabilità delle multiple si moltiplicano: più eventi aggiungi, più cala la probabilità di vincere e più margine guadagna il bookmaker. Le quote indicate sono le migliori trovate, anche su bookmaker diversi: verifica quella del tuo prima di giocare.</p>
   </>;

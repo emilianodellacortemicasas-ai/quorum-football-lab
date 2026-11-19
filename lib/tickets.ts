@@ -68,9 +68,10 @@ const ev = (legs: Leg[]) => prob(legs) * legs.reduce((s, l) => s * l.odds, 1);
 
 export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const c = candidates(matches, now);
-  // 1. Raddoppi con la singola: quota 1,80–2,40, ordinati per valore e poi probabilità.
-  const singles = perMatch(c, l => l.odds >= 1.8 && l.odds <= 2.4 && l.p >= 0.42, l => l.edge + l.p * 0.01).slice(0, 6)
-    .map(l => ticket('raddoppio-singola', 'Raddoppio · singola', 'Una sola partita a quota circa 2: se vince raddoppi la puntata.', [l]));
+  // 1. Raddoppi con la singola: una partita a quota 1,70–2,50 dove la quota giocabile ha valore (≥ +2%),
+  // ordinate per probabilità: prima le più probabili tra quelle che pagano più del dovuto.
+  const singles = perMatch(c, l => l.odds >= 1.7 && l.odds <= 2.5 && l.p >= 0.45 && l.edge >= 0.02, l => l.p + l.edge * 0.25).slice(0, 6)
+    .map(l => ticket('raddoppio-singola', 'Raddoppio · singola di valore', 'Una sola partita a quota circa 2 dove la quota paga più della probabilità: se vince raddoppi la puntata.', [l]));
   const tickets: Ticket[] = [];
   // 2. Raddoppio in multipla: 2–3 esiti molto probabili, quota totale 1,90–2,30, massima probabilità.
   const safe = perMatchTop(c, l => l.p >= 0.68 && l.odds >= 1.15 && l.odds <= 1.65, l => l.p, 3).slice(0, 40);

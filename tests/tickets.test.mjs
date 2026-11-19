@@ -5,7 +5,7 @@ const mk=(i,ps)=>({fixture_id:'sm-'+i,fixture:'A'+i+' – B'+i,competition:'Seri
 const matches=Array.from({length:12},(_,i)=>mk(i,{home:[0.55+i*0.02,1.75],draw:[0.25,3.6],away:[0.2,4.5],over15:[0.78,1.28],under25:[0.48,2.12],over25:[0.52,1.9]}));
 test('tickets: one leg per match, odds windows respected',()=>{
   const {singles,tickets}=buildTickets(matches);
-  assert.ok(singles.length>0);for(const s of singles)assert.ok(s.odds>=1.8&&s.odds<=2.4);
+  assert.ok(singles.length>0);for(const s of singles)assert.ok(s.odds>=1.7&&s.odds<=2.5&&s.ev>=0.02);
   const r=tickets.find(t=>t.kind==='raddoppio-multipla');assert.ok(r);assert.ok(r.odds>=1.9&&r.odds<=2.3);
   for(const t of tickets)assert.equal(new Set(t.legs.map(l=>l.fixtureId)).size,t.legs.length);
   for(const t of tickets.filter(t=>t.kind.startsWith('quota10-')))assert.ok(t.odds>=9.5&&t.odds<=13.5);

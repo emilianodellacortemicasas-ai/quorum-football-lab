@@ -222,3 +222,5 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .history-panel th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:#5d6f63;padding:6px 8px;border-bottom:1px solid #dfe7da}
 .history-panel td{padding:7px 8px;border-bottom:1px solid #eef2ea}.history-panel td small{color:#7b8a80}
 .history-panel td.pos{color:#1f5c3f;font-weight:700}.history-panel td.neg{color:#9a3d22;font-weight:700}
+.stake-line{margin:4px 0 0;padding:9px 12px;border-radius:10px;font-size:13px;font-weight:600}
+.stake-line.go{background:#e8f5e4;color:#1f5c3f}.stake-line.min{background:#f4f1ea;color:#6b5a2e}.stake-line.skip{background:#fbf0ec;color:#9a3d22}

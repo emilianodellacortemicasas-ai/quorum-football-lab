@@ -13,10 +13,10 @@ export async function recordTickets(t: { singles: Ticket[]; tickets: Ticket[]; b
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
   const d = new Date(day + 'T12:00:00Z'), monday = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
   const rows: [string, Ticket][] = [...t.tickets.map(x => [x.kind + ':' + day, x] as [string, Ticket]), ...t.singles.slice(0, 3).map((x, i) => ['raddoppio-singola-' + (i + 1) + ':' + day, x] as [string, Ticket])];
-  if (t.bomb) rows.push(['bomba:' + monday, t.bomb]);
+  if (t.bomb) rows.push(['bomba2:' + monday, t.bomb]);
   for (const x of t.probable || []) rows.push([x.kind + ':' + day, x]);
   const stmt = db().prepare('INSERT OR IGNORE INTO scanner_tickets (id,kind,title,legs,odds,p,created_at) VALUES (?,?,?,?,?,?,?)');
-  if (rows.length) await db().batch(rows.map(([id, x]) => stmt.bind(id, x.kind, x.title, JSON.stringify(x.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, odds: l.odds, p: l.p, kickoff: l.kickoff }))), x.odds, x.p, now())));
+  if (rows.length) await db().batch(rows.map(([id, x]) => stmt.bind(id, x.kind, x.title, JSON.stringify(x.legs), x.odds, x.p, now())));
 }
 
 async function finalOf(fixtureId: string, cache: Map<string, { status: string; final?: Final }>) {
@@ -86,4 +86,12 @@ export async function performance() {
     WHERE fo.kickoff < ? AND l.c > f.c`).bind(new Date().toISOString()).all<{ open: number; close: number }>()).results;
   const clv = { n: clvRows.length, beat: clvRows.length ? clvRows.filter(r => r.open > r.close).length / clvRows.length : null, avg: clvRows.length ? clvRows.reduce((s, r) => s + r.open / r.close - 1, 0) / clvRows.length : null };
   return { clv, value: agg(value), valueByMarket: ['1X2', 'Gol', 'Corner', 'Cartellini'].map(g => ({ group: g, ...agg(value.filter((r: any) => g === '1X2' ? ['home', 'draw', 'away'].includes(r.market) : g === 'Gol' ? /^(over|under)\d|^btts|^noGoal/.test(r.market) : g === 'Corner' ? r.market.startsWith('corners:') : r.market.startsWith('cards:'))) })), tickets: kinds, pendingTickets: pending, lastTickets: last };
+}
+
+// The Bomba of the current week (Monday-based, Rome time): fixed for the whole week once created.
+export async function weeklyBomb() {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+  const d = new Date(day + 'T12:00:00Z'), monday = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+  const r = await db().prepare('SELECT id,kind,title,legs,odds,p,created_at,result FROM scanner_tickets WHERE id=?').bind('bomba2:' + monday).first<any>();
+  return r ? { ...r, legs: JSON.parse(r.legs), week: monday } : null;
 }
