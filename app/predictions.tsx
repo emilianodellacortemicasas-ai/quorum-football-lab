@@ -40,7 +40,7 @@ function Extras({ meta, markets }: { meta: any; markets: Record<string, any> }) 
     {c && <div><span>Corner attesi</span><b>{(c.corners[0] + c.corners[1]).toFixed(1)} ({c.corners[0].toFixed(1)}–{c.corners[1].toFixed(1)})</b><b>{line('corners', c.corners[0] + c.corners[1], 12)}</b></div>}
     {cards && <div><span>Cartellini attesi</span><b>{(cards[0] + cards[1]).toFixed(1)} ({cards[0].toFixed(1)}–{cards[1].toFixed(1)})</b><b>{line('cards', cards[0] + cards[1], 6)}</b></div>}
     {pen && <div><span>Rigori</span><b>Assegnato: {percent(pen.awarded, 0)}</b><b>Sbagliato: {percent(pen.missed, 0)}</b></div>}
-    {sc && (sc.home.length || sc.away.length) ? <div><span>Marcatori</span><b className="out">{sc.home.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0)).join(' · ') || '—'}</b><b className="out">{sc.away.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0)).join(' · ') || '—'}</b></div> : null}
+    {sc && (sc.home.length || sc.away.length) ? <div><span>Marcatori</span><b className="out">{sc.home.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0) + (markets['scorer:' + p.id] ? ' (q ' + markets['scorer:' + p.id].bestOdds.toFixed(2) + ')' : '')).join(' · ') || '—'}</b><b className="out">{sc.away.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0) + (markets['scorer:' + p.id] ? ' (q ' + markets['scorer:' + p.id].bestOdds.toFixed(2) + ')' : '')).join(' · ') || '—'}</b></div> : null}
   </div>;
 }
 

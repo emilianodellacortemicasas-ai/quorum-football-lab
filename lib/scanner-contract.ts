@@ -59,8 +59,8 @@ export function marketConsensus(event: OddsEvent) {
         if (!Number.isFinite(o?.price) || o.price <= 1 || o.price > 1000) continue;
         let key: string | null = null, group = m.key;
         if (m.key === 'h2h') key = o.name === event.home_team ? 'home' : o.name === event.away_team ? 'away' : o.name === 'Draw' ? 'draw' : null;
-        if ((m.key === 'totals_corners' || m.key === 'totals_cards') && Number.isFinite(o.point) && o.point > 0 && o.point < 30 && (o.name === 'Over' || o.name === 'Under')) {
-          key = (m.key === 'totals_corners' ? 'corners' : 'cards') + ':total:' + (o.name === 'Over' ? 'over' : 'under') + ':' + o.point; group = m.key + o.point;
+        if (['totals_corners', 'totals_cards', 'alternate_totals_corners', 'alternate_totals_cards'].includes(m.key) && Number.isFinite(o.point) && o.point > 0 && o.point < 30 && (o.name === 'Over' || o.name === 'Under')) {
+          key = (m.key.includes('corners') ? 'corners' : 'cards') + ':total:' + (o.name === 'Over' ? 'over' : 'under') + ':' + o.point; group = m.key.replace('alternate_', '') + o.point;
         }
         if (m.key === 'btts') key = o.name === 'Yes' ? 'btts' : o.name === 'No' ? 'noGoal' : null;
         if (m.key === 'totals' && [1.5, 2.5, 3.5].includes(o.point) && (o.name === 'Over' || o.name === 'Under')) {
@@ -69,6 +69,12 @@ export function marketConsensus(event: OddsEvent) {
         if (!key) continue;
         if (!groups.has(group)) groups.set(group, []);
         groups.get(group)!.push({ key, price: o.price });
+      }
+      // Anytime goalscorer: one-sided market, margin removed with a flat 10% overround.
+      if (m.key === 'player_goal_scorer_anytime') {
+        for (const o of m.outcomes || []) if (o?.name === 'Yes' && typeof o.description === 'string' && Number.isFinite(o.price) && o.price > 1 && o.price < 200)
+          quotes.push({ key: 'anytime:' + normalizeTeam(o.description).join(' '), price: o.price, bookmaker: b.title, pFair: Math.min(0.95, 1 / o.price / 1.1) });
+        continue;
       }
       for (const [group, list] of groups) {
         const needed = group === 'h2h' ? 3 : 2;

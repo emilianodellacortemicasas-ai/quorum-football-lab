@@ -24,7 +24,17 @@ export async function lastRun() {
   return db().prepare('SELECT * FROM scanner_runs ORDER BY started_at DESC LIMIT 1').first<any>();
 }
 
-const marketKeys = (c: Record<string, unknown>) => [...SCANNED_MARKETS, ...Object.keys(c).filter(k => k.startsWith('corners:') || k.startsWith('cards:'))];
+// Map bookmaker scorer names to the model's scorers (by normalized name) → 'scorer:<id>' keys.
+function mapScorers(consensus: Record<string, any>, m: Match | null) {
+  const out: Record<string, any> = {}, sc = [...(m?.context?.scorers?.home || []), ...(m?.context?.scorers?.away || [])];
+  for (const [k, v] of Object.entries(consensus)) {
+    if (!k.startsWith('anytime:')) { out[k] = v; continue; }
+    const name = k.slice(8), p = sc.find(s => { const n = s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); return name === n.replace(/[^a-z0-9 ]+/g, ' ').trim() || name.split(' ').pop() === n.split(' ').pop(); });
+    if (p) out['scorer:' + p.id] = { ...v, label: 'Marcatore: ' + p.name, pModel: p.p };
+  }
+  return out;
+}
+const marketKeys = (c: Record<string, unknown>) => [...SCANNED_MARKETS, ...Object.keys(c).filter(k => k.startsWith('corners:') || k.startsWith('cards:') || k.startsWith('scorer:'))];
 async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>) {
   const out: R[] = []; let i = 0;
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } }));
@@ -71,11 +81,13 @@ export async function runScan(trigger: 'cron' | 'manual') {
     let bttsDownloaded = 0;
     await pool(paired, 4, async ({ f, e }) => {
       const key = ODDS_SPORT[f.competition]; if (!key) return;
-      const cacheId = 'ev:' + e.id, saved = await db().prepare('SELECT built_at,payload FROM model_state WHERE id=?').bind(cacheId).first<{ built_at: string; payload: string }>();
+      const cacheId = 'ev2:' + e.id, saved = await db().prepare('SELECT built_at,payload FROM model_state WHERE id=?').bind(cacheId).first<{ built_at: string; payload: string }>();
       let books: any[] | null = saved && Date.now() - Date.parse(saved.built_at) < BTTS_MAX_AGE ? JSON.parse(saved.payload) : null;
       if (!books) {
         try {
-          const r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts,totals_corners,totals_cards&oddsFormat=decimal', 600);
+          let r: any;
+          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime&oddsFormat=decimal', 600); }
+          catch { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts&oddsFormat=decimal', 600); }
           books = Array.isArray(r.payload?.bookmakers) ? r.payload.bookmakers : []; bttsDownloaded++;
           if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
           await db().prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind(cacheId, new Date().toISOString(), JSON.stringify(books)).run();
@@ -89,11 +101,11 @@ export async function runScan(trigger: 'cron' | 'manual') {
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
     const matchRows: any[] = [];
     paired.forEach(({ f, e }, i) => {
-      const x = modelled[i], consensus = marketConsensus(e), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {};
+      const x = modelled[i], consensus = mapScorers(marketConsensus(e), fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {};
       for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c) continue;
-        const pModel = probs && Number.isFinite(probs[key]) ? probs[key] : null;
-        markets[key] = { pModel, pMarket: c.pMarket, pBlend: pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books };
+        const pModel = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;
+        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend: pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books };
       }
       const fm = fetched[i]; if (fm) markets.meta = { sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
       if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
@@ -104,11 +116,11 @@ export async function runScan(trigger: 'cron' | 'manual') {
     const created = new Date().toISOString(), rows: any[] = [];
     for (const x of modelled) {
       if (!x) continue;
-      const probs = analyzeMatch(x.m)!.markets, consensus = marketConsensus(x.e);
+      const probs = analyzeMatch(x.m)!.markets, consensus = mapScorers(marketConsensus(x.e), x.m);
       for (const key of marketKeys(consensus)) {
-        const c = consensus[key]; if (!c || !Number.isFinite(probs[key])) continue;
-        const v = evaluateOutcome(probs[key], c);
-        rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, marketLabel(key), probs[key], c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created]);
+        const c = consensus[key], pm = Number.isFinite(c?.pModel) ? c.pModel : probs[key]; if (!c || !Number.isFinite(pm)) continue;
+        const v = evaluateOutcome(pm, c);
+        rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, c.label ?? marketLabel(key), pm, c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created]);
       }
     }
     const insert = db().prepare('INSERT INTO scanner_rows (id,run_id,fixture_id,fixture,competition,kickoff,market,label,p_model,p_market,p_blend,best_odds,bookmaker,books,edge,kelly,is_pick,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');

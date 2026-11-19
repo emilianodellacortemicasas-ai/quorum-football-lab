@@ -12,10 +12,10 @@ export function candidates(matches: MatchRow[], now = Date.now()): Leg[] {
   const out: Leg[] = [];
   for (const m of matches) {
     if (Date.parse(m.kickoff) <= now + 10 * 60000) continue;
-    for (const k of [...KEYS, ...Object.keys(m.markets || {}).filter(x => x.startsWith('corners:') || x.startsWith('cards:'))]) {
+    for (const k of [...KEYS, ...Object.keys(m.markets || {}).filter(x => x.startsWith('corners:') || x.startsWith('cards:') || x.startsWith('scorer:'))]) {
       const x = m.markets?.[k];
       if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds) || x.bestOdds <= 1 || (x.books ?? 0) < 3) continue;
-      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k] ?? extraLabel(k), p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
+      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k] ?? x.label ?? extraLabel(k), p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
     }
   }
   return out;
