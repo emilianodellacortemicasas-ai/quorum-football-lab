@@ -29,12 +29,13 @@ async function fdRows(comp: string, season: string): Promise<FdRow[]> {
   await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind(id, new Date().toISOString(), JSON.stringify(rows)).run();
   return rows;
 }
-export async function refreshTicketBacktest() {
+export async function refreshTicketBacktest(weights?: number[]) {
   const results = await storedResults();
   const seasons = new Set(results.map(r => { const d = new Date(r.ts), y = d.getUTCMonth() >= 6 ? d.getUTCFullYear() : d.getUTCFullYear() - 1; return String(y % 100).padStart(2, '0') + String((y + 1) % 100).padStart(2, '0'); }));
   const fd: FdRow[] = [], missing: string[] = [];
   for (const comp of Object.keys(FD_CODES)) for (const s of seasons) { try { fd.push(...await fdRows(comp, s)); } catch { missing.push(comp + ' ' + s); } }
   const odds = matchFd(results.filter(r => r.comp !== 'Coppa Italia'), fd);
+  if (weights) return { compare: weights.map(w => ({ w, ...ticketBacktest(results, odds, 240, Date.now(), w) })) } as any;
   const out = { ...ticketBacktest(results, odds, 240), matchedOdds: odds.size, oddsRows: fd.length, missing };
   await env.DB!.prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('ticket-backtest',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(out.at, JSON.stringify(out)).run();
   return out;

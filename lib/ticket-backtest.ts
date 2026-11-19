@@ -6,7 +6,7 @@ import { fitLeague, lambdas, type Result } from './model-v2';
 import { buildTickets, type Ticket } from './tickets.ts';
 import type { FdRow } from './football-data-contract.ts';
 
-const W = 0.35, WEEK = 7 * 86400000;
+const WEEK = 7 * 86400000;
 export type KindStat = { kind: string; title: string; n: number; won: number; hit: number; expected: number; roi: number; avgOdds: number; avgLegs: number };
 const won = (t: Ticket, res: Map<string, Result>) => t.legs.every(l => {
   const r = res.get(l.fixtureId)!, tot = r.hg + r.ag;
@@ -17,7 +17,7 @@ const won = (t: Ticket, res: Map<string, Result>) => t.legs.every(l => {
   }
 });
 
-export function ticketBacktest(results: Result[], odds: Map<string | number, FdRow>, testDays = 240, now = Date.now()) {
+export function ticketBacktest(results: Result[], odds: Map<string | number, FdRow>, testDays = 240, now = Date.now(), W = 0.35) {
   const comps = [...new Set(results.map(r => r.comp))].filter(c => c !== 'Coppa Italia');
   const stats = new Map<string, { title: string; n: number; won: number; p: number; profit: number; odds: number; legs: number }>();
   let weeks = 0, matches = 0;

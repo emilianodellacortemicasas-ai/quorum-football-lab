@@ -19,7 +19,7 @@ export async function POST(request:Request){
  if(!await isOwner(request,who))return reply({error:'Solo l’amministratore.'},403);
  try{
   const raw=await request.json() as any;
-  if(raw?.tickets===true){const t0=Date.now();const out=await refreshTicketBacktest();return reply({ms:Date.now()-t0,...out});}
+  if(raw?.tickets===true){const t0=Date.now();const out=await refreshTicketBacktest(Array.isArray(raw.weights)?raw.weights.filter((w:any)=>typeof w==='number'&&w>=0&&w<=1).slice(0,5):undefined);return reply({ms:Date.now()-t0,...out});}
   if(raw?.refresh===true){const t0=Date.now();await refreshBacktest(true);return reply({refreshed:true,ms:Date.now()-t0});}
   const b=input.parse(raw),results=await storedResults(),t0=Date.now();
   const metrics=b.configs.map(c=>backtest(results,c,b.testDays??150));
