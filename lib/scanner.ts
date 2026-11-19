@@ -56,6 +56,20 @@ export async function runScan(trigger: 'cron' | 'manual') {
     const modelled = await pool(paired, 4, async ({ f, e }) => {
       try { const m = await getSportmonksMatch(f.id); return m.lambdaHome !== null && m.lambdaAway !== null ? { m, e } : null; } catch { return null; }
     });
+    // Per-match predictions: every paired match, with the model when available and the market otherwise.
+    const matchRows: any[] = [];
+    paired.forEach(({ f, e }, i) => {
+      const x = modelled[i], consensus = marketConsensus(e), probs = x ? analyze(x.m.lambdaHome!, x.m.lambdaAway!).markets : null, markets: Record<string, any> = {};
+      for (const key of SCANNED_MARKETS) {
+        const c = consensus[key]; if (!c) continue;
+        const pModel = probs && Number.isFinite(probs[key]) ? probs[key] : null;
+        markets[key] = { pModel, pMarket: c.pMarket, pBlend: pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books };
+      }
+      if (x) markets.meta = { sampleHome: x.m.sampleHome, sampleAway: x.m.sampleAway };
+      if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
+    });
+    const insertMatch = db().prepare('INSERT INTO scanner_matches (id,run_id,fixture_id,fixture,competition,kickoff,modelled,lambda_home,lambda_away,markets,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
+    for (let i = 0; i < matchRows.length; i += 50) await db().batch(matchRows.slice(i, i + 50).map(r => insertMatch.bind(...r)));
     // 4. Evaluate every outcome; store all of them (dataset for settlement and backtest), flag the picks.
     const created = new Date().toISOString(), rows: any[] = [];
     for (const x of modelled) {
@@ -89,4 +103,11 @@ export async function latestPicks() {
   const picks = (await db().prepare('SELECT * FROM scanner_rows WHERE run_id=? AND edge > 0 AND kickoff > ? ORDER BY is_pick DESC, edge DESC LIMIT 200').bind(run.id, new Date().toISOString()).all<any>()).results;
   const evaluated = (await db().prepare('SELECT COUNT(*) AS n FROM scanner_rows WHERE run_id=?').bind(run.id).first<{ n: number }>())?.n ?? 0;
   return { run, last, picks, evaluated };
+}
+
+export async function latestPredictions() {
+  const run = await db().prepare("SELECT * FROM scanner_runs WHERE status='ok' ORDER BY started_at DESC LIMIT 1").first<any>();
+  if (!run) return { run: null, matches: [] };
+  const rows = (await db().prepare('SELECT * FROM scanner_matches WHERE run_id=? AND kickoff > ? ORDER BY kickoff').bind(run.id, new Date().toISOString()).all<any>()).results;
+  return { run, matches: rows.map(r => ({ ...r, markets: JSON.parse(r.markets) })) };
 }

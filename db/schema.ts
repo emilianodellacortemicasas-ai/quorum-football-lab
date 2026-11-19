@@ -45,3 +45,9 @@ export const scannerRows = sqliteTable('scanner_rows', {
   edge: real('edge').notNull(), kelly: real('kelly').notNull(), isPick: integer('is_pick').notNull().default(0),
   result: text('result'), createdAt: text('created_at').notNull(),
 }, t => [index('scanner_rows_run').on(t.runId, t.isPick), index('scanner_rows_fixture').on(t.fixtureId)]);
+export const scannerMatches = sqliteTable('scanner_matches', {
+  id: text('id').primaryKey(), runId: text('run_id').notNull(), fixtureId: text('fixture_id').notNull(),
+  fixture: text('fixture').notNull(), competition: text('competition').notNull(), kickoff: text('kickoff').notNull(),
+  modelled: integer('modelled').notNull().default(0), lambdaHome: real('lambda_home'), lambdaAway: real('lambda_away'),
+  markets: text('markets').notNull(), createdAt: text('created_at').notNull(),
+}, t => [index('scanner_matches_run').on(t.runId, t.kickoff)]);

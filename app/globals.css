@@ -121,3 +121,6 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .value-check.ok{background:#e4f5d2;color:#1f5c3f}
 .value-check.warn{background:#fdf0e3;color:#9a4b14}
 .value-card.checked{border-color:#9fd36a}
+.day-title{font-size:15px;text-transform:capitalize;color:var(--muted);margin:18px 0 4px;font-weight:700}
+.small-note{font-size:12px;color:var(--muted);margin:0}
+.value-card.muted{opacity:.75}
