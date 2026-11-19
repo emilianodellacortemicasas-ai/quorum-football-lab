@@ -83,3 +83,11 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Indisponibili: include `sidelined.player;sidelined.type` disponibile nel piano Starter. Mostrati, non ancora pesati nel calcolo.
 - Prima verifica (42 partite): scarto medio dal mercato 4,8 punti su 1X2, 8,5 su Over/Under 2,5 con il modello che sottostima l'Over di 5,4 punti → da correggere col backtest.
 - Le limitazioni dello scanner sono state tolte su richiesta: tutte le giocate con valore > 0 sono visibili, i controlli QUORUM sono un'etichetta. Unico freno: riserva crediti The Odds API (12).
+
+## 19/11/2026 · Backtest e modello v2.1
+- Backtest walk-forward (lib/backtest.ts, endpoint /api/backtest solo admin): rifit settimanale solo con dati precedenti, 461 partite negli ultimi 150 giorni, 1.942 risultati totali.
+- Griglia testata: emivita 45–320 giorni, shrinkage 1–4, fattore gol 1,00–1,09. Scelti: emivita 250, shrinkage 3, fattore gol 1,07.
+- v2.1: log-loss 1X2 0,978 (riferimento frequenze di campionato 1,063); segno più probabile preso 53,6%; Over/Under 2,5 preso 57,5%; gol previsti 3,03 vs reali 3,02; Over previsto 57,2% vs reale 57,7%.
+- Calibrazione pronostici principali: 56%→59% presi, 65%→62%, 74%→72%, 84%→95% (20 casi).
+- Scarto Over 2,5 dal mercato sulle partite in programma: bias da −5,4 a −1,7 punti.
+- Il backtest salvato è mostrato nella pagina Pronostici ("Affidabilità misurata").
