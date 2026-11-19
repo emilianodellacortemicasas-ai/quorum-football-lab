@@ -46,9 +46,17 @@ export async function POST(request:Request){
       if(!diagnosis.keyRecognized)return reply({saved:false,diagnosis,error:'OpenAI non ha accettato la chiave in nessun passaggio. Nessun salvataggio eseguito. Vedi la diagnosi.'},422);
     }else if(body.provider==='api-football'){
       const r=await fetch('https://v3.football.api-sports.io/status',{headers:{'x-apisports-key':key},signal:AbortSignal.timeout(20000)});
-      if(!r.ok)return reply({error:'API-Football non accetta la chiave o non è disponibile (HTTP '+r.status+'). Nessun salvataggio eseguito.'},422);
-      const d=await r.json() as any;
-      if(Object.keys(d.errors||{}).length||!d.response?.subscription)return reply({error:'API-Football non ha confermato il collegamento. Controlla account e chiave.'},422);
+      const d=await r.json().catch(()=>null) as any;
+      const errs=d&&d.errors&&typeof d.errors==='object'&&!Array.isArray(d.errors)?Object.keys(d.errors).filter(k=>/^[A-Za-z]{2,30}$/.test(k)):[];
+      if(!r.ok||errs.length||!d?.response?.subscription){
+        // API-Sports reports problems in `errors` with HTTP 200. Map known keys; never echo raw text.
+        const why=errs.includes('rateLimit')||r.status===429?'API-Football limita le richieste da questo server. Con i server condivisi (Cloudflare) succede anche se la tua chiave ha richieste disponibili: API-Sports lo documenta. Non riprovare a ripetizione: sul piano Free può portare alla sospensione dell’account.'
+          :errs.includes('access')?'API-Football segnala un problema di accesso all’account (possibile sospensione). Controlla la dashboard API-Football.'
+          :errs.includes('token')?'API-Football non riconosce la chiave. Copiala di nuovo da My Access.'
+          :errs.includes('requests')?'Limite giornaliero di richieste API-Football raggiunto.'
+          :'API-Football non ha confermato il collegamento.';
+        return reply({error:why+' (HTTP '+r.status+(errs.length?' · '+errs.join(', '):'')+'). Nessun salvataggio eseguito.',saved:false},422);
+      }
     }else if(body.provider==='sportmonks'){
       const r=await fetch('https://api.sportmonks.com/v3/football/leagues?per_page=1',{headers:{Authorization:key},signal:AbortSignal.timeout(20000)});
       if(!r.ok)return reply({error:'Sportmonks non autorizza il collegamento (HTTP '+r.status+'). Controlla token e abbonamento Football API.',saved:false},422);
