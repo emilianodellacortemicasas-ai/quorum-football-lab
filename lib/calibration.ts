@@ -66,3 +66,11 @@ export function ticketReliability(legs: { p: number; se: number }[]) {
   const rel = Math.sqrt(legs.reduce((s, l) => s + (l.se / Math.max(l.p, 0.01)) ** 2, 0));
   return { p, low: Math.max(0, p * (1 - rel)), high: Math.min(1, p * (1 + rel)) };
 }
+
+// Correction from the ticket backtest with real prices: for each kind of ticket, how many won versus how many
+// QUORUM expected. Shrunk with 5 pseudo-tickets so that a few results do not swing the estimate.
+export function kindFactor(h: { n: number; won: number; expected: number } | undefined) {
+  if (!h || !h.n || !(h.expected > 0)) return 1;
+  const k = 5, exp = h.expected * h.n;
+  return Math.min(1.3, Math.max(0.6, (h.won + k * h.expected) / (exp + k * h.expected)));
+}

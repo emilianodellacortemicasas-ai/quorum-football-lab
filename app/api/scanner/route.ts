@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getIdentity, isOwner } from '../../../lib/identity';
+import { kindFactor } from '../../../lib/calibration';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
@@ -14,7 +15,11 @@ export async function GET(request:Request){
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='performance')return reply(await performance());
-  if(view==='tickets'){const p=await latestPredictions(),[cal,perf]=await Promise.all([loadCalibration().catch(()=>null),performance().catch(()=>null)]);return reply({run:p.run,...buildTickets(p.matches),calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history:await env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null)});}
+  if(view==='tickets'){
+   const p=await latestPredictions(),[cal,perf,history]=await Promise.all([loadCalibration().catch(()=>null),performance().catch(()=>null),env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null)]);
+   const b=buildTickets(p.matches),adj=(t:any)=>{if(!t)return t;const f=kindFactor(history?.byKind?.find((k:any)=>k.kind===t.kind));return {...t,pRaw:t.p,p:Math.min(0.99,t.p*f),low:Math.min(0.99,t.low*f),high:Math.min(0.99,t.high*f),ev:Math.min(0.99,t.p*f)*t.odds-1,factor:f};};
+   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),bomb:adj(b.bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
+  }
   return reply(view==='predictions'?await latestPredictions():await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scanner non disponibile.'},500);}
 }
