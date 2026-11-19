@@ -20,3 +20,9 @@ test('Risk blocks an oversized stake and open exposure that breaches the daily b
 test('Settlement uses net profit, void stakes do not inflate ROI, pending stakes are reserved',()=>{assert.equal(settlementPnl(500,1.8,'won'),400);assert.equal(settlementPnl(500,1.8,'lost'),-500);assert.equal(settlementPnl(500,1.8,'void'),0);const rows=[bet('w',{status:'won',pnlCents:400,settledAt:'2026-11-18T13:00:00Z'}),bet('l',{status:'lost',pnlCents:-500,settledAt:'2026-11-18T13:01:00Z'}),bet('v',{status:'void',settledAt:'2026-11-18T13:02:00Z'}),bet('pending')];const x=portfolioMetrics(p,rows,new Date('2026-11-18T14:00:00Z'));assert.equal(x.equity,99900);assert.equal(x.availableCents,99400);near(x.roi,-.1);assert.equal(x.settledCount,2);near(x.hitRate,.5);});
 test('Daily loss and maximum drawdown stops use actual ledger equity',()=>{const rows=[bet('l',{status:'lost',stakeCents:10000,pnlCents:-10000,settledAt:'2026-11-18T12:00:00Z'})];const x=riskCheck(p,rows,100,new Date('2026-11-18T13:00:00Z'));near(x.drawdown,.1);assert.equal(x.allowed,false);assert.ok(x.reasons.some(x=>x.includes('drawdown')));});
 test('Daily cutoffs follow Rome timezone, including the previous UTC date',()=>{const rows=[bet('l',{status:'lost',pnlCents:-500,settledAt:'2026-11-17T23:15:00Z'})];const x=portfolioMetrics(p,rows,new Date('2026-11-18T09:00:00Z'));assert.equal(x.dayLossCents,500);assert.equal(x.dayStartCents,100000);});
+test('Money-management rules are optional per portfolio; available capital always applies',()=>{
+  const p={id:'p',name:'x',mode:'paper',initialCents:100000,stakeBps:50,exposureBps:300,dayBps:200,drawdownBps:1000,createdAt:'2026-01-01T00:00:00Z'};
+  assert.equal(riskCheck(p,[],10000).allowed,false);
+  assert.equal(riskCheck({...p,limitsEnabled:false},[],10000).allowed,true);
+  assert.equal(riskCheck({...p,limitsEnabled:false},[],200000).allowed,false);
+});

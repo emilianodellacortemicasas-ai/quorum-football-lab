@@ -27,9 +27,13 @@ export async function POST(request:Request) {
   try {
     const body=await request.json() as any;
     if(body.action==='init') {
-      for(let i=0;i<previewPortfolios.length;i++){
-        const p=previewPortfolios[i],id=owner+'-portfolio-'+i;
-        await db.insert(portfolios).values({...p,id,owner,createdAt:new Date().toISOString()}).onConflictDoNothing();
+      // One personal portfolio per new user; the user names it.
+      const existing=await db.select({id:portfolios.id}).from(portfolios).where(eq(portfolios.owner,owner));
+      if(!existing.length){
+        const name=z.string().trim().min(1).max(40).catch('Il mio portafoglio').parse(body.name);
+        const initialCents=z.number().int().min(100).max(100000000).catch(100000).parse(body.initialCents);
+        const {id:_,name:__,...p}=previewPortfolios[0],id=owner+'-portfolio-0';
+        await db.insert(portfolios).values({...p,name,initialCents,id,owner,createdAt:new Date().toISOString()}).onConflictDoNothing();
         await db.insert(locks).values({portfolioId:id,revision:0}).onConflictDoNothing();
       }
     } else if(body.action==='portfolio'){
@@ -43,7 +47,20 @@ export async function POST(request:Request) {
       if(revision===undefined)return failure('Portafoglio non inizializzato.',409);
       const advance=raw.prepare('UPDATE portfolio_revisions SET revision=revision+1 WHERE portfolio_id=? AND revision=?').bind(portfolioId,revision);
       let statement:D1PreparedStatement;
-      if(body.action==='settings'){
+      if(body.action==='rename'){
+        const name=z.string().trim().min(1).max(40).parse(body.name);
+        statement=raw.prepare('UPDATE portfolios SET name=? WHERE id=? AND owner=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(name,portfolioId,owner,portfolioId,revision);
+      } else if(body.action==='limits'){
+        const enabled=z.boolean().parse(body.enabled);
+        statement=raw.prepare('UPDATE portfolios SET limits_enabled=? WHERE id=? AND owner=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(enabled?1:0,portfolioId,owner,portfolioId,revision);
+      } else if(body.action==='delete'){
+        const all=await db.select({id:portfolios.id}).from(portfolios).where(eq(portfolios.owner,owner));
+        if(all.length<2)return failure('Tieni almeno un portafoglio: puoi rinominarlo.');
+        const used=await db.select({id:bets.id}).from(bets).where(and(eq(bets.owner,owner),eq(bets.portfolioId,portfolioId)));
+        if(used.length)return failure('Il portafoglio contiene operazioni registrate: non viene eliminato per non perdere lo storico.');
+        await raw.batch([raw.prepare('DELETE FROM portfolio_revisions WHERE portfolio_id=?').bind(portfolioId),raw.prepare('DELETE FROM portfolios WHERE id=? AND owner=?').bind(portfolioId,owner)]);
+        return Response.json(await workspace(owner),{headers:{'Cache-Control':'no-store'}});
+      } else if(body.action==='settings'){
         const s=settings.parse(body);
         if(s.stakeBps>s.exposureBps || s.stakeBps>s.dayBps)return failure('Il limite singolo deve rientrare nei limiti di giornata e di esposizione.');
         statement=raw.prepare('UPDATE portfolios SET stake_bps=?,exposure_bps=?,day_bps=?,drawdown_bps=? WHERE id=? AND owner=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(s.stakeBps,s.exposureBps,s.dayBps,s.drawdownBps,portfolioId,owner,portfolioId,revision);

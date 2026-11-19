@@ -16,6 +16,5 @@ export const demoMatches: Match[] = [
  {...base,id:'demo-6',home:'Napoli',away:'Juventus',homeCode:'NAP',awayCode:'JUV',homeColor:'#2f8fd0',awayColor:'#c9c9c9',competition:'Serie A',group:'Italia',kickoff:'Scenario F',lambdaHome:1.18,lambdaAway:1.39,odds:{home:2.95,draw:3.25,away:2.5,over25:2.05,under25:1.8,btts:1.95}},
 ];
 export const previewPortfolios: Portfolio[] = [
- {id:'preview-emiliano',name:'Emiliano',mode:'paper',initialCents:100000,stakeBps:50,exposureBps:300,dayBps:200,drawdownBps:1000,createdAt:'2026-11-18T00:00:00Z'},
- {id:'preview-fratello',name:'Mio fratello',mode:'paper',initialCents:100000,stakeBps:50,exposureBps:300,dayBps:200,drawdownBps:1000,createdAt:'2026-11-18T00:00:00Z'},
+ {id:'preview-portfolio',name:'Il mio portafoglio',mode:'paper',initialCents:100000,stakeBps:50,exposureBps:300,dayBps:200,drawdownBps:1000,limitsEnabled:true,createdAt:'2026-11-18T00:00:00Z'},
 ];

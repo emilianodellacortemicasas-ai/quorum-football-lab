@@ -79,11 +79,13 @@ export function riskCheck(portfolio: Portfolio, bets: Bet[], stakeCents: number,
   const m = portfolioMetrics(portfolio,bets,now), reasons: string[] = [];
   const singleCap = Math.floor(m.equity * portfolio.stakeBps / 10000), openCap = Math.floor(m.equity * portfolio.exposureBps / 10000), dayCap = Math.floor(m.dayStartCents * portfolio.dayBps / 10000);
   if (!Number.isSafeInteger(stakeCents) || stakeCents <= 0) reasons.push('Inserisci un importo positivo in centesimi.');
-  if (stakeCents > singleCap) reasons.push('Superato il limite per singola operazione.');
-  if (m.openCents + stakeCents > openCap) reasons.push('Superata l’esposizione massima aperta.');
-  if (m.dayLossCents + m.openCents + stakeCents > dayCap) reasons.push('Superato il budget di perdita della giornata, incluse le operazioni aperte.');
+  // Money-management rules are optional per portfolio; the available-capital check is accounting and always applies.
+  const rules = portfolio.limitsEnabled !== false;
+  if (rules && stakeCents > singleCap) reasons.push('Superato il limite per singola operazione.');
+  if (rules && m.openCents + stakeCents > openCap) reasons.push('Superata l’esposizione massima aperta.');
+  if (rules && m.dayLossCents + m.openCents + stakeCents > dayCap) reasons.push('Superato il budget di perdita della giornata, incluse le operazioni aperte.');
   if (stakeCents > m.availableCents) reasons.push('Disponibilità insufficiente.');
-  if (m.drawdown >= portfolio.drawdownBps / 10000) reasons.push('Stop drawdown raggiunto: sospendi e rivedi il metodo.');
+  if (rules && m.drawdown >= portfolio.drawdownBps / 10000) reasons.push('Stop drawdown raggiunto: sospendi e rivedi il metodo.');
   return {...m, singleCap, openCap, dayCap, reasons, allowed:reasons.length===0};
 }
 export function settlementPnl(stakeCents: number, odds: number, status: string) {

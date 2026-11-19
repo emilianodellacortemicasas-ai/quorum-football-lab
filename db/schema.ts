@@ -4,6 +4,7 @@ export const portfolios = sqliteTable('portfolios', {
   mode: text('mode').notNull().default('paper'), initialCents: integer('initial_cents').notNull(),
   stakeBps: integer('stake_bps').notNull().default(50), exposureBps: integer('exposure_bps').notNull().default(300),
   dayBps: integer('day_bps').notNull().default(200), drawdownBps: integer('drawdown_bps').notNull().default(1000),
+  limitsEnabled: integer('limits_enabled', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
 }, t => [index('portfolios_owner').on(t.owner)]);
 export const bets = sqliteTable('bets', {
