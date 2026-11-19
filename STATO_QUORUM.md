@@ -117,3 +117,10 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Vista "Guida" (app/guide.tsx): 19 slide con schermate reali (public/guide/*.jpg, 1,4 MB), frecce/tasti ←→, ingrandimento immagine, pulsante "Apri la sezione". Copre Pronostici, scheda partita, contesto, Centro partita, corner/cartellini, Valore, Bomba, Multiple, Raddoppi, Laboratorio, Risultati, Money management (regole, budget, profili, limiti), Partite, Collegamenti/telefono, Glossario.
 - Aggiornati testi residui della demo nel Centro partita e nel Laboratorio.
 - Per aggiornare le immagini: sostituire i file in public/guide con lo stesso nome.
+
+## 19/11/2026 · Assenze, formazioni, CLV
+- Assenze nel calcolo (lib/extras.ts attackAdjustment): gol attesi ridotti del 50% della quota di gol dei marcatori indisponibili; con formazioni ufficiali (Sportmonks `lineups`, type 11) anche del 35% per i marcatori in panchina; tetto −25%. Marcatori in panchina ×0,35 nelle probabilità marcatore.
+- Ricalcolo pre-partita: cron orario `10 * * * *` → scansione "prematch" se una partita inizia tra 20 e 80 minuti e l'ultima scansione ha più di 40 minuti (riusa il modello, quote fresche).
+- Quota di chiusura (CLV) in Risultati: quota alla prima proposta vs ultima quota prima del via.
+- Quote italiane (Lottomatica/Planetwin365): The Odds API non le copre. Opzioni trovate: odds-api.io (Solo $65/mese, 2 bookmaker; Lottomatica IT e Planetwin365 IT nell'elenco ADM), OddsPapi (free 250 richieste/mese, 350+ bookmaker, piani a pagamento da verificare), Sportmonks Premium Odds (Planetwin365 sì, Lottomatica no). Planetwin365 appartiene a Lottomatica dal 2024. In attesa di decisione di Emiliano.
+- Link con schedina precompilata sui bookmaker: non realizzabile (nessuna API pubblica di Lottomatica/Planetwin365 per login o schedina da terzi).
