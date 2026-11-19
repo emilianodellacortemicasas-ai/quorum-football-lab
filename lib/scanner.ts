@@ -130,6 +130,12 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         const pBlend = pModel === null ? c.pMarket : evaluateOutcome(pModel, c, calLive(key)).pBlend, it = itBest(fit, key, pBlend), ms = measured(key, pBlend);
         markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}), ...(ms ? { se: ms.se, calN: ms.n } : {}) };
       }
+      // Double chance: probability = sum of the two 1X2 outcomes; price only from Lottomatica / Planetwin365.
+      for (const [k, a, b] of [['homeDraw', 'home', 'draw'], ['drawAway', 'draw', 'away'], ['homeAway', 'home', 'away']] as const) {
+        const x = markets[a], y = markets[b], q = fit?.quotes[k]; if (!x || !y || !q) continue;
+        const pBlend = Math.min(0.995, x.pBlend + y.pBlend), sorted = Object.entries(q).sort((u, v) => v[1].odds - u[1].odds), best = sorted[0][1].odds;
+        markets[k] = { pModel: x.pModel !== null && y.pModel !== null ? x.pModel + y.pModel : null, pMarket: x.pMarket + y.pMarket, pBlend, bestOdds: best, bookmaker: sorted.filter(e => e[1].odds === best).map(e => e[0]).join(' / '), books: Math.min(x.books, y.books), it: Object.fromEntries(sorted.map(([bk, v]) => [bk, v.odds])), se: Math.sqrt((x.se ?? 0.02) ** 2 + (y.se ?? 0.02) ** 2) };
+      }
       const fm = fetched[i]; if (fm) markets.meta = { calibration: cal ? { backtestSamples: cal.backtestSamples, liveSamples: cal.liveSamples, backtestAt: cal.backtestAt } : null, sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
       if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
     });

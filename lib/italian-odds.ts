@@ -37,6 +37,7 @@ type Meta = { tournaments: Record<string, number>; books: Record<string, string>
 const MARKETS: Record<string, Record<string, string>> = {
   '101': { '101': 'home', '102': 'draw', '103': 'away' },
   '104': { '104': 'btts', '105': 'noGoal' },
+  '101902': { '101902': 'homeDraw', '101904': 'drawAway', '101903': 'homeAway' },
   '108': { '108': 'over15', '109': 'under15' },
   '1010': { '1010': 'over25', '1011': 'under25' },
   '1012': { '1012': 'over35', '1013': 'under35' },
@@ -71,14 +72,14 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
   // The API accepts at most 5 tournaments per call: the 5 leagues every 12h, Coppa Italia every 24h.
   // 2 bookmakers × (2 + 1) calls a day ≈ 180 requests a month, plus ~13 for the weekly catalogue.
   const groups: [string, number, [string, number][]][] = [
-    ['oddspapi:odds', 12 * 3600000, ids.filter(([c]) => c !== 'Coppa Italia')],
+    ['oddspapi:odds2', 12 * 3600000, ids.filter(([c]) => c !== 'Coppa Italia')],
     ['oddspapi:odds:cup', 24 * 3600000, ids.filter(([c]) => c === 'Coppa Italia')],
   ];
   const out: ItalianFixture[] = [];
   for (const [cacheId, age, group] of groups) {
     if (!group.length) continue;
     try { out.push(...await cached<ItalianFixture[]>(cacheId, age, () => fetchGroup(group.map(x => x[1])))); }
-    catch (e) { if (!out.length && cacheId === 'oddspapi:odds') throw e; }
+    catch (e) { if (!out.length && cacheId === 'oddspapi:odds2') throw e; }
   }
   return out;
   async function fetchGroup(tids: number[]) {
@@ -116,7 +117,7 @@ export function matchItalian(fix: { home: string; away: string; kickoff: string;
 export async function italianStatus() {
   const key = await credentialValue('oddspapi'); if (!key) return { connected: false };
   const m = await meta(key);
-  const row = await db().prepare("SELECT built_at FROM model_state WHERE id='oddspapi:odds'").first<{ built_at: string }>();
+  const row = await db().prepare("SELECT built_at FROM model_state WHERE id='oddspapi:odds2'").first<{ built_at: string }>();
   return { connected: true, tournaments: m.tournaments, books: m.books, teams: Object.keys(m.teams).length, oddsUpdatedAt: row?.built_at ?? null };
 }
 

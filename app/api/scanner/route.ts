@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { getIdentity, isOwner } from '../../../lib/identity';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
@@ -13,7 +14,7 @@ export async function GET(request:Request){
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='performance')return reply(await performance());
-  if(view==='tickets'){const p=await latestPredictions(),[cal,perf]=await Promise.all([loadCalibration().catch(()=>null),performance().catch(()=>null)]);return reply({run:p.run,...buildTickets(p.matches),calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[]});}
+  if(view==='tickets'){const p=await latestPredictions(),[cal,perf]=await Promise.all([loadCalibration().catch(()=>null),performance().catch(()=>null)]);return reply({run:p.run,...buildTickets(p.matches),calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history:await env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null)});}
   return reply(view==='predictions'?await latestPredictions():await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scanner non disponibile.'},500);}
 }
