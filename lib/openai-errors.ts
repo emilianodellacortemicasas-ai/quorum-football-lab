@@ -53,6 +53,8 @@ export async function egressLocation(fetcher: typeof fetch = fetch): Promise<Dia
   } catch { return { step: 'egress', ok: false, label: 'Posizione di uscita del server', detail: 'non determinata' }; }
 }
 
+const RECOGNIZED = new Set(['model_list_permission', 'model_request_permission', 'key_permission', 'billing', 'rate_limit', 'model_access', 'org_verification']);
+
 export async function diagnoseOpenAi(key: string, model: string, fetcher: typeof fetch = fetch): Promise<OpenAiDiagnosis> {
   const auth = { Authorization: 'Bearer ' + key };
   const [egress, modelsResult, responsesResult] = await Promise.all([
@@ -86,7 +88,8 @@ export async function diagnoseOpenAi(key: string, model: string, fetcher: typeof
   const models = steps.find((s) => s.step === 'models')!, responses = steps.find((s) => s.step === 'responses')!;
   return {
     usable: responses.ok,
-    keyRecognized: models.ok || responses.ok,
+    // A permission, quota or model error proves OpenAI authenticated the key; only 401/region/network do not.
+    keyRecognized: models.ok || responses.ok || [models, responses].some((s) => !!s.category && RECOGNIZED.has(s.category)),
     model, modelListed, visibleModels, steps, checkedAt: new Date().toISOString(),
   };
 }

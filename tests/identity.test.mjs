@@ -65,3 +65,10 @@ test('OpenAI diagnosis: unknown model reported with visible alternatives',async(
   assert.deepEqual(d.visibleModels,['gpt-6-luna','gpt-6.1-sol']);
   assert.equal(d.steps.find(s=>s.step==='responses').category,'model_access');
 });
+
+test('OpenAI diagnosis: exhausted credit still proves the key is valid (saved, not usable)',async()=>{
+  const fetcher=async(url)=>String(url).includes('cdn-cgi/trace')?new Response('colo=FRA\nloc=IT\n'):String(url).endsWith('/v1/models')?json(403,{error:{message:'You have insufficient permissions for this operation. Missing scopes: api.model.read.'}}):json(429,{error:{code:'insufficient_quota',type:'insufficient_quota',message:'credit balance exhausted'}});
+  const d=await diagnoseOpenAi('sk-test','gpt-6.1-sol',fetcher);
+  assert.equal(d.usable,false);assert.equal(d.keyRecognized,true);
+  assert.equal(d.steps.find(s=>s.step==='responses').category,'billing');
+});
