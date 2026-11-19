@@ -1,5 +1,5 @@
 import { getIdentity, isOwner } from '../../../lib/identity';
-import { italianStatus } from '../../../lib/italian-odds';
+import { italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
 import { performance } from '../../../lib/settle';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
@@ -8,6 +8,7 @@ export async function GET(request:Request){
  if(!await getIdentity(request))return reply({error:'Accedi al laboratorio.'},401);
  try{
   const view=new URL(request.url).searchParams.get('view');
+  if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='performance')return reply(await performance());
   if(view==='tickets'){const p=await latestPredictions();return reply({run:p.run,...buildTickets(p.matches)});}

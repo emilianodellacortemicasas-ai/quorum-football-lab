@@ -24,7 +24,7 @@ async function api(path: string, key: string) {
 const list = (x: any): any[] => Array.isArray(x) ? x : Array.isArray(x?.data) ? x.data : x && typeof x === 'object' ? Object.values(x) : [];
 async function cached<T>(id: string, maxAgeMs: number, build: () => Promise<T>): Promise<T> {
   const row = await db().prepare('SELECT built_at,payload FROM model_state WHERE id=?').bind(id).first<{ built_at: string; payload: string }>();
-  if (row && Date.now() - Date.parse(row.built_at) < maxAgeMs) return JSON.parse(row.payload) as T;
+  if (row && row.payload !== '[]' && Date.now() - Date.parse(row.built_at) < maxAgeMs) return JSON.parse(row.payload) as T;
   try {
     const v = await build();
     await db().prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind(id, new Date().toISOString(), JSON.stringify(v)).run();
@@ -108,7 +108,9 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
         byFixture.set(fid, fx);
       }
     }
-    return [...byFixture.values()].filter(f => f.home && f.away && Object.keys(f.quotes).length);
+    const res = [...byFixture.values()].filter(f => f.home && f.away && Object.keys(f.quotes).length);
+    if (!res.length) throw new Error('nessuna quota riconosciuta');
+    return res;
   }
 }
 
@@ -123,4 +125,16 @@ export async function italianStatus() {
   const m = await meta(key);
   const row = await db().prepare("SELECT built_at FROM model_state WHERE id='oddspapi:odds'").first<{ built_at: string }>();
   return { connected: true, tournaments: m.tournaments, books: m.books, markets: Object.keys(m.markets).length, oddsUpdatedAt: row?.built_at ?? null };
+}
+
+// Owner diagnostic: one request (Serie A, Lottomatica) summarised, plus the market map.
+export async function italianDebug() {
+  const key = await credentialValue('oddspapi'); if (!key) return { connected: false };
+  const m = await meta(key);
+  const raw = await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(m.books.lottomatica) + '&tournamentIds=' + m.tournaments['Serie A'] + '&oddsFormat=decimal', key);
+  const data = list(raw), f = data[0], board = f?.bookmakerOdds ? Object.values<any>(f.bookmakerOdds)[0] : null;
+  return { type: Array.isArray(raw) ? 'array' : typeof raw, topKeys: raw && typeof raw === 'object' ? Object.keys(raw).slice(0, 10) : null, n: data.length,
+    fixtureKeys: f ? Object.keys(f) : null, books: f?.bookmakerOdds ? Object.keys(f.bookmakerOdds) : null,
+    marketIds: board?.markets ? Object.keys(board.markets).slice(0, 40) : null,
+    m101: board?.markets?.['101'] ?? null, map: m.markets };
 }
