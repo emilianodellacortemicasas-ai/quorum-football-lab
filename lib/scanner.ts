@@ -1,0 +1,92 @@
+import { env } from 'cloudflare:workers';
+import { getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
+import { oddsFeed } from './odds-provider';
+import { analyze, marketLabel } from './math';
+import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
+import type { Match } from './types';
+
+const db = () => { if (!env.DB) throw new Error('Database non disponibile.'); return env.DB; };
+const romeDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+// Free The Odds API plan: 500 credits/month. Below this reserve the scanner stops calling it.
+const ODDS_RESERVE = 40;
+
+async function lastOddsRemaining() {
+  const r = await db().prepare("SELECT odds_remaining FROM scanner_runs WHERE odds_remaining IS NOT NULL ORDER BY started_at DESC LIMIT 1").first<{ odds_remaining: number }>();
+  return r?.odds_remaining ?? null;
+}
+export async function lastRun() {
+  return db().prepare('SELECT * FROM scanner_runs ORDER BY started_at DESC LIMIT 1').first<any>();
+}
+
+async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>) {
+  const out: R[] = []; let i = 0;
+  await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } }));
+  return out;
+}
+
+export async function runScan(trigger: 'cron' | 'manual') {
+  const id = crypto.randomUUID(), started = new Date().toISOString();
+  const running = await db().prepare("SELECT id FROM scanner_runs WHERE status='running' AND started_at > ?").bind(new Date(Date.now() - 10 * 60000).toISOString()).first();
+  if (running) throw new Error('Una scansione è già in corso. Riprova tra qualche minuto.');
+  await db().prepare('INSERT INTO scanner_runs (id,trigger,status,started_at) VALUES (?,?,?,?)').bind(id, trigger, 'running', started).run();
+  const notes: string[] = [];
+  try {
+    const remainingBefore = await lastOddsRemaining();
+    if (remainingBefore !== null && remainingBefore < ODDS_RESERVE) throw new Error('Crediti The Odds API quasi esauriti (' + remainingBefore + '). Scansione sospesa fino al rinnovo del piano.');
+    // 1. Calendar: next 3 days, only matches not yet started (at least 15 minutes ahead).
+    const now = Date.now(), horizon = now + 72 * 3600000;
+    const days = [0, 1, 2, 3].map(d => romeDate(new Date(now + d * 86400000)));
+    const fixtures: Match[] = [];
+    for (const d of days) fixtures.push(...await getSportmonksFixtures(d));
+    const upcoming = [...new Map(fixtures.map(f => [f.id, f])).values()].filter(f => { const t = Date.parse(f.kickoff); return t > now + 15 * 60000 && t <= horizon; });
+    // 2. Odds: one request per competition (h2h + totals, EU books = 2 credits each). Only sports active on the provider.
+    const active = new Set(((await oddsFeed('sports', 3600)).payload as any[]).map(s => s.key));
+    const events = new Map<string, OddsEvent[]>(); let remaining: number | null = null;
+    for (const comp of new Set(upcoming.map(f => f.competition))) {
+      const key = ODDS_SPORT[comp];
+      if (!key || !active.has(key)) { notes.push(comp + ': quote non disponibili dal fornitore.'); continue; }
+      try {
+        const r = await oddsFeed('sports/' + key + '/odds?regions=eu&markets=h2h,totals&oddsFormat=decimal', 600);
+        events.set(comp, Array.isArray(r.payload) ? r.payload : []);
+        if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
+      } catch (e) { notes.push(comp + ': ' + (e instanceof Error ? e.message : 'quote non disponibili.')); }
+    }
+    // 3. Reconcile fixtures with odds events, then model only the matched ones.
+    const paired = upcoming.map(f => ({ f, e: matchEvent(f, events.get(f.competition) || []) })).filter(x => x.e) as { f: Match; e: OddsEvent }[];
+    const modelled = await pool(paired, 4, async ({ f, e }) => {
+      try { const m = await getSportmonksMatch(f.id); return m.lambdaHome !== null && m.lambdaAway !== null ? { m, e } : null; } catch { return null; }
+    });
+    // 4. Evaluate every outcome; store all of them (dataset for settlement and backtest), flag the picks.
+    const created = new Date().toISOString(), rows: any[] = [];
+    for (const x of modelled) {
+      if (!x) continue;
+      const probs = analyze(x.m.lambdaHome!, x.m.lambdaAway!).markets, consensus = marketConsensus(x.e);
+      for (const key of SCANNED_MARKETS) {
+        const c = consensus[key]; if (!c || !Number.isFinite(probs[key])) continue;
+        const v = evaluateOutcome(probs[key], c);
+        rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, marketLabel(key), probs[key], c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created]);
+      }
+    }
+    const insert = db().prepare('INSERT INTO scanner_rows (id,run_id,fixture_id,fixture,competition,kickoff,market,label,p_model,p_market,p_blend,best_odds,bookmaker,books,edge,kelly,is_pick,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    for (let i = 0; i < rows.length; i += 50) await db().batch(rows.slice(i, i + 50).map(r => insert.bind(...r)));
+    const picks = rows.filter(r => r[16] === 1).length, modelledCount = modelled.filter(Boolean).length;
+    if (upcoming.length && !paired.length) notes.push('Nessuna partita abbinata alle quote.');
+    if (paired.length > modelledCount) notes.push((paired.length - modelledCount) + ' partite senza storico sufficiente per il modello.');
+    await db().prepare('UPDATE scanner_runs SET status=?,finished_at=?,fixtures=?,matched=?,modelled=?,picks=?,odds_remaining=?,message=? WHERE id=?')
+      .bind('ok', new Date().toISOString(), upcoming.length, paired.length, modelledCount, picks, remaining, notes.join(' ') || null, id).run();
+    return { id, fixtures: upcoming.length, matched: paired.length, modelled: modelledCount, picks };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Scansione non riuscita.';
+    await db().prepare('UPDATE scanner_runs SET status=?,finished_at=?,message=? WHERE id=?').bind('error', new Date().toISOString(), message, id).run();
+    throw new Error(message);
+  }
+}
+
+export async function latestPicks() {
+  const run = await db().prepare("SELECT * FROM scanner_runs WHERE status='ok' ORDER BY started_at DESC LIMIT 1").first<any>();
+  const last = await lastRun();
+  if (!run) return { run: null, last, picks: [], evaluated: 0 };
+  const picks = (await db().prepare('SELECT * FROM scanner_rows WHERE run_id=? AND is_pick=1 AND kickoff > ? ORDER BY edge DESC LIMIT 60').bind(run.id, new Date().toISOString()).all<any>()).results;
+  const evaluated = (await db().prepare('SELECT COUNT(*) AS n FROM scanner_rows WHERE run_id=?').bind(run.id).first<{ n: number }>())?.n ?? 0;
+  return { run, last, picks, evaluated };
+}

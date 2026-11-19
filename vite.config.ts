@@ -29,6 +29,8 @@ const localBindingConfig = {
         placement: { mode: "targeted" as const, region: process.env.QUORUM_PLACEMENT_REGION || "aws:eu-central-1" },
         workers_dev: true,
         observability: { enabled: true },
+        // 05:40 UTC = 06:40 Rome (07:40 in summer): daily value scan.
+        triggers: { crons: ["40 5 * * *"] },
       }
     : {}),
   d1_databases: d1

@@ -28,3 +28,20 @@ export const serviceCredentials = sqliteTable('service_credentials', {
 export const operationCounters = sqliteTable('operation_counters', {
   id: text('id').primaryKey(), count: integer('count').notNull().default(0),
 });
+// Value scanner: every evaluated outcome is stored, so picks can be settled and back-tested later.
+export const scannerRuns = sqliteTable('scanner_runs', {
+  id: text('id').primaryKey(), trigger: text('trigger').notNull(), status: text('status').notNull(),
+  startedAt: text('started_at').notNull(), finishedAt: text('finished_at'),
+  fixtures: integer('fixtures').notNull().default(0), matched: integer('matched').notNull().default(0),
+  modelled: integer('modelled').notNull().default(0), picks: integer('picks').notNull().default(0),
+  oddsRemaining: integer('odds_remaining'), message: text('message'),
+}, t => [index('scanner_runs_started').on(t.startedAt)]);
+export const scannerRows = sqliteTable('scanner_rows', {
+  id: text('id').primaryKey(), runId: text('run_id').notNull(), fixtureId: text('fixture_id').notNull(),
+  fixture: text('fixture').notNull(), competition: text('competition').notNull(), kickoff: text('kickoff').notNull(),
+  market: text('market').notNull(), label: text('label').notNull(),
+  pModel: real('p_model').notNull(), pMarket: real('p_market').notNull(), pBlend: real('p_blend').notNull(),
+  bestOdds: real('best_odds').notNull(), bookmaker: text('bookmaker').notNull(), books: integer('books').notNull(),
+  edge: real('edge').notNull(), kelly: real('kelly').notNull(), isPick: integer('is_pick').notNull().default(0),
+  result: text('result'), createdAt: text('created_at').notNull(),
+}, t => [index('scanner_rows_run').on(t.runId, t.isPick), index('scanner_rows_fixture').on(t.fixtureId)]);
