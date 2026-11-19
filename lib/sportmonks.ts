@@ -40,7 +40,7 @@ export async function buildModel():Promise<ModelState>{
  for(const id of new Set(leagueOnly.flatMap(r=>[r.homeId,r.awayId])))forms[id]=form(leagueOnly,id,5);
  const state={builtAt:new Date().toISOString(),version:MODEL_V2,extras,leagues,tables,forms,results:unique.length};
  const comps=[...new Set(unique.map(r=>r.comp))],compact=unique.map(r=>[r.id,r.ts,comps.indexOf(r.comp),r.homeId,r.awayId,r.hg,r.ag,r.season]);
- await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('results',state.builtAt,JSON.stringify({comps,rows:compact})).run();
+ await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('results',state.builtAt,JSON.stringify({comps,rows:compact,names:Object.fromEntries(unique.flatMap(r=>[[r.homeId,r.home],[r.awayId,r.away]]))})).run();
  await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('v2',state.builtAt,JSON.stringify(state)).run();
  memo={at:Date.now(),state};return state;
 }
@@ -93,8 +93,8 @@ export async function getSportmonksMatch(id:string):Promise<Match>{
 export async function storedResults():Promise<Result[]>{
  let row=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='results'").first<{payload:string}>();
  if(!row){await buildModel();row=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='results'").first<{payload:string}>();}
- const {comps,rows}=JSON.parse(row!.payload) as {comps:string[];rows:any[][]};
- return rows.map(([id,ts,c,homeId,awayId,hg,ag,season])=>({id,ts,comp:comps[c],homeId,awayId,hg,ag,season,home:String(homeId),away:String(awayId)}));
+ const {comps,rows,names}=JSON.parse(row!.payload) as {comps:string[];rows:any[][];names?:Record<string,string>};
+ return rows.map(([id,ts,c,homeId,awayId,hg,ag,season])=>({id,ts,comp:comps[c],homeId,awayId,hg,ag,season,home:names?.[homeId]??String(homeId),away:names?.[awayId]??String(awayId)}));
 }
 // Final facts of a fixture for settlement. 'void' for cancelled/abandoned matches or postponed by more than 3 days.
 export async function fixtureFinal(id:string):Promise<{status:'final'|'void'|'pending';final?:import('./settle-contract').Final}>{
