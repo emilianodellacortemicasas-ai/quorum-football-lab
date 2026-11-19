@@ -103,3 +103,10 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Scansione ogni 3 ore (cron `40 2-23/3 * * *` UTC). Aggiornamenti manuali riusano le quote se scaricate da meno di 30 minuti.
 - Aggiunto Goal/No Goal con quote reali (mercato `btts` per evento, 1 credito a partita, aggiornato ogni ~9 ore e salvato in D1).
 - Stima consumo: ~2.400 crediti/mese per 1X2+O/U, ~4.000 per Goal/No Goal → ~6.500 su 20.000.
+
+## 19/11/2026 · Regolamento automatico, mercati extra, demo rimossa
+- Regolamento (lib/settle.ts, regole in lib/settle-contract.ts): dopo ogni scansione (ogni 3 ore) controlla le partite iniziate da più di 2,5 ore. Regola le giocate del portafoglio (fixture Sportmonks), tutti gli esiti valutati dallo scanner e le schedine proposte. Rinviate oltre 3 giorni/annullate = rimborso. Risultati finali salvati in `fixture_results`.
+- Schedine salvate in `scanner_tickets`: una per tipo al giorno, 3 raddoppi singoli al giorno, Bomba una a settimana (lunedì).
+- Vista "Risultati": rendimento value bet (1 unità alla quota migliore, ultima quota prima del via), per mercato, e per tipo di schedina.
+- Mercati extra: corner e cartellini (medie di squadra pesate sugli avversari, binomiale negativa; quote reali `totals_corners`/`totals_cards`), rigori assegnati e sbagliati (Poisson su frequenze a favore/contro, % errore del campionato), marcatori (quota dei gol di squadra nell'ultimo anno × gol attesi, assenti esclusi). Dati da Sportmonks statistics (34/84/83) ed events (14/15/16/17).
+- Demo eliminata dall'interfaccia: Partite usa solo il calendario reale, la panoramica rimanda ai Pronostici.

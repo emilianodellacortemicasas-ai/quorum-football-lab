@@ -6,15 +6,16 @@ export type Leg = { fixtureId: string; fixture: string; competition: string; kic
 export type Ticket = { kind: string; title: string; description: string; legs: Leg[]; odds: number; p: number; ev: number; kelly: number };
 type MatchRow = { fixture_id: string; fixture: string; competition: string; kickoff: string; markets: Record<string, any> };
 
+const extraLabel = (k: string) => { const [f, , ou, line] = k.split(':'); return (f === 'corners' ? 'Corner' : 'Cartellini') + ' ' + (ou === 'over' ? 'Over ' : 'Under ') + String(line).replace('.', ','); };
 const KEYS = ['home', 'draw', 'away', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35', 'btts', 'noGoal'];
 export function candidates(matches: MatchRow[], now = Date.now()): Leg[] {
   const out: Leg[] = [];
   for (const m of matches) {
     if (Date.parse(m.kickoff) <= now + 10 * 60000) continue;
-    for (const k of KEYS) {
+    for (const k of [...KEYS, ...Object.keys(m.markets || {}).filter(x => x.startsWith('corners:') || x.startsWith('cards:'))]) {
       const x = m.markets?.[k];
       if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds) || x.bestOdds <= 1 || (x.books ?? 0) < 3) continue;
-      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k], p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
+      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k] ?? extraLabel(k), p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
     }
   }
   return out;

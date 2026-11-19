@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { ArrowRight, Info, RefreshCw, Target } from 'lucide-react';
-import { analyze, percent } from '../lib/math';
+import { analyze, negativeBinomialCdf, percent } from '../lib/math';
 
 type Mk = { pModel: number | null; pMarket: number; pBlend: number; bestOdds: number; bookmaker: string; books: number };
 type Row = { id: string; fixture_id: string; fixture: string; competition: string; kickoff: string; modelled: number; lambda_home: number | null; lambda_away: number | null; markets: Record<string, any> };
@@ -22,6 +22,26 @@ export function predict(r: Row) {
   // Main tip: the 1X2 sign if clear enough, otherwise the strongest between double chance and goals line.
   const main = sign[1] >= 0.5 ? { label: 'Segno ' + sign[0], p: sign[1], key: sign[2] } : dc[1] >= goals[1] ? { label: 'Doppia chance ' + dc[0], p: dc[1], key: null } : { label: goals[0], p: goals[1], key: goals[2] };
   return { sign, dc, goals, btts, top, main, xg: [r.lambda_home, r.lambda_away] as const };
+}
+
+function Extras({ meta, markets }: { meta: any; markets: Record<string, any> }) {
+  if (!meta) return null;
+  const c = meta.counts, pen = meta.penalties, sc = meta.scorers;
+  const line = (family: 'corners' | 'cards', mean: number, shape: number) => {
+    // bookmaker line closest to the expected total, otherwise the nearest .5 line
+    const offered = Object.keys(markets).filter(k => k.startsWith(family + ':total:over:')).map(k => Number(k.split(':')[3]));
+    const L = offered.length ? offered.reduce((a, b) => Math.abs(b - mean) < Math.abs(a - mean) ? b : a) : Math.floor(mean) + 0.5;
+    const over = markets[family + ':total:over:' + L]?.pModel ?? 1 - negativeBinomialCdf(mean, shape, Math.floor(L));
+    const q = markets[family + ':total:' + (over >= 0.5 ? 'over' : 'under') + ':' + L];
+    return (over >= 0.5 ? 'Over ' : 'Under ') + String(L).replace('.', ',') + ' · ' + percent(over >= 0.5 ? over : 1 - over, 0) + (q ? ' · q ' + q.bestOdds.toFixed(2) : '');
+  };
+  const cards = c ? [c.yellow[0] + c.red[0], c.yellow[1] + c.red[1]] : null;
+  return <div className="ctx extras">
+    {c && <div><span>Corner attesi</span><b>{(c.corners[0] + c.corners[1]).toFixed(1)} ({c.corners[0].toFixed(1)}–{c.corners[1].toFixed(1)})</b><b>{line('corners', c.corners[0] + c.corners[1], 12)}</b></div>}
+    {cards && <div><span>Cartellini attesi</span><b>{(cards[0] + cards[1]).toFixed(1)} ({cards[0].toFixed(1)}–{cards[1].toFixed(1)})</b><b>{line('cards', cards[0] + cards[1], 6)}</b></div>}
+    {pen && <div><span>Rigori</span><b>Assegnato: {percent(pen.awarded, 0)}</b><b>Sbagliato: {percent(pen.missed, 0)}</b></div>}
+    {sc && (sc.home.length || sc.away.length) ? <div><span>Marcatori</span><b className="out">{sc.home.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0)).join(' · ') || '—'}</b><b className="out">{sc.away.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0)).join(' · ') || '—'}</b></div> : null}
+  </div>;
 }
 
 function Context({ meta }: { meta: any }) {
@@ -93,11 +113,12 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
             <div><dt>Risultato più probabile</dt><dd>{p.top.home}-{p.top.away} · {percent(p.top.p, 0)}</dd></div>
             <div><dt>Gol attesi</dt><dd>{p.xg[0].toFixed(2)} – {p.xg[1].toFixed(2)}<small>su {r.markets.meta?.sampleHome ?? '?'} / {r.markets.meta?.sampleAway ?? '?'} partite</small></dd></div>
           </dl>
+          <Extras meta={r.markets.meta} markets={r.markets} />
           <Context meta={r.markets.meta} />
           {gap !== null && <p className="small-note">Mercato: {percent(ref!.pMarket, 0)}{Math.abs(gap) > 0.1 ? ' · le statistiche si discostano molto dal mercato, verifica assenze e formazioni.' : ' · in linea con le statistiche.'}</p>}
           <button className="text-button" onClick={() => onOpen(r.fixture_id)}>Tutti i mercati della partita<ArrowRight size={15} /></button>
         </article>;
       })}</div></section>)}
-    <p className="footnote">Modello v2.1: rating di attacco e difesa su ~13 mesi di partite del campionato (più peso alle recenti), fattore campo, correzione Dixon–Coles e calibrazione dei gol da backtest. Classifica, forma e indisponibili sono mostrati; gli indisponibili non sono ancora nel calcolo. Fiducia: Alta ≥ 60%, Media ≥ 48%, Bassa sotto.</p>
+    <p className="footnote">Modello v2.1: rating di attacco e difesa su ~13 mesi di partite del campionato (più peso alle recenti), fattore campo, correzione Dixon–Coles e calibrazione dei gol da backtest. Classifica, forma e indisponibili sono mostrati; gli indisponibili non sono ancora nel calcolo (tranne per i marcatori, dove gli assenti sono esclusi). Corner e cartellini: medie di squadra pesate sugli avversari. Rigori: frequenza di rigori a favore e contro di ogni squadra; sbagliato = assegnato × percentuale di errore del campionato. Marcatori: quota dei gol della squadra segnati dal giocatore nell'ultimo anno. Fiducia: Alta ≥ 60%, Media ≥ 48%, Bassa sotto.</p>
   </>;
 }

@@ -1,9 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { getModel, getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
 import { oddsFeed } from './odds-provider';
-import { analyze, marketLabel } from './math';
+import { analyzeMatch, marketLabel } from './math';
 import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
 import type { Match } from './types';
+import { buildTickets } from './tickets';
+import { recordTickets, settleAll } from './settle';
 
 const db = () => { if (!env.DB) throw new Error('Database non disponibile.'); return env.DB; };
 const romeDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
@@ -12,7 +14,7 @@ const ODDS_RESERVE = 12;
 // Manual refreshes reuse odds younger than this: the model is recomputed for free.
 const ODDS_MAX_AGE = 30 * 60000;
 // Goal/No Goal is an event-level market (1 credit per match): refreshed twice a day, reused in between.
-const BTTS_MAX_AGE = 9 * 3600000;
+const BTTS_MAX_AGE = 12 * 3600000;
 
 async function lastOddsRemaining() {
   const r = await db().prepare("SELECT odds_remaining FROM scanner_runs WHERE odds_remaining IS NOT NULL ORDER BY started_at DESC LIMIT 1").first<{ odds_remaining: number }>();
@@ -22,6 +24,7 @@ export async function lastRun() {
   return db().prepare('SELECT * FROM scanner_runs ORDER BY started_at DESC LIMIT 1').first<any>();
 }
 
+const marketKeys = (c: Record<string, unknown>) => [...SCANNED_MARKETS, ...Object.keys(c).filter(k => k.startsWith('corners:') || k.startsWith('cards:'))];
 async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>) {
   const out: R[] = []; let i = 0;
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, async () => { while (i < items.length) { const k = i++; out[k] = await fn(items[k]); } }));
@@ -68,11 +71,11 @@ export async function runScan(trigger: 'cron' | 'manual') {
     let bttsDownloaded = 0;
     await pool(paired, 4, async ({ f, e }) => {
       const key = ODDS_SPORT[f.competition]; if (!key) return;
-      const cacheId = 'btts:' + e.id, saved = await db().prepare('SELECT built_at,payload FROM model_state WHERE id=?').bind(cacheId).first<{ built_at: string; payload: string }>();
+      const cacheId = 'ev:' + e.id, saved = await db().prepare('SELECT built_at,payload FROM model_state WHERE id=?').bind(cacheId).first<{ built_at: string; payload: string }>();
       let books: any[] | null = saved && Date.now() - Date.parse(saved.built_at) < BTTS_MAX_AGE ? JSON.parse(saved.payload) : null;
       if (!books) {
         try {
-          const r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts&oddsFormat=decimal', 600);
+          const r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts,totals_corners,totals_cards&oddsFormat=decimal', 600);
           books = Array.isArray(r.payload?.bookmakers) ? r.payload.bookmakers : []; bttsDownloaded++;
           if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
           await db().prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind(cacheId, new Date().toISOString(), JSON.stringify(books)).run();
@@ -80,19 +83,19 @@ export async function runScan(trigger: 'cron' | 'manual') {
       }
       e.bookmakers = [...(e.bookmakers || []), ...(books ?? [])];
     });
-    if (bttsDownloaded) notes.push('Quote Goal/No Goal aggiornate per ' + bttsDownloaded + ' partite.');
+    if (bttsDownloaded) notes.push('Quote Goal/No Goal, corner e cartellini aggiornate per ' + bttsDownloaded + ' partite.');
     const fetched = await pool(paired, 4, async ({ f }) => { try { return await getSportmonksMatch(f.id); } catch { return null; } });
     const modelled = fetched.map((m, i) => m && m.lambdaHome !== null && m.lambdaAway !== null ? { m, e: paired[i].e } : null);
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
     const matchRows: any[] = [];
     paired.forEach(({ f, e }, i) => {
-      const x = modelled[i], consensus = marketConsensus(e), probs = x ? analyze(x.m.lambdaHome!, x.m.lambdaAway!, x.m.context?.rho ?? 0).markets : null, markets: Record<string, any> = {};
-      for (const key of SCANNED_MARKETS) {
+      const x = modelled[i], consensus = marketConsensus(e), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {};
+      for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c) continue;
         const pModel = probs && Number.isFinite(probs[key]) ? probs[key] : null;
         markets[key] = { pModel, pMarket: c.pMarket, pBlend: pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books };
       }
-      const fm = fetched[i]; if (fm) markets.meta = { sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, ...fm.context };
+      const fm = fetched[i]; if (fm) markets.meta = { sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
       if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
     });
     const insertMatch = db().prepare('INSERT INTO scanner_matches (id,run_id,fixture_id,fixture,competition,kickoff,modelled,lambda_home,lambda_away,markets,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
@@ -101,8 +104,8 @@ export async function runScan(trigger: 'cron' | 'manual') {
     const created = new Date().toISOString(), rows: any[] = [];
     for (const x of modelled) {
       if (!x) continue;
-      const probs = analyze(x.m.lambdaHome!, x.m.lambdaAway!, x.m.context?.rho ?? 0).markets, consensus = marketConsensus(x.e);
-      for (const key of SCANNED_MARKETS) {
+      const probs = analyzeMatch(x.m)!.markets, consensus = marketConsensus(x.e);
+      for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c || !Number.isFinite(probs[key])) continue;
         const v = evaluateOutcome(probs[key], c);
         rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, marketLabel(key), probs[key], c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created]);
@@ -116,6 +119,9 @@ export async function runScan(trigger: 'cron' | 'manual') {
     if (paired.length > modelledCount) notes.push((paired.length - modelledCount) + ' partite senza storico sufficiente per il modello.');
     await db().prepare('UPDATE scanner_runs SET status=?,finished_at=?,fixtures=?,matched=?,modelled=?,picks=?,odds_remaining=?,message=? WHERE id=?')
       .bind('ok', new Date().toISOString(), upcoming.length, paired.length, modelledCount, picks, remaining ?? remainingBefore, notes.join(' ') || null, id).run();
+    // Save today's tickets and settle finished matches. Failures here never invalidate the scan.
+    try { await recordTickets(buildTickets((await latestPredictions()).matches)); } catch { /* recorded on next scan */ }
+    try { await settleAll(); } catch { /* retried on next scan */ }
     return { id, fixtures: upcoming.length, matched: paired.length, modelled: modelledCount, picks };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Scansione non riuscita.';

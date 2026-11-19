@@ -32,7 +32,7 @@ export function analyze(lambdaHome: number, lambdaAway: number, rho = 0) {
 }
 export const marketLabel = (key: string): string => {
   const parts=key.split(':');
-  if(['corners','yellow','red','teamGoals'].includes(parts[0]))return ({corners:'Corner',yellow:'Gialli',red:'Rossi',teamGoals:'Gol'}[parts[0]]||'')+' '+({total:'totali',home:'casa',away:'ospite'}[parts[1]]||'')+' · '+(parts[2]==='over'?'Over ':'Under ')+parts[3].replace('.',',');
+  if(['corners','yellow','red','cards','teamGoals'].includes(parts[0]))return ({corners:'Corner',yellow:'Gialli',red:'Rossi',cards:'Cartellini',teamGoals:'Gol'}[parts[0]]||'')+' '+({total:'totali',home:'casa',away:'ospite'}[parts[1]]||'')+' · '+(parts[2]==='over'?'Over ':'Under ')+parts[3].replace('.',',');
   return ({home:'1 · Casa',draw:'X · Pareggio',away:'2 · Ospite',over15:'Over 1,5',under15:'Under 1,5',over25:'Over 2,5',under25:'Under 2,5',over35:'Over 3,5',under35:'Under 3,5',btts:'Goal',noGoal:'No Goal',homeDraw:'Doppia chance 1X',drawAway:'Doppia chance X2',homeAway:'Doppia chance 12'}[key] || (key.startsWith('exact:') ? 'Risultato esatto ' + key.slice(6) : key));
 };
 export function negativeBinomialCdf(mean:number,shape:number,max:number) {
@@ -51,10 +51,11 @@ export function analyzeMatch(m:Match){
     }
   }
   for(const line of [.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5]){const under=a.scores.filter(s=>s.home+s.away<=Math.floor(line)).reduce((v,s)=>v+s.p,0);a.markets['teamGoals:total:under:'+line]=under;a.markets['teamGoals:total:over:'+line]=1-under;}
-  if(m.counts)for(const family of ['corners','yellow','red'] as const){
-    const lines=Array.from({length:family==='corners'?21:family==='yellow'?11:4},(_,i)=>i+.5);
+  if(m.counts)for(const family of ['corners','yellow','red','cards'] as const){
+    const lines=Array.from({length:family==='corners'?21:family==='red'?4:11},(_,i)=>i+.5);
+    const c=family==='cards'?[m.counts.yellow[0]+m.counts.red[0],m.counts.yellow[1]+m.counts.red[1]] as [number,number]:m.counts[family];
     for(const side of ['total','home','away'] as const){
-      const mean=side==='total'?m.counts[family][0]+m.counts[family][1]:m.counts[family][side==='home'?0:1],shape=family==='corners'?12:family==='yellow'?6:2;
+      const mean=side==='total'?c[0]+c[1]:c[side==='home'?0:1],shape=family==='corners'?12:family==='red'?2:6;
       for(const line of lines){const under=negativeBinomialCdf(mean,shape,Math.floor(line)),prefix=family+':'+side+':';a.markets[prefix+'under:'+line]=under;a.markets[prefix+'over:'+line]=1-under;}
     }
   }

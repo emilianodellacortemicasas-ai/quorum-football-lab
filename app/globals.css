@@ -148,3 +148,7 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .bomb-list .value-card{border:2px solid #1f5c3f;background:linear-gradient(180deg,#f3fbe6,#fff 40%)}
 .bomb-list .value-pick .odds{font-size:30px;color:#1f5c3f}
 @media(min-width:900px){.bomb-list{grid-template-columns:minmax(0,640px)}}
+.res-box{background:#f6faf3;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.res-box span{font-size:11px;color:var(--muted)}.res-box b{font-size:18px;color:var(--ink)}.res-box small{font-size:11px;color:var(--muted)}
+.value-card.result-won{border-color:#7cc36a}.value-card.result-lost{opacity:.7}
+.ctx.extras{border-top:1px solid var(--line)}

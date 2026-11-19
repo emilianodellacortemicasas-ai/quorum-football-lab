@@ -43,6 +43,13 @@
       "when": 1795111000000,
       "tag": "0005_quorum_model_state",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795112000000,
+      "tag": "0006_quorum_settlement",
+      "breakpoints": true
     }
   ]
 }

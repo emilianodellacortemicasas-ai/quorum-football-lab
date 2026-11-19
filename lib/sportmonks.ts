@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { credentialValue } from './vault';
+import { expectedCount, fitExtras, parseExtras, penaltyProbs, scorerProbs, type ExtraRow, type ExtrasModel } from './extras';
 import { MODEL_V2, fitLeague, form, lambdas, parseResult, table, type LeagueModel, type Result, type TableRow } from './model-v2';
 import { historicalGoalMeans,sportmonksCompetition,sportmonksFixture } from './sportmonks-contract';
 import type { Match } from './types';
@@ -19,25 +20,25 @@ export async function getSportmonksFixtures(date:string,league?:string):Promise<
  const data=await pages('fixtures/date/'+date+'?include=participants;league.country;state&timezone=Europe%2FRome');
  return data.filter(f=>!league||String(sportmonksCompetition(f.league)?.id)===league).map(sportmonksFixture).filter((m):m is Match=>m!==null);
 }
-type ModelState={builtAt:string;version:string;leagues:Record<string,LeagueModel>;tables:Record<string,TableRow[]>;forms:Record<string,string>;results:number};
+type ModelState={builtAt:string;version:string;extras?:Record<string,ExtrasModel>;leagues:Record<string,LeagueModel>;tables:Record<string,TableRow[]>;forms:Record<string,string>;results:number};
 let memo:{at:number;state:ModelState}|null=null;
 // Builds the v2 model from ~13 months of results of the subscribed competitions and stores it in D1.
 export async function buildModel():Promise<ModelState>{
- const now=Date.now(),results:Result[]=[];
+ const now=Date.now(),results:Result[]=[],extraRows:ExtraRow[]=[],seen=new Set<number>();
  for(let w=0;w<4;w++){
   const end=new Date(now-86400000-w*99*86400000),start=new Date(end.getTime()-98*86400000);
-  const data=await pages('fixtures/between/'+start.toISOString().slice(0,10)+'/'+end.toISOString().slice(0,10)+'?include=participants;scores;state;league.country',40);
-  for(const f of data){const r=parseResult(f,sportmonksCompetition(f.league)?.name??null);if(r)results.push(r);}
+  const data=await pages('fixtures/between/'+start.toISOString().slice(0,10)+'/'+end.toISOString().slice(0,10)+'?include=participants;scores;state;league.country;statistics;events',60);
+  for(const f of data){const r=parseResult(f,sportmonksCompetition(f.league)?.name??null);if(r){results.push(r);if(!seen.has(r.id)){seen.add(r.id);extraRows.push({ts:r.ts,comp:r.comp,homeId:r.homeId,awayId:r.awayId,x:parseExtras(f)});}}}
  }
- const unique=[...new Map(results.map(r=>[r.id,r])).values()],leagues:Record<string,LeagueModel>={},tables:Record<string,TableRow[]>={},forms:Record<string,string>={};
+ const unique=[...new Map(results.map(r=>[r.id,r])).values()],extras:Record<string,ExtrasModel>={},leagues:Record<string,LeagueModel>={},tables:Record<string,TableRow[]>={},forms:Record<string,string>={};
  for(const comp of new Set(unique.map(r=>r.comp))){
   const rs=unique.filter(r=>r.comp===comp);
-  if(comp!=='Coppa Italia'){const m=fitLeague(rs,now);if(m)leagues[comp]=m;}
+  if(comp!=='Coppa Italia'){const m=fitLeague(rs,now);if(m)leagues[comp]=m;extras[comp]=fitExtras(extraRows.filter(r=>r.comp===comp),now);}
   const season=rs.reduce((a,b)=>b.ts>a.ts?b:a).season;tables[comp]=table(rs,season);
  }
  const leagueOnly=unique.filter(r=>r.comp!=='Coppa Italia');
  for(const id of new Set(leagueOnly.flatMap(r=>[r.homeId,r.awayId])))forms[id]=form(leagueOnly,id,5);
- const state={builtAt:new Date().toISOString(),version:MODEL_V2,leagues,tables,forms,results:unique.length};
+ const state={builtAt:new Date().toISOString(),version:MODEL_V2,extras,leagues,tables,forms,results:unique.length};
  const comps=[...new Set(unique.map(r=>r.comp))],compact=unique.map(r=>[r.id,r.ts,comps.indexOf(r.comp),r.homeId,r.awayId,r.hg,r.ag,r.season]);
  await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('results',state.builtAt,JSON.stringify({comps,rows:compact})).run();
  await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind('v2',state.builtAt,JSON.stringify(state)).run();
@@ -67,7 +68,12 @@ export async function getSportmonksMatch(id:string):Promise<Match>{
  const league=state.leagues[m.competition==='Coppa Italia'?'Serie A':m.competition],l=league?lambdas(league,h.id,a.id):null;
  const tbl=state.tables[m.competition==='Coppa Italia'?'Serie A':m.competition]||[],ph=tbl.find(r=>r.teamId===h.id),pa=tbl.find(r=>r.teamId===a.id);
  const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0};
- return {...m,sampleHome:context.homeN,sampleAway:context.awayN,lambdaHome:l?l.lh:null,lambdaAway:l?l.la:null,context,notes:[
+ const ex=state.extras?.[m.competition==='Coppa Italia'?'Serie A':m.competition];
+ let counts:Match['counts'];
+ if(ex){const c=expectedCount(ex.corners,h.id,a.id),y=expectedCount(ex.yellow,h.id,a.id),r=expectedCount(ex.red,h.id,a.id);if(c&&y&&r)counts={corners:c,yellow:y,red:r};
+  const pen=penaltyProbs(ex,h.id,a.id);if(pen)(context as any).penalties=pen;
+  if(l)(context as any).scorers={home:scorerProbs(ex,h.id,l.lh,context.homeOut),away:scorerProbs(ex,a.id,l.la,context.awayOut)};}
+ return {...m,counts,sampleHome:context.homeN,sampleAway:context.awayN,lambdaHome:l?l.lh:null,lambdaAway:l?l.la:null,context,notes:[
   'Modello v2: forza di attacco e difesa di ogni squadra stimata su tutte le partite del campionato degli ultimi 13 mesi circa ('+state.results+' risultati), con peso maggiore alle più recenti (metà peso dopo 250 giorni), calibrato con backtest.',
   'Include fattore campo del campionato e correzione Dixon–Coles sui risultati bassi. Punteggio dopo i 90 minuti.',
   l?'Stima basata su '+context.homeN+' e '+context.awayN+' partite delle due squadre.':'Dati insufficienti per una delle due squadre: nessuna probabilità generata.',
@@ -80,4 +86,17 @@ export async function storedResults():Promise<Result[]>{
  if(!row){await buildModel();row=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='results'").first<{payload:string}>();}
  const {comps,rows}=JSON.parse(row!.payload) as {comps:string[];rows:any[][]};
  return rows.map(([id,ts,c,homeId,awayId,hg,ag,season])=>({id,ts,comp:comps[c],homeId,awayId,hg,ag,season,home:String(homeId),away:String(awayId)}));
+}
+// Final facts of a fixture for settlement. 'void' for cancelled/abandoned matches or postponed by more than 3 days.
+export async function fixtureFinal(id:string):Promise<{status:'final'|'void'|'pending';final?:import('./settle-contract').Final}>{
+ if(!/^sm-\d{1,12}$/.test(id))return {status:'pending'};
+ const f=(await feed('fixtures/'+id.slice(3)+'?include=participants;scores;state;statistics;events',120)).data,st=f?.state?.state;
+ if(['FT','AET','FT_PEN'].includes(st)){
+  const r=parseResult(f,'x');if(!r)return {status:'pending'};
+  const x=parseExtras(f);
+  return {status:'final',final:{hg:r.hg,ag:r.ag,corners:x.corners,yellow:x.yellow,red:x.red,penAwarded:x.penAwarded,penMissed:x.penMissed,scorers:x.scorers?x.scorers.map(s=>s.id):null}};
+ }
+ const late=Number.isFinite(f?.starting_at_timestamp)&&Date.now()-f.starting_at_timestamp*1000>3*86400000;
+ if(['CANCL','ABAN','AWARDED','WO','DELETED'].includes(st)||(late&&['POSTP','SUSP','INT','TBA','NS'].includes(st)))return {status:'void'};
+ return {status:'pending'};
 }

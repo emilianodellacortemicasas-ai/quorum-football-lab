@@ -1,11 +1,13 @@
 import { getIdentity, isOwner } from '../../../lib/identity';
 import { buildTickets } from '../../../lib/tickets';
+import { performance } from '../../../lib/settle';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function GET(request:Request){
  if(!await getIdentity(request))return reply({error:'Accedi al laboratorio.'},401);
  try{
   const view=new URL(request.url).searchParams.get('view');
+  if(view==='performance')return reply(await performance());
   if(view==='tickets'){const p=await latestPredictions();return reply({run:p.run,...buildTickets(p.matches)});}
   return reply(view==='predictions'?await latestPredictions():await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scanner non disponibile.'},500);}

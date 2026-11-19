@@ -17,7 +17,7 @@ jobs:
         with: { node-version: 22.13.0, cache: npm }
       - run: npm run install:ci
       - run: node node_modules/typescript/bin/tsc --noEmit
-      - run: node --experimental-strip-types --test tests/math.test.mjs tests/key-crypto.test.mjs tests/providers.test.mjs tests/identity.test.mjs tests/scanner.test.mjs tests/model-v2.test.mjs tests/tickets.test.mjs
+      - run: node --experimental-strip-types --test tests/math.test.mjs tests/key-crypto.test.mjs tests/providers.test.mjs tests/identity.test.mjs tests/scanner.test.mjs tests/model-v2.test.mjs tests/tickets.test.mjs tests/settle.test.mjs
       - name: Deploy
         if: env.HAS_CF == 'true'
         run: bash scripts/quorum-deploy.sh

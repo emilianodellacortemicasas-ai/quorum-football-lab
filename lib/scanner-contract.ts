@@ -59,6 +59,9 @@ export function marketConsensus(event: OddsEvent) {
         if (!Number.isFinite(o?.price) || o.price <= 1 || o.price > 1000) continue;
         let key: string | null = null, group = m.key;
         if (m.key === 'h2h') key = o.name === event.home_team ? 'home' : o.name === event.away_team ? 'away' : o.name === 'Draw' ? 'draw' : null;
+        if ((m.key === 'totals_corners' || m.key === 'totals_cards') && Number.isFinite(o.point) && o.point > 0 && o.point < 30 && (o.name === 'Over' || o.name === 'Under')) {
+          key = (m.key === 'totals_corners' ? 'corners' : 'cards') + ':total:' + (o.name === 'Over' ? 'over' : 'under') + ':' + o.point; group = m.key + o.point;
+        }
         if (m.key === 'btts') key = o.name === 'Yes' ? 'btts' : o.name === 'No' ? 'noGoal' : null;
         if (m.key === 'totals' && [1.5, 2.5, 3.5].includes(o.point) && (o.name === 'Over' || o.name === 'Under')) {
           const line = String(o.point).replace('.', ''); key = (o.name === 'Over' ? 'over' : 'under') + line; group = 'totals' + line;
