@@ -78,5 +78,12 @@ export async function performance() {
   const kinds = [...new Set(tickets.map((t: any) => t.kind))].map(kind => { const rows = tickets.filter((t: any) => t.kind === kind).map((t: any) => ({ ...t, best_odds: t.odds, p_blend: 0 })); const a = agg(rows); return { kind, title: rows[0].title, ...a }; });
   const pending = (await db().prepare('SELECT COUNT(*) AS n FROM scanner_tickets WHERE result IS NULL').first<{ n: number }>())?.n ?? 0;
   const last = (await db().prepare('SELECT id,kind,title,odds,result,created_at,legs FROM scanner_tickets ORDER BY created_at DESC LIMIT 12').all<any>()).results.map((t: any) => ({ ...t, legs: JSON.parse(t.legs) }));
-  return { value: agg(value), valueByMarket: ['1X2', 'Gol', 'Corner', 'Cartellini'].map(g => ({ group: g, ...agg(value.filter((r: any) => g === '1X2' ? ['home', 'draw', 'away'].includes(r.market) : g === 'Gol' ? /^(over|under)\d|^btts|^noGoal/.test(r.market) : g === 'Corner' ? r.market.startsWith('corners:') : r.market.startsWith('cards:'))) })), tickets: kinds, pendingTickets: pending, lastTickets: last };
+  // Closing line value: price when QUORUM first proposed the pick vs. the last price seen before kick-off.
+  const clvRows = (await db().prepare(`WITH f AS (SELECT fixture_id,market,MIN(created_at) AS c FROM scanner_rows WHERE is_pick=1 GROUP BY fixture_id,market),
+    l AS (SELECT fixture_id,market,MAX(created_at) AS c FROM scanner_rows WHERE created_at < kickoff GROUP BY fixture_id,market)
+    SELECT fo.best_odds AS open,lo.best_odds AS close FROM f JOIN scanner_rows fo ON fo.fixture_id=f.fixture_id AND fo.market=f.market AND fo.created_at=f.c
+    JOIN l ON l.fixture_id=f.fixture_id AND l.market=f.market JOIN scanner_rows lo ON lo.fixture_id=l.fixture_id AND lo.market=l.market AND lo.created_at=l.c
+    WHERE fo.kickoff < ? AND l.c > f.c`).bind(new Date().toISOString()).all<{ open: number; close: number }>()).results;
+  const clv = { n: clvRows.length, beat: clvRows.length ? clvRows.filter(r => r.open > r.close).length / clvRows.length : null, avg: clvRows.length ? clvRows.reduce((s, r) => s + r.open / r.close - 1, 0) / clvRows.length : null };
+  return { clv, value: agg(value), valueByMarket: ['1X2', 'Gol', 'Corner', 'Cartellini'].map(g => ({ group: g, ...agg(value.filter((r: any) => g === '1X2' ? ['home', 'draw', 'away'].includes(r.market) : g === 'Gol' ? /^(over|under)\d|^btts|^noGoal/.test(r.market) : g === 'Corner' ? r.market.startsWith('corners:') : r.market.startsWith('cards:'))) })), tickets: kinds, pendingTickets: pending, lastTickets: last };
 }

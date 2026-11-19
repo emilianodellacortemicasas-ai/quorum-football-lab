@@ -48,10 +48,13 @@ function Context({ meta }: { meta: any }) {
   if (!meta) return null;
   const pos = (p: number | null | undefined, pts: number | null | undefined) => p ? p + 'ª · ' + pts + ' pt' : '—';
   const dots = (f: string) => f ? <span className="form-dots">{f.split('').map((c, i) => <i key={i} className={c === 'V' ? 'w' : c === 'P' ? 'l' : 'd'}>{c}</i>)}</span> : '—';
+  const eff = (a: { factor: number; missing: string[]; bench: string[] }) => a.factor < 0.995 ? '−' + Math.round((1 - a.factor) * 100) + '% (' + [...a.missing, ...a.bench.map(b => b + ' in panchina')].slice(0, 3).join(', ') + ')' : 'nessuno';
   const out = (o: string[] | null | undefined) => o === null || o === undefined ? 'n.d.' : o.length ? o.length + ': ' + o.join(', ') : 'nessuno';
   return <div className="ctx"><div><span>Classifica</span><b>{pos(meta.homePos, meta.homePts)}</b><b>{pos(meta.awayPos, meta.awayPts)}</b></div>
     <div><span>Forma (ultime 5)</span><b>{dots(meta.homeForm)}</b><b>{dots(meta.awayForm)}</b></div>
-    <div><span>Indisponibili</span><b className="out">{out(meta.homeOut)}</b><b className="out">{out(meta.awayOut)}</b></div></div>;
+    <div><span>Indisponibili</span><b className="out">{out(meta.homeOut)}</b><b className="out">{out(meta.awayOut)}</b></div>
+    {meta.adjust && <div><span>Effetto sui gol</span><b>{eff(meta.adjust.home)}</b><b>{eff(meta.adjust.away)}</b></div>}
+    <div><span>Formazioni</span><b className={meta.lineupConfirmed ? 'ok-txt' : ''}>{meta.lineupConfirmed ? '✓ Ufficiali, calcolo aggiornato' : 'In attesa · ricalcolo ~1 ora prima'}</b><b></b></div></div>;
 }
 
 function Reliability() {
@@ -119,6 +122,6 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
           <button className="text-button" onClick={() => onOpen(r.fixture_id)}>Tutti i mercati della partita<ArrowRight size={15} /></button>
         </article>;
       })}</div></section>)}
-    <p className="footnote">Modello v2.1: rating di attacco e difesa su ~13 mesi di partite del campionato (più peso alle recenti), fattore campo, correzione Dixon–Coles e calibrazione dei gol da backtest. Classifica, forma e indisponibili sono mostrati; gli indisponibili non sono ancora nel calcolo (tranne per i marcatori, dove gli assenti sono esclusi). Corner e cartellini: medie di squadra pesate sugli avversari. Rigori: frequenza di rigori a favore e contro di ogni squadra; sbagliato = assegnato × percentuale di errore del campionato. Marcatori: quota dei gol della squadra segnati dal giocatore nell'ultimo anno. Fiducia: Alta ≥ 60%, Media ≥ 48%, Bassa sotto.</p>
+    <p className="footnote">Modello v2.1: rating di attacco e difesa su ~13 mesi di partite del campionato (più peso alle recenti), fattore campo, correzione Dixon–Coles e calibrazione dei gol da backtest. Assenze nel calcolo: i gol attesi di una squadra scendono in base alla quota di gol dei marcatori assenti (fino a −25%); con le formazioni ufficiali, circa un’ora prima, pesano anche i marcatori in panchina. Corner e cartellini: medie di squadra pesate sugli avversari. Rigori: frequenza di rigori a favore e contro di ogni squadra; sbagliato = assegnato × percentuale di errore del campionato. Marcatori: quota dei gol della squadra segnati dal giocatore nell'ultimo anno. Fiducia: Alta ≥ 60%, Media ≥ 48%, Bassa sotto.</p>
   </>;
 }

@@ -22,6 +22,9 @@ export function ResultsView() {
       : <>
         <section className="reliability"><div className="rel-head"><strong>Value bet</strong><span>Puntata fissa di 1 unità alla quota migliore vista prima del calcio d'inizio.</span></div>
           <div className="rel-grid"><Box title="Tutte le value bet" a={d.value} note={d.value.expectedHit !== null && d.value.n ? 'attese ' + percent(d.value.expectedHit, 0) : undefined} />{d.valueByMarket.map((g: any) => <Box key={g.group} title={g.group} a={g} />)}</div></section>
+        <section className="reliability"><div className="rel-head"><strong>Quota di chiusura</strong><span>Quota quando QUORUM ha proposto la giocata, confrontata con l’ultima quota prima del calcio d’inizio. Batterla spesso è il segnale più affidabile che il metodo funziona.</span></div>
+          <div className="rel-grid"><div className="res-box"><span>Value bet con quota migliore della chiusura</span>{d.clv?.n ? <><b>{percent(d.clv.beat ?? 0, 0)}</b><small>su {d.clv.n} giocate concluse</small></> : <><b>—</b><small>Si misura dalle partite di questo fine settimana.</small></>}</div>
+          <div className="res-box"><span>Vantaggio medio sulla chiusura (CLV)</span>{d.clv?.n ? <><b>{(d.clv.avg >= 0 ? '+' : '') + percent(d.clv.avg ?? 0)}</b><small>sopra zero = prendi quote migliori del mercato finale</small></> : <><b>—</b><small>In attesa dei primi dati.</small></>}</div></div></section>
         <section className="reliability"><div className="rel-head"><strong>Schedine proposte</strong><span>{d.pendingTickets} ancora in corso.</span></div>
           <div className="rel-grid">{d.tickets.length ? d.tickets.map((t: any) => <Box key={t.kind} title={t.title} a={t} />) : <p className="small-note">Le prime schedine si chiudono dopo le partite di questo fine settimana.</p>}</div></section>
         <h3 className="day-title">Ultime schedine</h3>

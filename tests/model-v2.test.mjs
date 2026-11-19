@@ -27,3 +27,11 @@ test('table and form',()=>{
   const r=[{id:1,ts:1,comp:'X',season:1,homeId:1,awayId:2,home:'A',away:'B',hg:2,ag:0},{id:2,ts:2,comp:'X',season:1,homeId:2,awayId:1,home:'B',away:'A',hg:1,ag:1}];
   const t=table(r,1);assert.equal(t[0].name,'A');assert.equal(t[0].points,4);assert.equal(form(r,1),'NV');
 });
+import {attackAdjustment} from '../lib/extras.ts';
+test('assenze e formazioni riducono i gol attesi, con tetto -25%',()=>{
+  const sc=[{id:1,name:'Bomber',share:0.4},{id:2,name:'Ala',share:0.2},{id:3,name:'Mezzala',share:0.1}];
+  assert.ok(Math.abs(attackAdjustment(sc,new Set([1]),null).factor-0.8)<1e-9);
+  const xi=new Set([3,4,5,6,7,8,9,10,11,12,13]);
+  const r=attackAdjustment(sc,new Set([1]),xi);assert.equal(r.factor,0.75);assert.deepEqual(r.bench,['Ala']);
+  assert.equal(attackAdjustment(sc,new Set(),null).factor,1);
+});

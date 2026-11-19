@@ -41,7 +41,7 @@ async function pool<T, R>(items: T[], size: number, fn: (x: T) => Promise<R>) {
   return out;
 }
 
-export async function runScan(trigger: 'cron' | 'manual') {
+export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
   const id = crypto.randomUUID(), started = new Date().toISOString();
   const running = await db().prepare("SELECT id FROM scanner_runs WHERE status='running' AND started_at > ?").bind(new Date(Date.now() - 10 * 60000).toISOString()).first();
   if (running) throw new Error('Una scansione è già in corso. Riprova tra qualche minuto.');
@@ -51,7 +51,8 @@ export async function runScan(trigger: 'cron' | 'manual') {
     const remainingBefore = await lastOddsRemaining();
     if (remainingBefore !== null && remainingBefore < ODDS_RESERVE) throw new Error('Crediti The Odds API quasi esauriti (' + remainingBefore + '). Si rinnovano a inizio mese, oppure passa al piano a pagamento.');
     // 0. Rebuild the v2 model once per scan (ratings, tables, form).
-    await getModel(true);
+    // The pre-kickoff refresh reuses the model built by the last full scan.
+    await getModel(trigger !== 'prematch');
     // 1. Calendar: next 7 days, only matches not yet started (at least 15 minutes ahead).
     const now = Date.now(), horizon = now + 7 * 24 * 3600000;
     const days = [0, 1, 2, 3, 4, 5, 6, 7].map(d => romeDate(new Date(now + d * 86400000)));
@@ -156,4 +157,17 @@ export async function latestPredictions() {
   if (!run) return { run: null, matches: [] };
   const rows = (await db().prepare('SELECT * FROM scanner_matches WHERE run_id=? AND kickoff > ? ORDER BY kickoff').bind(run.id, new Date().toISOString()).all<any>()).results;
   return { run, matches: rows.map(r => ({ ...r, markets: JSON.parse(r.markets) })) };
+}
+
+// Pre-kickoff refresh: a match starts in 20–80 minutes (official line-ups are usually out ~1 hour before)
+// and the last scan is older than 40 minutes.
+export async function prematchDue() {
+  const now = Date.now();
+  const last = await db().prepare("SELECT started_at FROM scanner_runs ORDER BY started_at DESC LIMIT 1").first<{ started_at: string }>();
+  if (last && now - Date.parse(last.started_at) < 40 * 60000) return false;
+  const run = await db().prepare("SELECT id FROM scanner_runs WHERE status='ok' ORDER BY started_at DESC LIMIT 1").first<{ id: string }>();
+  if (!run) return false;
+  const soon = await db().prepare('SELECT COUNT(*) AS n FROM scanner_matches WHERE run_id=? AND kickoff BETWEEN ? AND ?')
+    .bind(run.id, new Date(now + 20 * 60000).toISOString(), new Date(now + 80 * 60000).toISOString()).first<{ n: number }>();
+  return (soon?.n ?? 0) > 0;
 }

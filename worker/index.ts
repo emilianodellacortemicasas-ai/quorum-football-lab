@@ -1,7 +1,7 @@
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
-import { runScan } from "../lib/scanner";
+import { prematchDue, runScan } from "../lib/scanner";
 
 const worker = {
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
@@ -27,8 +27,10 @@ const worker = {
     return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
   },
   // Daily value scan (see triggers in vite.config.ts). Errors are recorded in scanner_runs.
-  async scheduled(_controller: ScheduledController, _env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runScan("cron").catch(() => undefined));
+  // "40 2-23/3 * * *": full scan every 3 hours. "10 * * * *": pre-kickoff refresh (line-ups, closing odds) only when a match is about to start.
+  async scheduled(controller: ScheduledController, _env: Cloudflare.Env, ctx: ExecutionContext) {
+    if (controller.cron === "10 * * * *") ctx.waitUntil(prematchDue().then(due => (due ? runScan("prematch") : undefined)).catch(() => undefined));
+    else ctx.waitUntil(runScan("cron").catch(() => undefined));
   },
 };
 

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { credentialValue } from './vault';
-import { expectedCount, fitExtras, parseExtras, penaltyProbs, scorerProbs, type ExtraRow, type ExtrasModel } from './extras';
+import { attackAdjustment, expectedCount, fitExtras, parseExtras, penaltyProbs, scorerProbs, type ExtraRow, type ExtrasModel } from './extras';
 import { MODEL_V2, fitLeague, form, lambdas, parseResult, table, type LeagueModel, type Result, type TableRow } from './model-v2';
 import { historicalGoalMeans,sportmonksCompetition,sportmonksFixture } from './sportmonks-contract';
 import type { Match } from './types';
@@ -59,25 +59,34 @@ function sidelinedNames(f:any,teamId:number):string[]|null{
 export async function getSportmonksMatch(id:string):Promise<Match>{
  if(!/^sm-\d{1,12}$/.test(id))throw new Error('Partita Sportmonks non valida.');
  let f:any;
- try{f=(await feed('fixtures/'+id.slice(3)+'?include=participants;league.country;state;sidelined.player;sidelined.type',300)).data;}
- catch{f=(await feed('fixtures/'+id.slice(3)+'?include=participants;league.country;state',300)).data;}
+ try{f=(await feed('fixtures/'+id.slice(3)+'?include=participants;league.country;state;sidelined.player;sidelined.type;lineups',300)).data;}
+ catch{try{f=(await feed('fixtures/'+id.slice(3)+'?include=participants;league.country;state;sidelined.player;sidelined.type',300)).data;}
+ catch{f=(await feed('fixtures/'+id.slice(3)+'?include=participants;league.country;state',300)).data;}}
  const m=sportmonksFixture(f);
  if(!m)throw new Error('Competizione o dati Sportmonks non supportati.');
  if(f.state?.state!=='NS'||new Date(m.kickoff).getTime()<=Date.now())throw new Error('Il modello analizza solo partite non iniziate.');
  const state=await getModel(),h=f.participants.find((x:any)=>x.meta?.location==='home'),a=f.participants.find((x:any)=>x.meta?.location==='away');
- const league=state.leagues[m.competition==='Coppa Italia'?'Serie A':m.competition],l=league?lambdas(league,h.id,a.id):null;
+ const league=state.leagues[m.competition==='Coppa Italia'?'Serie A':m.competition],l0=league?lambdas(league,h.id,a.id):null;
+ // Absences and official line-ups (Sportmonks lineups: type 11 = starting XI) adjust each team's expected goals.
+ const exAdj=state.extras?.[m.competition==='Coppa Italia'?'Serie A':m.competition];
+ const absentIds=(teamId:number)=>new Set<number>(Array.isArray(f.sidelined)?f.sidelined.filter((s:any)=>(s.participant_id??s.sideline?.team_id)===teamId&&s.sideline?.completed!==true).map((s:any)=>s.player_id??s.sideline?.player_id).filter((x:any)=>Number.isInteger(x)):[]);
+ const starterIds=(teamId:number)=>{if(!Array.isArray(f.lineups))return null;const st=f.lineups.filter((x:any)=>x.team_id===teamId&&x.type_id===11).map((x:any)=>x.player_id);return st.length>=11?new Set<number>(st):null;};
+ const sh=starterIds(h.id),sa=starterIds(a.id),adjH=attackAdjustment(exAdj?.scorers[h.id],absentIds(h.id),sh),adjA=attackAdjustment(exAdj?.scorers[a.id],absentIds(a.id),sa);
+ const l=l0?{lh:l0.lh*adjH.factor,la:l0.la*adjA.factor}:null;
  const tbl=state.tables[m.competition==='Coppa Italia'?'Serie A':m.competition]||[],ph=tbl.find(r=>r.teamId===h.id),pa=tbl.find(r=>r.teamId===a.id);
- const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0};
+ const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0,lineupConfirmed:Boolean(sh&&sa),adjust:{home:adjH,away:adjA}};
  const ex=state.extras?.[m.competition==='Coppa Italia'?'Serie A':m.competition];
  let counts:Match['counts'];
  if(ex){const c=expectedCount(ex.corners,h.id,a.id),y=expectedCount(ex.yellow,h.id,a.id),r=expectedCount(ex.red,h.id,a.id);if(c&&y&&r)counts={corners:c,yellow:y,red:r};
   const pen=penaltyProbs(ex,h.id,a.id);if(pen)(context as any).penalties=pen;
-  if(l)(context as any).scorers={home:scorerProbs(ex,h.id,l.lh,context.homeOut),away:scorerProbs(ex,a.id,l.la,context.awayOut)};}
+  if(l){const benchCut=(list:{id:number;name:string;p:number}[],st:Set<number>|null)=>list.map(x=>st&&!st.has(x.id)?{...x,p:x.p*0.35}:x).sort((x,y)=>y.p-x.p);
+   (context as any).scorers={home:benchCut(scorerProbs(ex,h.id,l.lh,context.homeOut),sh),away:benchCut(scorerProbs(ex,a.id,l.la,context.awayOut),sa)};}}
  return {...m,counts,sampleHome:context.homeN,sampleAway:context.awayN,lambdaHome:l?l.lh:null,lambdaAway:l?l.la:null,context,notes:[
   'Modello v2: forza di attacco e difesa di ogni squadra stimata su tutte le partite del campionato degli ultimi 13 mesi circa ('+state.results+' risultati), con peso maggiore alle più recenti (metà peso dopo 250 giorni), calibrato con backtest.',
   'Include fattore campo del campionato e correzione Dixon–Coles sui risultati bassi. Punteggio dopo i 90 minuti.',
   l?'Stima basata su '+context.homeN+' e '+context.awayN+' partite delle due squadre.':'Dati insufficienti per una delle due squadre: nessuna probabilità generata.',
-  context.homeOut===null?'Indisponibili: dato non fornito dal piano dati.':'Indisponibili mostrati a titolo informativo: il loro peso non è ancora nel calcolo.']};
+  context.homeOut===null?'Indisponibili: dato non fornito dal piano dati.':'Assenze nel calcolo: i gol attesi scendono in base alla quota di gol dei marcatori assenti (massimo −25%).',
+  sh&&sa?'Formazioni ufficiali confermate: i marcatori in panchina pesano meno.':'Formazioni ufficiali non ancora pubblicate: ricalcolo automatico circa un’ora prima del calcio d’inizio.']};
 }
 
 // Stored results for the backtest (names are not needed there).

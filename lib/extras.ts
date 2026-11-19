@@ -84,3 +84,15 @@ export function scorerProbs(m: ExtrasModel, teamId: number, teamLambda: number, 
   return (m.scorers[teamId] || []).filter(p => !absent.some(o => o.startsWith(p.name.toLowerCase()))).slice(0, 4)
     .map(p => ({ id: p.id, name: p.name, p: 1 - Math.exp(-p.share * teamLambda * 0.85) }));
 }
+
+// Absences and official line-ups: a team's expected goals drop by the share of goals its missing scorers
+// usually provide. Injured/suspended: 50% of their share is lost (the replacement scores too).
+// Confirmed line-up, scorer on the bench: 35% of the share (he may come on). Floor: −25%.
+export function attackAdjustment(scorers: { id: number; name: string; share: number }[] | undefined, absent: Set<number>, starters: Set<number> | null) {
+  let lost = 0; const missing: string[] = [], bench: string[] = [];
+  for (const s of scorers || []) {
+    if (absent.has(s.id)) { lost += s.share * 0.5; missing.push(s.name); }
+    else if (starters && starters.size >= 11 && !starters.has(s.id)) { lost += s.share * 0.35; bench.push(s.name); }
+  }
+  return { factor: Math.max(0.75, 1 - lost), missing, bench };
+}

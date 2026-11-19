@@ -30,7 +30,7 @@ const localBindingConfig = {
         workers_dev: true,
         observability: { enabled: true },
         // Value scan every 3 hours (first at 06:40 Rome in winter).
-        triggers: { crons: ["40 2-23/3 * * *"] },
+        triggers: { crons: ["40 2-23/3 * * *", "10 * * * *"] },
       }
     : {}),
   d1_databases: d1
