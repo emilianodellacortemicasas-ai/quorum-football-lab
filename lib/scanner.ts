@@ -35,9 +35,9 @@ export async function runScan(trigger: 'cron' | 'manual') {
     if (remainingBefore !== null && remainingBefore < ODDS_RESERVE) throw new Error('Crediti The Odds API quasi esauriti (' + remainingBefore + '). Si rinnovano a inizio mese, oppure passa al piano a pagamento.');
     // 0. Rebuild the v2 model once per scan (ratings, tables, form).
     await getModel(true);
-    // 1. Calendar: next 3 days, only matches not yet started (at least 15 minutes ahead).
-    const now = Date.now(), horizon = now + 72 * 3600000;
-    const days = [0, 1, 2, 3].map(d => romeDate(new Date(now + d * 86400000)));
+    // 1. Calendar: next 7 days, only matches not yet started (at least 15 minutes ahead).
+    const now = Date.now(), horizon = now + 7 * 24 * 3600000;
+    const days = [0, 1, 2, 3, 4, 5, 6, 7].map(d => romeDate(new Date(now + d * 86400000)));
     const fixtures: Match[] = [];
     for (const d of days) fixtures.push(...await getSportmonksFixtures(d));
     const upcoming = [...new Map(fixtures.map(f => [f.id, f])).values()].filter(f => { const t = Date.parse(f.kickoff); return t > now + 15 * 60000 && t <= horizon; });

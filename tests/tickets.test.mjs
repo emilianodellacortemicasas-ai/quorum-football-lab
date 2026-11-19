@@ -10,3 +10,8 @@ test('tickets: one leg per match, odds windows respected',()=>{
   for(const t of tickets)assert.equal(new Set(t.legs.map(l=>l.fixtureId)).size,t.legs.length);
   const a=tickets.find(t=>t.kind==='ambiziosa');if(a)assert.ok(a.odds>=10&&a.odds<=25);
 });
+test('bomba: high odds, 5–8 legs, distinct matches',()=>{
+  const ms=Array.from({length:16},(_,i)=>mk(i,{home:[0.5+(i%5)*0.02,2.1],over25:[0.55,1.85],under25:[0.45,2.05]}));
+  const {bomb}=buildTickets(ms);assert.ok(bomb);assert.ok(bomb.odds>=50&&bomb.odds<=200);
+  assert.ok(bomb.legs.length>=5&&bomb.legs.length<=8);assert.equal(new Set(bomb.legs.map(l=>l.fixtureId)).size,bomb.legs.length);
+});

@@ -64,7 +64,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
   const leagues = ['Tutte', ...new Set((data?.matches || []).map(r => r.competition))];
   const days = [...new Set(rows.map(r => day(r.kickoff)))];
   return <>
-    <div className="page-heading"><div><p className="eyebrow">PRONOSTICI</p><h1>Le partite, lette dai numeri<span>.</span></h1><p>Pronostico per ogni partita dei prossimi 3 giorni: forza di attacco e difesa pesata sugli avversari, stato di forma, fattore campo, classifica e indisponibili.</p></div>
+    <div className="page-heading"><div><p className="eyebrow">PRONOSTICI</p><h1>Le partite, lette dai numeri<span>.</span></h1><p>Pronostico per ogni partita dei prossimi 7 giorni: forza di attacco e difesa pesata sugli avversari, stato di forma, fattore campo, classifica e indisponibili.</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Aggiornamento…' : 'Aggiorna ora'}</button></div>
     {data?.run && <p className="value-note"><Info size={15} />Aggiornati {when(data.run.started_at)} · {data.matches.length} partite · {data.matches.filter(m => m.modelled).length} con statistiche sufficienti.</p>}
     <Reliability />

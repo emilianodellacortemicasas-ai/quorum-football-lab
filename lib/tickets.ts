@@ -1,6 +1,6 @@
 // Automatic tickets (singles that double the stake and accumulators) built from the latest predictions.
 // Pure logic: input = per-match markets with blended probability and best price.
-import { marketLabel } from './math';
+const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5' };
 
 export type Leg = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p: number; odds: number; bookmaker: string; edge: number };
 export type Ticket = { kind: string; title: string; description: string; legs: Leg[]; odds: number; p: number; ev: number; kelly: number };
@@ -14,7 +14,7 @@ export function candidates(matches: MatchRow[], now = Date.now()): Leg[] {
     for (const k of KEYS) {
       const x = m.markets?.[k];
       if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds) || x.bestOdds <= 1 || (x.books ?? 0) < 3) continue;
-      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: marketLabel(k), p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
+      out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k], p: x.pBlend, odds: x.bestOdds, bookmaker: x.bookmaker, edge: x.pBlend * x.bestOdds - 1 });
     }
   }
   return out;
@@ -67,5 +67,10 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const wide = perMatch(c, l => l.p >= 0.5 && l.odds >= 1.3 && l.odds <= 2.6, l => l.p + Math.max(0, l.edge)).slice(0, 16);
   const a = bestCombo(wide, [4, 5, 6], 10, 25, prob);
   if (a) tickets.push(ticket('ambiziosa', 'Multipla ambiziosa', 'Quota alta: vince raramente, punta poco.', a));
-  return { singles, tickets, candidates: c.length };
+  // 6. Bomba della settimana: 5–8 eventi su tutta la settimana, quota 50–200.
+  // Solo esiti con probabilità ≥ 45% e mai contro il mercato: preferiti quelli con valore positivo.
+  const bombPool = perMatch(c, l => l.p >= 0.45 && l.odds >= 1.55 && l.odds <= 3.6 && l.edge > -0.03, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 18);
+  const b = bestCombo(bombPool, [5, 6, 7, 8], 50, 200, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
+  const bomb = b ? ticket('bomba', 'Bomba della settimana', 'Quota altissima per sbancare: 5–8 esiti scelti tra le partite della settimana con la probabilità più alta per quella quota. Vince di rado: punta solo una piccola cifra.', b) : null;
+  return { singles, tickets, bomb, candidates: c.length };
 }
