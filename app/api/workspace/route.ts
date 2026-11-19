@@ -50,6 +50,10 @@ export async function POST(request:Request) {
       if(body.action==='rename'){
         const name=z.string().trim().min(1).max(40).parse(body.name);
         statement=raw.prepare('UPDATE portfolios SET name=? WHERE id=? AND owner=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(name,portfolioId,owner,portfolioId,revision);
+      } else if(body.action==='capital'){
+        // Starting budget chosen by the user (whole euros, 10 € – 10M €). Results already recorded stay as they are.
+        const cents=z.number().int().min(1000).max(1000000000).parse(body.initialCents);
+        statement=raw.prepare('UPDATE portfolios SET initial_cents=? WHERE id=? AND owner=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(cents,portfolioId,owner,portfolioId,revision);
       } else if(body.action==='limits'){
         const enabled=z.boolean().parse(body.enabled);
         statement=raw.prepare('UPDATE portfolios SET limits_enabled=? WHERE id=? AND owner=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(enabled?1:0,portfolioId,owner,portfolioId,revision);

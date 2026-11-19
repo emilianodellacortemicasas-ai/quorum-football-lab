@@ -47,7 +47,7 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
       : !run ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna scansione ancora.</h3><p>La prima parte in automatico domattina. Puoi avviarla adesso con “Aggiorna ora”.</p></div>
       : !picks.length ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna giocata con valore in questa selezione.</h3><p>Cambia competizione o disattiva “Solo quelle che superano i controlli”.</p></div>
       : <div className="value-list">{picks.map(p => {
-        const stake = Math.floor(equityCents * p.kelly / 100) * 100;
+        const raw = Math.floor(equityCents * p.kelly / 100) * 100, stake = raw > 0 ? Math.max(200, raw) : 0;
         const why = p.is_pick ? [] : evaluateOutcome(p.p_model, { pMarket: p.p_market, bestOdds: p.best_odds, books: p.books }).reasons;
         return <article className={'value-card' + (p.is_pick ? ' checked' : '')} key={p.id}>
           <div className="value-head"><span>{p.competition} · {when(p.kickoff)}</span><b className="edge">{signed(p.edge)} valore</b></div>
