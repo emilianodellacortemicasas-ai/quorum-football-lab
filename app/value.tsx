@@ -47,14 +47,14 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
       : !run ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna scansione ancora.</h3><p>La prima parte in automatico domattina. Puoi avviarla adesso con “Aggiorna ora”.</p></div>
       : !picks.length ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna giocata con valore in questa selezione.</h3><p>Cambia competizione o disattiva “Solo quelle che superano i controlli”.</p></div>
       : <div className="value-list">{picks.map(p => {
-        const raw = Math.floor(equityCents * p.kelly / 100) * 100, stake = raw > 0 ? Math.max(200, raw) : 0;
+        const raw = Math.floor(equityCents * p.kelly / 100) * 100, stake = p.kelly > 0 ? Math.max(200, raw) : 0, atMin = p.kelly > 0 && raw < 200;
         const why = p.is_pick ? [] : evaluateOutcome(p.p_model, { pMarket: p.p_market, bestOdds: p.best_odds, books: p.books }).reasons;
         return <article className={'value-card' + (p.is_pick ? ' checked' : '')} key={p.id}>
           <div className="value-head"><span>{p.competition} · {when(p.kickoff)}</span><b className="edge">{signed(p.edge)} valore</b></div>
           <h3>{p.fixture}</h3>
           <span className={'value-check ' + (p.is_pick ? 'ok' : 'warn')}>{p.is_pick ? 'Supera i controlli QUORUM' : 'Attenzione: ' + why.join(', ')}</span>
           <div className="value-pick"><strong>{p.label}</strong><span className="odds">{p.best_odds.toFixed(2)}</span><small>{p.bookmaker}</small></div>
-          <dl><div><dt>Modello</dt><dd>{percent(p.p_model)}</dd></div><div><dt>Mercato</dt><dd>{percent(p.p_market)}</dd></div><div><dt>Stima QUORUM</dt><dd>{percent(p.p_blend)}</dd></div><div><dt>Puntata indicativa</dt><dd>{stake > 0 ? money(stake) : '—'}<small>{percent(p.kelly)} del capitale</small></dd></div></dl>
+          <dl><div><dt>Modello</dt><dd>{percent(p.p_model)}</dd></div><div><dt>Mercato</dt><dd>{percent(p.p_market)}</dd></div><div><dt>Stima QUORUM</dt><dd>{percent(p.p_blend)}</dd></div><div><dt>Puntata indicativa</dt><dd>{stake > 0 ? money(stake) + (atMin ? ' (minimo)' : '') : '—'}<small>{atMin ? 'calcolata ' + money(Math.round(equityCents * p.kelly)) + ', sotto la giocata minima' : percent(p.kelly) + ' del capitale'}</small></dd></div></dl>
           <button className="text-button" onClick={() => onOpen(p.fixture_id)}>Apri la partita<ArrowRight size={15} /></button>
         </article>;
       })}</div>}

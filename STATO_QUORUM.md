@@ -112,3 +112,8 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Demo eliminata dall'interfaccia: Partite usa solo il calendario reale, la panoramica rimanda ai Pronostici.
 - Quote eventi: `btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime` (≈165 crediti per 48 partite, refresh ogni 12 ore → ~12.400 crediti/mese totali con 1X2+O/U). Marcatori del bookmaker abbinati ai marcatori del modello per nome.
 - Money management: sezione guidata nel Portafoglio (3 regole, simulazione Monte Carlo 300 giocate per profilo Prudente 1% / Equilibrato 2% / Aggressivo 5% / Senza regole 15%, scelta profilo con un clic che imposta i limiti).
+
+## 19/11/2026 · Guida in-app
+- Vista "Guida" (app/guide.tsx): 19 slide con schermate reali (public/guide/*.jpg, 1,4 MB), frecce/tasti ←→, ingrandimento immagine, pulsante "Apri la sezione". Copre Pronostici, scheda partita, contesto, Centro partita, corner/cartellini, Valore, Bomba, Multiple, Raddoppi, Laboratorio, Risultati, Money management (regole, budget, profili, limiti), Partite, Collegamenti/telefono, Glossario.
+- Aggiornati testi residui della demo nel Centro partita e nel Laboratorio.
+- Per aggiornare le immagini: sostituire i file in public/guide con lo stesso nome.

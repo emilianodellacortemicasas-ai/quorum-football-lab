@@ -8,7 +8,7 @@ import type { Ticket } from '../lib/tickets';
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 function TicketCard({ t, equityCents, onLab }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void }) {
-  const raw = Math.floor(equityCents * (t.kind === 'bomba' ? 0.002 : t.kelly) / 100) * 100, stake = t.kind === 'bomba' || raw > 0 ? Math.max(200, raw) : 0;
+  const raw = Math.floor(equityCents * (t.kind === 'bomba' ? 0.002 : t.kelly) / 100) * 100, stake = t.kind === 'bomba' || t.kelly > 0 ? Math.max(200, raw) : 0;
   return <article className={'value-card ticket ' + t.kind}>
     <div className="value-head"><span>{t.title}</span><b className={t.ev > 0 ? 'edge' : 'edge neutral'}>{t.ev > 0 ? '+' + percent(t.ev) + ' valore' : 'valore ' + percent(t.ev)}</b></div>
     <p className="small-note">{t.description}</p>
