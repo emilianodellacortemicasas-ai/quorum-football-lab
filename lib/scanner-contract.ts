@@ -59,6 +59,7 @@ export function marketConsensus(event: OddsEvent) {
         if (!Number.isFinite(o?.price) || o.price <= 1 || o.price > 1000) continue;
         let key: string | null = null, group = m.key;
         if (m.key === 'h2h') key = o.name === event.home_team ? 'home' : o.name === event.away_team ? 'away' : o.name === 'Draw' ? 'draw' : null;
+        if (m.key === 'btts') key = o.name === 'Yes' ? 'btts' : o.name === 'No' ? 'noGoal' : null;
         if (m.key === 'totals' && [1.5, 2.5, 3.5].includes(o.point) && (o.name === 'Over' || o.name === 'Under')) {
           const line = String(o.point).replace('.', ''); key = (o.name === 'Over' ? 'over' : 'under') + line; group = 'totals' + line;
         }
@@ -85,7 +86,7 @@ export function marketConsensus(event: OddsEvent) {
   return out;
 }
 
-export const SCANNED_MARKETS = ['home', 'draw', 'away', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35'] as const;
+export const SCANNED_MARKETS = ['home', 'draw', 'away', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35', 'btts', 'noGoal'] as const;
 
 export function evaluateOutcome(pModel: number, m: { pMarket: number; bestOdds: number; books: number }) {
   const pBlend = MODEL_WEIGHT * pModel + (1 - MODEL_WEIGHT) * m.pMarket;

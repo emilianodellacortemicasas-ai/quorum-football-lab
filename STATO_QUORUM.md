@@ -97,3 +97,9 @@ Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella
 - Sempre un solo esito per partita. Probabilità = stima QUORUM (35% modello + 65% mercato). "Analizza nel Laboratorio" carica la schedina nel calcolatore di sistemi.
 - Orizzonte scanner esteso a 7 giorni (48 partite al 19/11).
 - Nota: il valore atteso delle multiple è calcolato sulle quote migliori di bookmaker diversi, quindi è ottimistico rispetto a un solo bookmaker.
+
+## 19/11/2026 · The Odds API 20K
+- Abbonamento The Odds API 20K attivo (30 $/mese, sottoscritto da Emiliano). Nuova chiave collegata da lui in Collegamenti.
+- Scansione ogni 3 ore (cron `40 2-23/3 * * *` UTC). Aggiornamenti manuali riusano le quote se scaricate da meno di 30 minuti.
+- Aggiunto Goal/No Goal con quote reali (mercato `btts` per evento, 1 credito a partita, aggiornato ogni ~9 ore e salvato in D1).
+- Stima consumo: ~2.400 crediti/mese per 1X2+O/U, ~4.000 per Goal/No Goal → ~6.500 su 20.000.

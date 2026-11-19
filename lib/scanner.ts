@@ -10,7 +10,9 @@ const romeDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Euro
 // Free The Odds API plan: 500 credits/month. Below this reserve the scanner stops calling it.
 const ODDS_RESERVE = 12;
 // Manual refreshes reuse odds younger than this: the model is recomputed for free.
-const ODDS_MAX_AGE = 3 * 3600000;
+const ODDS_MAX_AGE = 30 * 60000;
+// Goal/No Goal is an event-level market (1 credit per match): refreshed twice a day, reused in between.
+const BTTS_MAX_AGE = 9 * 3600000;
 
 async function lastOddsRemaining() {
   const r = await db().prepare("SELECT odds_remaining FROM scanner_runs WHERE odds_remaining IS NOT NULL ORDER BY started_at DESC LIMIT 1").first<{ odds_remaining: number }>();
@@ -62,6 +64,23 @@ export async function runScan(trigger: 'cron' | 'manual') {
     }
     // 3. Reconcile fixtures with odds events, then model only the matched ones.
     const paired = upcoming.map(f => ({ f, e: matchEvent(f, events.get(f.competition) || []) })).filter(x => x.e) as { f: Match; e: OddsEvent }[];
+    // Goal/No Goal odds per event, merged into the event's bookmakers.
+    let bttsDownloaded = 0;
+    await pool(paired, 4, async ({ f, e }) => {
+      const key = ODDS_SPORT[f.competition]; if (!key) return;
+      const cacheId = 'btts:' + e.id, saved = await db().prepare('SELECT built_at,payload FROM model_state WHERE id=?').bind(cacheId).first<{ built_at: string; payload: string }>();
+      let books: any[] | null = saved && Date.now() - Date.parse(saved.built_at) < BTTS_MAX_AGE ? JSON.parse(saved.payload) : null;
+      if (!books) {
+        try {
+          const r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts&oddsFormat=decimal', 600);
+          books = Array.isArray(r.payload?.bookmakers) ? r.payload.bookmakers : []; bttsDownloaded++;
+          if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
+          await db().prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind(cacheId, new Date().toISOString(), JSON.stringify(books)).run();
+        } catch { books = []; }
+      }
+      e.bookmakers = [...(e.bookmakers || []), ...(books ?? [])];
+    });
+    if (bttsDownloaded) notes.push('Quote Goal/No Goal aggiornate per ' + bttsDownloaded + ' partite.');
     const fetched = await pool(paired, 4, async ({ f }) => { try { return await getSportmonksMatch(f.id); } catch { return null; } });
     const modelled = fetched.map((m, i) => m && m.lambdaHome !== null && m.lambdaAway !== null ? { m, e: paired[i].e } : null);
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
@@ -92,7 +111,7 @@ export async function runScan(trigger: 'cron' | 'manual') {
     const insert = db().prepare('INSERT INTO scanner_rows (id,run_id,fixture_id,fixture,competition,kickoff,market,label,p_model,p_market,p_blend,best_odds,bookmaker,books,edge,kelly,is_pick,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (let i = 0; i < rows.length; i += 50) await db().batch(rows.slice(i, i + 50).map(r => insert.bind(...r)));
     const picks = rows.filter(r => r[16] === 1).length, modelledCount = modelled.filter(Boolean).length;
-    if (reused) notes.push('Quote riusate per ' + reused + ' campionati (scaricate meno di 3 ore fa, 0 crediti).');
+    if (reused) notes.push('Quote riusate per ' + reused + ' campionati (scaricate meno di 30 minuti fa, 0 crediti).');
     if (upcoming.length && !paired.length) notes.push('Nessuna partita abbinata alle quote.');
     if (paired.length > modelledCount) notes.push((paired.length - modelledCount) + ' partite senza storico sufficiente per il modello.');
     await db().prepare('UPDATE scanner_runs SET status=?,finished_at=?,fixtures=?,matched=?,modelled=?,picks=?,odds_remaining=?,message=? WHERE id=?')

@@ -1,12 +1,12 @@
 // Automatic tickets (singles that double the stake and accumulators) built from the latest predictions.
 // Pure logic: input = per-match markets with blended probability and best price.
-const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5' };
+const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5', btts: 'Goal', noGoal: 'No Goal' };
 
 export type Leg = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p: number; odds: number; bookmaker: string; edge: number };
 export type Ticket = { kind: string; title: string; description: string; legs: Leg[]; odds: number; p: number; ev: number; kelly: number };
 type MatchRow = { fixture_id: string; fixture: string; competition: string; kickoff: string; markets: Record<string, any> };
 
-const KEYS = ['home', 'draw', 'away', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35'];
+const KEYS = ['home', 'draw', 'away', 'over15', 'under15', 'over25', 'under25', 'over35', 'under35', 'btts', 'noGoal'];
 export function candidates(matches: MatchRow[], now = Date.now()): Leg[] {
   const out: Leg[] = [];
   for (const m of matches) {
