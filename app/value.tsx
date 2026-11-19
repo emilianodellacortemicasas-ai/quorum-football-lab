@@ -4,7 +4,7 @@ import { ArrowRight, Info, RefreshCw, TrendingUp } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import { evaluateOutcome } from '../lib/scanner-contract';
 
-type Pick = { id: string; fixture_id: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p_model: number; p_market: number; p_blend: number; best_odds: number; bookmaker: string; books: number; edge: number; kelly: number; is_pick: number };
+type Pick = { id: string; fixture_id: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p_model: number; p_market: number; p_blend: number; best_odds: number; bookmaker: string; books: number; edge: number; kelly: number; is_pick: number; it_odds?: number | null; it_book?: string | null; it_edge?: number | null; it_kelly?: number | null };
 type Run = { started_at: string; finished_at: string | null; status: string; fixtures: number; matched: number; modelled: number; picks: number; odds_remaining: number | null; message: string | null };
 type Data = { run: Run | null; last: Run | null; picks: Pick[]; evaluated: number };
 
@@ -13,7 +13,7 @@ const signed = (p: number) => (p >= 0 ? '+' : '') + percent(p);
 
 export function ValueView({ equityCents, onOpen, notify }: { equityCents: number; onOpen: (fixtureId: string) => void; notify: (m: string) => void }) {
   const [data, setData] = useState<Data | null>(null), [loading, setLoading] = useState(true), [scanning, setScanning] = useState(false), [error, setError] = useState('');
-  const [league, setLeague] = useState('Tutte'), [onlyChecked, setOnlyChecked] = useState(false);
+  const [league, setLeague] = useState('Tutte'), [onlyChecked, setOnlyChecked] = useState(false), [onlyIt, setOnlyIt] = useState(false);
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -26,7 +26,8 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
     catch (e) { notify(e instanceof Error ? e.message : 'Scansione non riuscita.'); } finally { setScanning(false); }
   }
   const all = data?.picks || [], checked = all.filter(p => p.is_pick).length;
-  const picks = all.filter(p => (league === 'Tutte' || p.competition === league) && (!onlyChecked || p.is_pick));
+  const picks = all.filter(p => (league === 'Tutte' || p.competition === league) && (!onlyChecked || p.is_pick) && (!onlyIt || (p.it_edge ?? 0) > 0));
+  const hasIt = all.some(p => p.it_odds);
   const leagues = ['Tutte', ...new Set((data?.picks || []).map(p => p.competition))];
   const run = data?.run, last = data?.last;
   return <>
@@ -41,20 +42,24 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
     </section>}
     {last && last.status === 'error' && <p className="value-warning"><Info size={15} />Ultimo tentativo non riuscito: {last.message}</p>}
     {run?.message && <p className="value-note"><Info size={15} />{run.message}</p>}
-    <div className="filters">{leagues.map(l => <button key={l} className={league === l ? 'selected' : ''} onClick={() => setLeague(l)}>{l}</button>)}<button className={onlyChecked ? 'selected' : ''} onClick={() => setOnlyChecked(!onlyChecked)}>{onlyChecked ? '✓ ' : ''}Solo quelle che superano i controlli</button></div>
+    <div className="filters">{leagues.map(l => <button key={l} className={league === l ? 'selected' : ''} onClick={() => setLeague(l)}>{l}</button>)}<button className={onlyChecked ? 'selected' : ''} onClick={() => setOnlyChecked(!onlyChecked)}>{onlyChecked ? '✓ ' : ''}Solo quelle che superano i controlli</button>{hasIt && <button className={onlyIt ? 'selected' : ''} onClick={() => setOnlyIt(!onlyIt)}>{onlyIt ? '✓ ' : ''}Valore su Lottomatica / Planetwin365</button>}</div>
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Carico le giocate…</h3></div>
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Scanner non disponibile</h3><p>{error}</p></div>
       : !run ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna scansione ancora.</h3><p>La prima parte in automatico domattina. Puoi avviarla adesso con “Aggiorna ora”.</p></div>
       : !picks.length ? <div className="empty"><span className="empty-icon"><TrendingUp /></span><h3>Nessuna giocata con valore in questa selezione.</h3><p>Cambia competizione o disattiva “Solo quelle che superano i controlli”.</p></div>
       : <div className="value-list">{picks.map(p => {
-        const raw = Math.floor(equityCents * p.kelly / 100) * 100, stake = p.kelly > 0 ? Math.max(200, raw) : 0, atMin = p.kelly > 0 && raw < 200;
+        // When an Italian book has the market, the stake follows the Italian price (the one you can actually play).
+        const itOk = !!p.it_odds && (p.it_edge ?? 0) > 0, k = p.it_odds ? (p.it_kelly ?? 0) : p.kelly;
+        const raw = Math.floor(equityCents * k / 100) * 100, stake = k > 0 ? Math.max(200, raw) : 0, atMin = k > 0 && raw < 200;
         const why = p.is_pick ? [] : evaluateOutcome(p.p_model, { pMarket: p.p_market, bestOdds: p.best_odds, books: p.books }).reasons;
         return <article className={'value-card' + (p.is_pick ? ' checked' : '')} key={p.id}>
           <div className="value-head"><span>{p.competition} · {when(p.kickoff)}</span><b className="edge">{signed(p.edge)} valore</b></div>
           <h3>{p.fixture}</h3>
           <span className={'value-check ' + (p.is_pick ? 'ok' : 'warn')}>{p.is_pick ? 'Supera i controlli QUORUM' : 'Attenzione: ' + why.join(', ')}</span>
           <div className="value-pick"><strong>{p.label}</strong><span className="odds">{p.best_odds.toFixed(2)}</span><small>{p.bookmaker}</small></div>
-          <dl><div><dt>Modello</dt><dd>{percent(p.p_model)}</dd></div><div><dt>Mercato</dt><dd>{percent(p.p_market)}</dd></div><div><dt>Stima QUORUM</dt><dd>{percent(p.p_blend)}</dd></div><div><dt>Puntata indicativa</dt><dd>{stake > 0 ? money(stake) + (atMin ? ' (minimo)' : '') : '—'}<small>{atMin ? 'calcolata ' + money(Math.round(equityCents * p.kelly)) + ', sotto la giocata minima' : percent(p.kelly) + ' del capitale'}</small></dd></div></dl>
+          {p.it_odds ? <div className={'value-it ' + (itOk ? 'ok' : 'no')}><span>{p.it_book}</span><b>{p.it_odds.toFixed(2)}</b><em>{itOk ? signed(p.it_edge!) + ' valore' : 'senza valore (' + signed(p.it_edge!) + ')'}</em></div>
+            : <div className="value-it none"><span>Lottomatica / Planetwin365</span><em>quota non disponibile per questo mercato</em></div>}
+          <dl><div><dt>Modello</dt><dd>{percent(p.p_model)}</dd></div><div><dt>Mercato</dt><dd>{percent(p.p_market)}</dd></div><div><dt>Stima QUORUM</dt><dd>{percent(p.p_blend)}</dd></div><div><dt>{p.it_odds ? 'Puntata su ' + p.it_book : 'Puntata indicativa'}</dt><dd>{stake > 0 ? money(stake) + (atMin ? ' (minimo)' : '') : '—'}<small>{atMin ? 'calcolata ' + money(Math.round(equityCents * k)) + ', sotto la giocata minima' : percent(k) + ' del capitale'}</small></dd></div></dl>
           <button className="text-button" onClick={() => onOpen(p.fixture_id)}>Apri la partita<ArrowRight size={15} /></button>
         </article>;
       })}</div>}

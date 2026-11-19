@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { getModel, getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
 import { oddsFeed } from './odds-provider';
 import { analyzeMatch, marketLabel } from './math';
+import { italianOdds, matchItalian, type ItalianFixture } from './italian-odds';
 import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
 import type { Match } from './types';
 import { buildTickets } from './tickets';
@@ -99,14 +100,26 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     if (bttsDownloaded) notes.push('Quote Goal/No Goal, corner e cartellini aggiornate per ' + bttsDownloaded + ' partite.');
     const fetched = await pool(paired, 4, async ({ f }) => { try { return await getSportmonksMatch(f.id); } catch { return null; } });
     const modelled = fetched.map((m, i) => m && m.lambdaHome !== null && m.lambdaAway !== null ? { m, e: paired[i].e } : null);
+    let ita: ItalianFixture[] = [];
+    try { ita = (await italianOdds()) ?? []; if (ita.length) notes.push('Quote Lottomatica/Planetwin365 disponibili per ' + ita.length + ' partite.'); }
+    catch (err) { notes.push('Quote italiane non aggiornate: ' + (err instanceof Error ? err.message : 'errore OddsPapi') + '.'); }
+    const itFor = (f: { home: string; away: string; kickoff: string; competition: string }) => ita.length ? matchItalian(f, ita) : null;
+    // Best Italian price for a market, with edge and quarter Kelly (cap 2%) against QUORUM's probability.
+    const itBest = (fx: ItalianFixture | null, key: string, p: number) => {
+      const q = fx?.quotes[key]; if (!q) return null;
+      const [book, v] = Object.entries(q).sort((a, b) => b[1].odds - a[1].odds)[0];
+      const edge = p * v.odds - 1, kelly = edge > 0 ? Math.min(0.02, 0.25 * edge / (v.odds - 1)) : 0;
+      return { book, odds: v.odds, edge, kelly, all: Object.fromEntries(Object.entries(q).map(([b, x]) => [b, x.odds])) };
+    };
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
     const matchRows: any[] = [];
     paired.forEach(({ f, e }, i) => {
-      const x = modelled[i], consensus = mapScorers(marketConsensus(e), fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {};
+      const x = modelled[i], consensus = mapScorers(marketConsensus(e), fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {}, fit = itFor(f);
       for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c) continue;
         const pModel = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;
-        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend: pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books };
+        const pBlend = pModel === null ? c.pMarket : evaluateOutcome(pModel, c).pBlend, it = itBest(fit, key, pBlend);
+        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}) };
       }
       const fm = fetched[i]; if (fm) markets.meta = { sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
       if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
@@ -117,14 +130,14 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     const created = new Date().toISOString(), rows: any[] = [];
     for (const x of modelled) {
       if (!x) continue;
-      const probs = analyzeMatch(x.m)!.markets, consensus = mapScorers(marketConsensus(x.e), x.m);
+      const probs = analyzeMatch(x.m)!.markets, consensus = mapScorers(marketConsensus(x.e), x.m), fit = itFor(x.m);
       for (const key of marketKeys(consensus)) {
         const c = consensus[key], pm = Number.isFinite(c?.pModel) ? c.pModel : probs[key]; if (!c || !Number.isFinite(pm)) continue;
-        const v = evaluateOutcome(pm, c);
-        rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, c.label ?? marketLabel(key), pm, c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created]);
+        const v = evaluateOutcome(pm, c), it = itBest(fit, key, v.pBlend);
+        rows.push([crypto.randomUUID(), id, x.m.id, x.m.home + ' – ' + x.m.away, x.m.competition, x.m.kickoff, key, c.label ?? marketLabel(key), pm, c.pMarket, v.pBlend, c.bestOdds, c.bookmaker, c.books, v.edge, v.kelly, v.isPick ? 1 : 0, created, it?.odds ?? null, it?.book ?? null, it?.edge ?? null, it?.kelly ?? null]);
       }
     }
-    const insert = db().prepare('INSERT INTO scanner_rows (id,run_id,fixture_id,fixture,competition,kickoff,market,label,p_model,p_market,p_blend,best_odds,bookmaker,books,edge,kelly,is_pick,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const insert = db().prepare('INSERT INTO scanner_rows (id,run_id,fixture_id,fixture,competition,kickoff,market,label,p_model,p_market,p_blend,best_odds,bookmaker,books,edge,kelly,is_pick,created_at,it_odds,it_book,it_edge,it_kelly) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (let i = 0; i < rows.length; i += 50) await db().batch(rows.slice(i, i + 50).map(r => insert.bind(...r)));
     const picks = rows.filter(r => r[16] === 1).length, modelledCount = modelled.filter(Boolean).length;
     if (reused) notes.push('Quote riusate per ' + reused + ' campionati (scaricate meno di 30 minuti fa, 0 crediti).');
@@ -147,7 +160,7 @@ export async function latestPicks() {
   const run = await db().prepare("SELECT * FROM scanner_runs WHERE status='ok' ORDER BY started_at DESC LIMIT 1").first<any>();
   const last = await lastRun();
   if (!run) return { run: null, last, picks: [], evaluated: 0 };
-  const picks = (await db().prepare('SELECT * FROM scanner_rows WHERE run_id=? AND edge > 0 AND kickoff > ? ORDER BY is_pick DESC, edge DESC LIMIT 200').bind(run.id, new Date().toISOString()).all<any>()).results;
+  const picks = (await db().prepare('SELECT * FROM scanner_rows WHERE run_id=? AND (edge > 0 OR it_edge > 0) AND kickoff > ? ORDER BY is_pick DESC, COALESCE(it_edge, edge) DESC LIMIT 200').bind(run.id, new Date().toISOString()).all<any>()).results;
   const evaluated = (await db().prepare('SELECT COUNT(*) AS n FROM scanner_rows WHERE run_id=?').bind(run.id).first<{ n: number }>())?.n ?? 0;
   return { run, last, picks, evaluated };
 }

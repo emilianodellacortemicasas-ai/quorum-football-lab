@@ -111,6 +111,7 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .value-pick{display:flex;align-items:baseline;gap:10px;background:#f3f8ef;border-radius:12px;padding:12px 14px}
 .value-pick strong{font-size:16px;color:#1f5c3f;flex:1}
 .value-pick .odds{font-size:24px;font-weight:800;font-family:Manrope,var(--font);color:var(--ink)}
+.value-it{display:flex;align-items:baseline;gap:10px;border:1px solid #dfe7da;border-radius:12px;padding:9px 14px;font-size:13px}.value-it span{flex:1;font-weight:700;color:var(--ink)}.value-it b{font-size:19px;font-family:Manrope,var(--font)}.value-it em{font-style:normal;font-size:12px}.value-it.ok{background:#eef7ff;border-color:#bcd8f2}.value-it.ok em{color:#1f5c3f;font-weight:700}.value-it.no em,.value-it.none em{color:#8a6d3b}.value-it.none{opacity:.75}
 .value-pick small{font-size:11px;color:var(--muted);max-width:90px;text-align:right}
 .value-card dl{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}
 .value-card dt{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}

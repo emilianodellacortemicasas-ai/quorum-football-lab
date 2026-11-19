@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, Info, RefreshCw, Target } from 'lucide-react';
 import { analyze, negativeBinomialCdf, percent } from '../lib/math';
 
-type Mk = { pModel: number | null; pMarket: number; pBlend: number; bestOdds: number; bookmaker: string; books: number };
+type Mk = { pModel: number | null; pMarket: number; pBlend: number; bestOdds: number; bookmaker: string; books: number; it?: Record<string, number> };
 type Row = { id: string; fixture_id: string; fixture: string; competition: string; kickoff: string; modelled: number; lambda_home: number | null; lambda_away: number | null; markets: Record<string, any> };
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const day = (s: string) => new Date(s).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long' });
@@ -108,6 +108,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
           <div className="value-head"><span>{r.competition} · {when(r.kickoff)}</span><b className="edge">Fiducia {confidence(p.main.p)}</b></div>
           <h3>{r.fixture}</h3>
           <div className="value-pick"><strong>{p.main.label}</strong><span className="odds">{percent(p.main.p, 0)}</span><small>{ref ? 'quota ' + ref.bestOdds.toFixed(2) : 'quota equa ' + fair(p.main.p)}</small></div>
+          {ref?.it && <div className="value-it ok">{Object.entries(ref.it).map(([b, q]) => <span key={b}>{b} <b>{q.toFixed(2)}</b></span>)}<em>{Object.values(ref.it).some(q => q * p.main.p > 1) ? 'con valore' : 'senza valore'}</em></div>}
           <dl>
             <div><dt>Segno</dt><dd>{p.sign[0]} · {percent(p.sign[1], 0)}</dd></div>
             <div><dt>Doppia chance</dt><dd>{p.dc[0]} · {percent(p.dc[1], 0)}</dd></div>

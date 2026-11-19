@@ -50,6 +50,13 @@
       "when": 1795112000000,
       "tag": "0006_quorum_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795200000000,
+      "tag": "0007_quorum_italian_odds",
+      "breakpoints": true
     }
   ]
 }

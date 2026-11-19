@@ -1,4 +1,4 @@
-export type CredentialProvider = 'openai' | 'api-football' | 'sportmonks' | 'the-odds-api';
+export type CredentialProvider = 'openai' | 'api-football' | 'sportmonks' | 'the-odds-api' | 'oddspapi';
 const labelFor=(provider:CredentialProvider,recipientId:string)=>new TextEncoder().encode('QUORUM|credentials|v1|'+provider+'|'+recipientId);
 export function toBase64Url(bytes:Uint8Array){return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 export function fromBase64Url(value:string){

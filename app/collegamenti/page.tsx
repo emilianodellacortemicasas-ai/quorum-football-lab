@@ -3,13 +3,14 @@ import { useEffect, useState } from 'react';
 import { Check, CircleAlert, KeyRound, LoaderCircle, LockKeyhole, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { sealCredential, validCredential, type CredentialProvider } from '../../lib/key-crypto';
 
-type Status={authenticated:boolean;admin:boolean;email?:string;openai:boolean;football:boolean;sportmonks:boolean;odds:boolean;securityReady:boolean;model?:string;publicKey?:JsonWebKey;recipientId?:string;error?:string};
+type Status={authenticated:boolean;admin:boolean;email?:string;openai:boolean;football:boolean;sportmonks:boolean;odds:boolean;oddspapi:boolean;securityReady:boolean;model?:string;publicKey?:JsonWebKey;recipientId?:string;error?:string};
 type Step={step:string;ok:boolean;label:string;upstreamStatus?:number;category?:string;code?:string;type?:string;requestId?:string;error?:string;detail?:string};
 type Diagnosis={usable:boolean;keyRecognized:boolean;model:string;modelListed:boolean|null;visibleModels:string[];steps:Step[];checkedAt:string};
-const providers:{provider:CredentialProvider;statusKey:'openai'|'football'|'sportmonks'|'odds';title:string;caption:string;text:string;plan:string;price:string;portal:string;pricing:string}[]=[
+const providers:{provider:CredentialProvider;statusKey:'openai'|'football'|'sportmonks'|'odds'|'oddspapi';title:string;caption:string;text:string;plan:string;price:string;portal:string;pricing:string}[]=[
  {provider:'openai',statusKey:'openai',title:'OpenAI',caption:'Il tuo analista AI',text:'Incolla la chiave QUORUM già creata. L’analista interpreta dati e calcoli; non genera le probabilità del modello.',plan:'API a consumo',price:'Costo in base ai token',portal:'https://platform.openai.com/api-keys',pricing:'https://platform.openai.com/settings/organization/billing'},
  {provider:'sportmonks',statusKey:'sportmonks',title:'Sportmonks',caption:'Fonte calcistica',text:'Calendario e storico per il modello. Piano attivo: Starter + 1 lega extra, 6 competizioni: Serie A, Premier League, La Liga, Bundesliga, Ligue 1 e Coppa Italia.',plan:'Starter + 1 extra · 6 competizioni',price:'33 EUR / mese',portal:'https://my.sportmonks.com/api/tokens',pricing:'https://www.sportmonks.com/football-api/plans-pricing/'},
- {provider:'the-odds-api',statusKey:'odds',title:'The Odds API',caption:'Confronto quote e mercati',text:'Quote dei bookmaker con fonte e aggiornamento. Risultati esatti, corner e cartellini compaiono solo quando disponibili per quella partita.',plan:'20K · 20.000 crediti al mese',price:'30 USD / mese',portal:'https://dash.the-odds-api.com/',pricing:'https://the-odds-api.com/'}
+ {provider:'the-odds-api',statusKey:'odds',title:'The Odds API',caption:'Confronto quote e mercati',text:'Quote dei bookmaker con fonte e aggiornamento. Risultati esatti, corner e cartellini compaiono solo quando disponibili per quella partita.',plan:'20K · 20.000 crediti al mese',price:'30 USD / mese',portal:'https://dash.the-odds-api.com/',pricing:'https://the-odds-api.com/'},
+ {provider:'oddspapi',statusKey:'oddspapi',title:'OddsPapi',caption:'Quote dei bookmaker italiani',text:'Quote di Lottomatica e Planetwin365 per valore, puntate e schedine. Si aggiornano due volte al giorno per restare nel piano gratuito.',plan:'Free · 250 richieste al mese',price:'Gratis',portal:'https://oddspapi.io/',pricing:'https://oddspapi.io/pricing'}
 ];
 export default function Connections(){
   const [status,setStatus]=useState<Status|null>(null),[error,setError]=useState('');
