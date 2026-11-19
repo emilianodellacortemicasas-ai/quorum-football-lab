@@ -32,32 +32,25 @@ async function cached<T>(id: string, maxAgeMs: number, build: () => Promise<T>):
   } catch (e) { if (row) return JSON.parse(row.payload) as T; throw e; }
 }
 
-type Meta = { tournaments: Record<string, number>; books: Record<string, string>; markets: Record<string, Record<string, string>> };
-// marketId → outcomeId → QUORUM key (home/draw/away, over15…under35, btts/noGoal)
-function marketMap(markets: any[]) {
-  const out: Record<string, Record<string, string>> = {};
-  for (const m of markets) {
-    const name = norm(m.marketName ?? m.name), id = String(m.marketId ?? m.id ?? ''), period = norm(m.period ?? 'fulltime');
-    if (!id || (period && !period.includes('full') && period !== 'ft' && period !== 'regular')) continue;
-    if (/half|1st|2nd|corner|card|booking|team|player|handicap|asian|exact|minute/.test(name)) continue;
-    const outcomes = list(m.outcomes), map: Record<string, string> = {};
-    const line = Number(m.handicap ?? m.line ?? m.marketLine);
-    for (const o of outcomes) {
-      const oid = String(o.outcomeId ?? o.id ?? ''), on = norm(o.outcomeName ?? o.name);
-      if (!oid) continue;
-      if (/(full time result|1x2|match result|^result)/.test(name) && !name.includes('double')) map[oid] = on === '1' || on.includes('home') ? 'home' : on === 'x' || on.includes('draw') ? 'draw' : on === '2' || on.includes('away') ? 'away' : '';
-      else if (/over under|total/.test(name) && [1.5, 2.5, 3.5].includes(line)) map[oid] = (on.includes('over') ? 'over' : on.includes('under') ? 'under' : '') + String(line).replace('.', '');
-      else if (/both teams to score|btts|goal no goal/.test(name)) map[oid] = on === 'yes' || on === 'si' ? 'btts' : on === 'no' ? 'noGoal' : '';
-    }
-    const clean = Object.fromEntries(Object.entries(map).filter(([, v]) => v && !/^(over|under)$/.test(v)));
-    if (Object.keys(clean).length) out[id] = clean;
-  }
-  return out;
-}
+type Meta = { tournaments: Record<string, number>; books: Record<string, string>; teams: Record<string, string> };
+// OddsPapi's soccer market ids are stable (docs: concepts → soccer market map); one id per line.
+const MARKETS: Record<string, Record<string, string>> = {
+  '101': { '101': 'home', '102': 'draw', '103': 'away' },
+  '104': { '104': 'btts', '105': 'noGoal' },
+  '108': { '108': 'over15', '109': 'under15' },
+  '1010': { '1010': 'over25', '1011': 'under25' },
+  '1012': { '1012': 'over35', '1013': 'under35' },
+};
 
 async function meta(key: string): Promise<Meta> {
-  return cached<Meta>('oddspapi:meta', 7 * 86400000, async () => {
-    const [tour, books, markets] = [await api('tournaments?sportId=' + SOCCER, key), await api('bookmakers', key), await api('markets?sportId=' + SOCCER, key)];
+  return cached<Meta>('oddspapi:meta2', 7 * 86400000, async () => {
+    const pause = () => new Promise(r => setTimeout(r, 1100));
+    const tour = await api('tournaments?sportId=' + SOCCER, key); await pause();
+    const books = await api('bookmakers', key); await pause();
+    const parts = await api('participants?sportId=' + SOCCER, key);
+    const teams: Record<string, string> = {};
+    if (parts && !Array.isArray(parts) && typeof parts === 'object' && !parts.data) { for (const [k, v] of Object.entries<any>(parts)) teams[k] = typeof v === 'string' ? v : String(v?.participantName ?? v?.name ?? ''); }
+    else for (const x of list(parts)) teams[String(x.participantId ?? x.id)] = String(x.participantName ?? x.name ?? '');
     const tournaments: Record<string, number> = {};
     for (const [comp, c] of Object.entries(COMPS)) {
       const t = list(tour).find(x => norm(x.categorySlug ?? x.categoryName).includes(c.cat) && c.names.some(n => norm(x.tournamentName ?? x.tournamentSlug) === n || norm(x.tournamentSlug) === n.replace(/ /g, ' ')));
@@ -65,7 +58,7 @@ async function meta(key: string): Promise<Meta> {
     }
     const slugs = list(books).map(b => typeof b === 'string' ? b : String(b.slug ?? b.bookmaker ?? b.bookmakerSlug ?? ''));
     const pick = (re: RegExp) => slugs.filter(s => re.test(s)).sort((a, b) => (b.includes('it') ? 1 : 0) - (a.includes('it') ? 1 : 0) || a.length - b.length)[0];
-    return { tournaments, books: { lottomatica: pick(/lottomatica/i) ?? '', planetwin: pick(/planet ?win/i) ?? '' }, markets: marketMap(list(markets)) };
+    return { tournaments, books: { lottomatica: pick(/lottomatica/i) ?? '', planetwin: pick(/planet ?win/i) ?? '' }, teams };
   });
 }
 
@@ -96,9 +89,9 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
       const data = list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + tids.join(',') + '&oddsFormat=decimal', key!));
       for (const f of data) {
         const fid = String(f.fixtureId), board = f.bookmakerOdds?.[slug]; if (!board) continue;
-        const fx: ItalianFixture = byFixture.get(fid) ?? { home: f.participant1Name, away: f.participant2Name, start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
+        const fx: ItalianFixture = byFixture.get(fid) ?? { home: f.participant1Name ?? m.teams[String(f.participant1Id)], away: f.participant2Name ?? m.teams[String(f.participant2Id)], start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
         for (const [mid, mk] of Object.entries<any>(board.markets ?? {})) {
-          const omap = m.markets[mid]; if (!omap) continue;
+          const omap = MARKETS[mid]; if (!omap) continue;
           for (const [oid, o] of Object.entries<any>(mk.outcomes ?? {})) {
             const q = omap[oid], p = o?.players?.['0'] ?? o?.players?.[0];
             if (!q || !p || p.active === false || !Number.isFinite(p.price) || p.price <= 1) continue;
@@ -124,7 +117,7 @@ export async function italianStatus() {
   const key = await credentialValue('oddspapi'); if (!key) return { connected: false };
   const m = await meta(key);
   const row = await db().prepare("SELECT built_at FROM model_state WHERE id='oddspapi:odds'").first<{ built_at: string }>();
-  return { connected: true, tournaments: m.tournaments, books: m.books, markets: Object.keys(m.markets).length, oddsUpdatedAt: row?.built_at ?? null };
+  return { connected: true, tournaments: m.tournaments, books: m.books, teams: Object.keys(m.teams).length, oddsUpdatedAt: row?.built_at ?? null };
 }
 
 // Owner diagnostic: one request (Serie A, Lottomatica) summarised, plus the market map.
@@ -135,6 +128,5 @@ export async function italianDebug() {
   const data = list(raw), f = data[0], board = f?.bookmakerOdds ? Object.values<any>(f.bookmakerOdds)[0] : null;
   return { type: Array.isArray(raw) ? 'array' : typeof raw, topKeys: raw && typeof raw === 'object' ? Object.keys(raw).slice(0, 10) : null, n: data.length,
     fixtureKeys: f ? Object.keys(f) : null, books: f?.bookmakerOdds ? Object.keys(f.bookmakerOdds) : null,
-    marketIds: board?.markets ? Object.keys(board.markets).slice(0, 40) : null,
-    m101: board?.markets?.['101'] ?? null, map: m.markets };
+    teams: Object.keys(m.teams).length, home: m.teams[String(f?.participant1Id)], away: m.teams[String(f?.participant2Id)], btts: board?.markets?.['104'] ? Object.keys(board.markets['104'].outcomes ?? {}) : null };
 }
