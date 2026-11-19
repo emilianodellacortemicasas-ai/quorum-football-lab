@@ -61,3 +61,10 @@ OpenAI respinge con 403 (`unsupported_country_region_territory`) le richieste ch
 | `CF_ACCESS_AUD` | Application Audience (AUD) tag dell'app Access |
 
 Le chiavi dei fornitori dati e di OpenAI **non** vanno qui. Si inseriscono nella pagina `/collegamenti` dell'app, dove vengono cifrate nel browser.
+
+## Aggiornamento 19 nov 2026, 03:50
+- Perimetro: Serie A, Serie B, Premier League, La Liga, Ligue 1 (Sportmonks Starter, 29 €/mese). Coppe e nazionali fuori perimetro.
+- API-Football rimosso dall'interfaccia (rischio blocchi/sospensione da IP condivisi Cloudflare); codice conservato.
+- Accesso: aggiunto login con codice via email (One-time PIN) e policy «QUORUM utenti autorizzati» (solo emilianodc.myedu@gmail.com).
+- Restyling «notte da stadio + tattico», nuovo logo (Q = cerchio di centrocampo), icone app, PWA installabile dietro Access (manifest con credenziali).
+- Collegamenti verificati: OpenAI, Sportmonks (Free), The Odds API (Free).
