@@ -3,12 +3,12 @@ const norm=(s:string)=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]
 export function sportmonksCompetition(league:any):{id:number;name:string;group:string}|null{
  const n=norm(league?.name||''),country=norm(league?.country?.name||'');
  const domestic:Record<string,Record<string,[number,string,string]>>={
-  england:{premierleague:[39,'Premier League','Inghilterra'],facup:[45,'FA Cup','Coppe nazionali'],carabaocup:[48,'League Cup','Coppe nazionali'],leaguecup:[48,'League Cup','Coppe nazionali']},
-  italy:{seriea:[135,'Serie A','Italia'],coppaitalia:[137,'Coppa Italia','Coppe nazionali']},
-  spain:{laliga:[140,'La Liga','Spagna'],copadelrey:[143,'Copa del Rey','Coppe nazionali']},
-  france:{ligue1:[61,'Ligue 1','Francia'],coupedefrance:[66,'Coupe de France','Coppe nazionali']}
+  england:{premierleague:[39,'Premier League','Inghilterra']},
+  italy:{seriea:[135,'Serie A','Italia'],serieb:[136,'Serie B','Italia']},
+  spain:{laliga:[140,'La Liga','Spagna'],laligaeasports:[140,'La Liga','Spagna']},
+  france:{ligue1:[61,'Ligue 1','Francia'],ligue1mcdonalds:[61,'Ligue 1','Francia']}
  };
- const international:Record<string,[number,string,string]>={championsleague:[2,'Champions League','Europa'],uefachampionsleague:[2,'Champions League','Europa'],europaleague:[3,'Europa League','Europa'],uefaeuropaleague:[3,'Europa League','Europa'],europaconferenceleague:[848,'Conference League','Europa'],uefaconferenceleague:[848,'Conference League','Europa'],conferenceleague:[848,'Conference League','Europa'],worldcup:[1,'Mondiali','Nazionali'],worldcupfinals:[1,'Mondiali','Nazionali'],europeanchampionship:[4,'Europei','Nazionali'],uefaeuropeanchampionship:[4,'Europei','Nazionali'],uefanationsleague:[5,'Nations League','Nazionali'],nationsleague:[5,'Nations League','Nazionali'],wcqualificationeurope:[32,'Qualificazioni Mondiali Europa','Nazionali'],euroqualification:[960,'Qualificazioni Europei','Nazionali'],friendlyinternational:[10,'Amichevoli nazionali','Nazionali']};
+ const international:Record<string,[number,string,string]>={}; // Coppe e nazionali fuori perimetro (Starter, 5 leghe).
  const v=domestic[country]?.[n]||((country==='europe'||country==='world')?international[n]:undefined);
  return v?{id:v[0],name:v[1],group:v[2]}:null;
 }
