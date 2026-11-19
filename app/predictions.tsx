@@ -41,7 +41,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
   const leagues = ['Tutte', ...new Set((data?.matches || []).map(r => r.competition))];
   const days = [...new Set(rows.map(r => day(r.kickoff)))];
   return <>
-    <div className="page-heading"><div><p className="eyebrow">PRONOSTICI</p><h1>Le partite, lette dai numeri<span>.</span></h1><p>Pronostico statistico per ogni partita dei prossimi 3 giorni: gol fatti e subiti in casa e in trasferta, ultimi 100 giorni.</p></div>
+    <div className="page-heading"><div><p className="eyebrow">PRONOSTICI</p><h1>Le partite, lette dai numeri<span>.</span></h1><p>Pronostico statistico per ogni partita dei prossimi 3 giorni: gol fatti e subiti in casa e in trasferta, ultime 20 partite (fino a circa 200 giorni).</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Aggiornamento…' : 'Aggiorna ora'}</button></div>
     {data?.run && <p className="value-note"><Info size={15} />Aggiornati {when(data.run.started_at)} · {data.matches.length} partite · {data.matches.filter(m => m.modelled).length} con statistiche sufficienti.</p>}
     <div className="filters">{leagues.map(l => <button key={l} className={league === l ? 'selected' : ''} onClick={() => setLeague(l)}>{l}</button>)}</div>
