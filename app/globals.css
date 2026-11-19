@@ -255,3 +255,90 @@ input:focus,select:focus{outline:2px solid #c8f25a;outline-offset:1px}
 .market-row>div{display:flex;flex-wrap:wrap;gap:6px}.chip-name{display:block;font-size:10px;color:#6b7a70;max-width:120px}
 .builder-search{display:inline-flex;align-items:center;gap:6px;border:1px solid #d9e0d4;border-radius:999px;padding:4px 10px;background:#fff}.builder-search input{border:0;outline:0;font-size:13px;width:130px}
 @media (max-width:980px){.builder{grid-template-columns:1fr}.builder-slip{position:fixed;left:10px;right:10px;bottom:74px;top:auto;max-height:46vh;z-index:30;box-shadow:0 10px 30px rgba(0,0,0,.18)}.builder-slip:not(.has){display:none}.builder-main{padding-bottom:48vh}.market-row{grid-template-columns:1fr}.market-row>span{padding-top:0}}
+
+/* ───────────── QUORUM v3 · tema più deciso, 3D e animato ───────────── */
+:root{--q-deep:#06281b;--q-emerald:#0f6b46;--q-emerald-2:#14895a;--q-lime:#b6f23e;--q-gold:#ffc83d;--q-ink:#0b1f17;--q-card-shadow:0 1px 0 #ffffff inset,0 10px 30px -12px rgba(6,40,27,.28),0 2px 6px -2px rgba(6,40,27,.12)}
+body{background:#eef3ee}
+.main-shell{position:relative;isolation:isolate}
+.main-shell:before{content:'';position:fixed;inset:-20%;z-index:-1;pointer-events:none;background:radial-gradient(40% 35% at 15% 10%,rgba(182,242,62,.18),transparent 70%),radial-gradient(35% 30% at 85% 20%,rgba(20,137,90,.16),transparent 70%),radial-gradient(45% 40% at 60% 95%,rgba(255,200,61,.12),transparent 70%);animation:q-drift 22s ease-in-out infinite alternate}
+@keyframes q-drift{0%{transform:translate3d(0,0,0) rotate(0)}100%{transform:translate3d(-3%,2%,0) rotate(4deg)}}
+.topbar{background:rgba(255,255,255,.82);backdrop-filter:blur(14px);position:sticky;top:0;z-index:20}
+
+/* Sidebar */
+.sidebar{background:linear-gradient(180deg,#04170f 0%,#072a1c 60%,#0a3324 100%);box-shadow:4px 0 30px rgba(0,0,0,.25)}
+.sidebar nav button{transition:transform .18s,background .18s,color .18s,box-shadow .18s}
+.sidebar nav button:hover{transform:translateX(3px);background:#0f3a28;color:#eaffcf}
+.sidebar nav button.active{background:linear-gradient(90deg,#13583c,#0f4430);color:var(--q-lime);box-shadow:0 0 0 1px rgba(182,242,62,.25),0 8px 24px -10px rgba(182,242,62,.45)}
+.sidebar nav button.active svg{filter:drop-shadow(0 0 6px rgba(182,242,62,.7))}
+
+/* Titoli */
+.page-heading h1{font-size:34px;font-weight:800;letter-spacing:-1.6px;color:var(--q-ink)}
+.page-heading h1>span{background:linear-gradient(90deg,var(--q-emerald-2),var(--q-lime),var(--q-gold),var(--q-emerald-2));background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:q-shine 6s linear infinite}
+@keyframes q-shine{to{background-position:300% 0}}
+.eyebrow{color:var(--q-emerald);font-weight:800;letter-spacing:2.2px}
+.day-title{font-family:Manrope,var(--font);font-size:20px;font-weight:800;letter-spacing:-.5px;margin:28px 0 8px;color:var(--q-ink)}
+
+/* Pulsanti 3D */
+.primary,.secondary,.lime-button,.filters button,.slip-actions button,.builder-cta{position:relative;transition:transform .12s ease,box-shadow .12s ease,background .2s,filter .2s}
+.primary{background:linear-gradient(180deg,var(--q-emerald-2),var(--q-emerald));color:#fff!important;border:0;box-shadow:0 4px 0 #084b30,0 10px 20px -8px rgba(8,75,48,.6);border-radius:12px;font-weight:700}
+.primary:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 5px 0 #084b30,0 14px 24px -8px rgba(8,75,48,.6)}
+.primary:active{transform:translateY(4px);box-shadow:0 0 0 #084b30,0 4px 10px -6px rgba(8,75,48,.6)}
+.secondary{background:linear-gradient(180deg,#fff,#f1f5ef);border:1px solid #cfdacb;color:var(--q-ink);box-shadow:0 3px 0 #c3cfbf,0 8px 16px -10px rgba(6,40,27,.3);border-radius:12px;font-weight:700}
+.secondary:hover{transform:translateY(-1px);box-shadow:0 4px 0 #c3cfbf,0 12px 20px -10px rgba(6,40,27,.35)}
+.secondary:active{transform:translateY(3px);box-shadow:0 0 0 #c3cfbf}
+.lime-button{background:linear-gradient(180deg,#cdff6a,var(--q-lime));color:#10301f;box-shadow:0 4px 0 #7fb11c,0 10px 22px -8px rgba(127,177,28,.7);border-radius:12px;font-weight:800}
+.lime-button:active{transform:translateY(4px);box-shadow:0 0 0 #7fb11c}
+.filters button{background:#fff;border:1px solid #d3ddcf;color:#24412f;font-weight:700;border-radius:999px;box-shadow:0 2px 0 #d3ddcf}
+.filters button:hover{transform:translateY(-1px)}
+.filters button:active{transform:translateY(2px);box-shadow:none}
+.filters button.selected{background:linear-gradient(180deg,#1b2f24,#0b1f17);border-color:#0b1f17;color:var(--q-lime);box-shadow:0 3px 0 #000,0 8px 16px -8px rgba(0,0,0,.5)}
+
+/* Pannelli e schede */
+.panel,.value-card,.metric,.match-card{border:1px solid #d8e3d4;box-shadow:var(--q-card-shadow);border-radius:18px}
+.value-card,.builder-match,.metric,.match-card,.history-panel,.builder-top{animation:q-rise .5s cubic-bezier(.2,.8,.2,1) both}
+.value-list>*:nth-child(2){animation-delay:.06s}.value-list>*:nth-child(3){animation-delay:.12s}.value-list>*:nth-child(4){animation-delay:.18s}.value-list>*:nth-child(5){animation-delay:.24s}.value-list>*:nth-child(6){animation-delay:.3s}
+@keyframes q-rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.value-card{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.value-card:hover{transform:translateY(-4px) perspective(900px) rotateX(1.2deg);box-shadow:0 1px 0 #fff inset,0 24px 44px -18px rgba(6,40,27,.38)}
+.value-card.ticket{background:linear-gradient(180deg,#fff,#fbfdf9)}
+.value-card.ticket.bomba{background:radial-gradient(120% 80% at 100% 0,rgba(255,200,61,.18),transparent 60%),#fff;border-color:#f1d27e}
+.value-card .edge{background:linear-gradient(180deg,#cdff6a,var(--q-lime));color:#10301f;font-weight:800;border-radius:999px;box-shadow:0 2px 0 #7fb11c;animation:q-pulse 2.4s ease-in-out infinite}
+.value-card .edge.neutral{background:#eef1ec;color:#5d6f63;box-shadow:none;animation:none}
+@keyframes q-pulse{0%,100%{box-shadow:0 2px 0 #7fb11c,0 0 0 0 rgba(182,242,62,.55)}50%{box-shadow:0 2px 0 #7fb11c,0 0 0 7px rgba(182,242,62,0)}}
+
+/* Affidabilità: numero grande con barra animata */
+.reliability{position:relative;overflow:hidden;border-width:1.5px}
+.reliability strong{font-size:36px;font-weight:800;letter-spacing:-1.5px}
+.reliability:after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.55) 45%,transparent 60%);transform:translateX(-100%);animation:q-sweep 3.8s ease-in-out infinite}
+@keyframes q-sweep{0%,55%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.reliability.r-alta{background:linear-gradient(135deg,#e6f9d4,#f3fbe9);border-color:#9fd56b}.reliability.r-alta strong{color:#0f6b46}
+
+/* Quote e linee di puntata */
+.value-pick{background:linear-gradient(135deg,#0b1f17,#123a29);border-radius:14px}
+.value-pick strong{color:#d9f7b0!important}.value-pick .odds{color:#fff!important;font-size:28px;text-shadow:0 0 18px rgba(182,242,62,.35)}.value-pick small{color:#9fc2ab!important}
+.stake-line{border-radius:12px;font-weight:700}
+.stake-line.go{background:linear-gradient(90deg,#d8f7b8,#ecfbd9);color:#0f5a3b;box-shadow:inset 0 0 0 1px #a8dd7c}
+.legs li{transition:background .2s}.legs li:hover{background:#f4f9ef}
+
+/* Costruisci la tua schedina */
+.builder-cta{background:linear-gradient(110deg,#0b3d2a,#0f6b46 45%,#14895a 60%,#0b3d2a);background-size:220% 100%;animation:q-cta 6s ease-in-out infinite;box-shadow:0 5px 0 #052317,0 16px 30px -12px rgba(6,40,27,.6);border-radius:16px}
+.builder-cta:hover{transform:translateY(-2px)}.builder-cta:active{transform:translateY(5px);box-shadow:0 0 0 #052317}
+.builder-cta svg:first-child{color:var(--q-lime);filter:drop-shadow(0 0 8px rgba(182,242,62,.7))}
+@keyframes q-cta{0%,100%{background-position:0 0}50%{background-position:100% 0}}
+.pick-chip{border:1px solid #cfdacb;border-radius:12px;box-shadow:0 3px 0 #cfdacb;transition:transform .1s,box-shadow .1s,background .15s}
+.pick-chip:hover{transform:translateY(-2px);box-shadow:0 5px 0 #cfdacb,0 10px 16px -10px rgba(6,40,27,.35)}
+.pick-chip:active{transform:translateY(3px);box-shadow:0 0 0 #cfdacb}
+.pick-chip.value{border-color:#3fa66a;box-shadow:0 3px 0 #3fa66a}
+.pick-chip.on{background:linear-gradient(180deg,#14895a,#0f6b46);border-color:#0b5236;box-shadow:0 3px 0 #073d27;animation:q-pop .25s ease}
+@keyframes q-pop{0%{transform:scale(.92)}60%{transform:scale(1.06)}100%{transform:scale(1)}}
+.starred .pick-chip{background:linear-gradient(180deg,#fff7d1,#ffefb0);border-color:#f0cf5f;box-shadow:0 3px 0 #e2bb3c}
+.builder-best span{background:linear-gradient(180deg,#ffe58a,#ffd34d);color:#4a3800;box-shadow:0 2px 0 #d9ad1f}
+.builder-slip{border:1.5px solid #0f6b46;box-shadow:0 20px 50px -20px rgba(6,40,27,.5)}
+.builder-slip.has .slip-total{background:linear-gradient(135deg,#0b1f17,#123a29)}.builder-slip.has .slip-total span{color:#9fc2ab}.builder-slip.has .slip-total strong{color:var(--q-lime);text-shadow:0 0 20px rgba(182,242,62,.45)}
+.slip-legs li{animation:q-rise .3s ease both;background:#fff}
+
+/* Barra mobile 3D */
+.mobile-nav{background:rgba(6,28,19,.94);backdrop-filter:blur(12px)}
+.mobile-nav button.active{color:var(--q-lime)}.mobile-nav button.active svg{filter:drop-shadow(0 0 6px rgba(182,242,62,.8));transform:translateY(-2px)}
+
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}

@@ -7,7 +7,7 @@ import { demoMatches, previewPortfolios } from '../../../lib/demo';
 import { analyzeMatch, marketLabel, MODEL_VERSION, riskCheck, settlementPnl } from '../../../lib/math';
 import { getLiveMatch, hasFootballKey } from '../../../lib/provider';
 import { credentialExists } from '../../../lib/vault';
-import { getIdentity } from '../../../lib/identity';
+import { isOwner, getIdentity } from '../../../lib/identity';
 import type { Bet, Portfolio } from '../../../lib/types';
 const failure=(message:string,status=422)=>Response.json({error:message},{status});
 async function workspace(owner:string) {
@@ -15,9 +15,9 @@ async function workspace(owner:string) {
   return {authenticated:true,portfolios:p.map(({owner,...rest})=>rest),bets:b.map(({owner,snapshot,...rest})=>rest),providerConnected:await hasFootballKey(),aiConnected:await credentialExists('openai')};
 }
 export async function GET(request:Request) {
-  const owner=(await getIdentity(request))?.userId;
+  const who=await getIdentity(request),owner=who?.userId;
   if(!owner)return Response.json({authenticated:false,portfolios:previewPortfolios,bets:[],providerConnected:await hasFootballKey(),aiConnected:await credentialExists('openai')},{headers:{'Cache-Control':'no-store'}});
-  try{return Response.json(await workspace(owner),{headers:{'Cache-Control':'no-store'}});}catch{return failure('Archivio non disponibile. Riprova tra poco.',503);}
+  try{return Response.json({...await workspace(owner),admin:await isOwner(request,who)},{headers:{'Cache-Control':'no-store'}});}catch{return failure('Archivio non disponibile. Riprova tra poco.',503);}
 }
 const settings=z.object({portfolioId:z.string(),stakeBps:z.number().int().min(1).max(500),exposureBps:z.number().int().min(1).max(2000),dayBps:z.number().int().min(1).max(2000),drawdownBps:z.number().int().min(1).max(5000)});
 export async function POST(request:Request) {

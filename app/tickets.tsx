@@ -23,8 +23,8 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core' 
     <div className="value-head"><span>{t.title}</span><b className={t.ev > 0 ? 'edge' : 'edge neutral'}>{t.ev > 0 ? '+' + percent(t.ev) + ' valore' : 'valore ' + percent(t.ev)}</b></div>
     <div className={'reliability r-' + verdict(t.p).replace(' ', '-')}>
       <div><span>Affidabilità misurata</span><strong>{pc(t.p)}</strong><em>{verdict(t.p)} · {oneIn(t.p)}</em></div>
-      <small>Intervallo probabile {pc(t.low)}–{pc(t.high)}. {(t as any).factor && Math.abs((t as any).factor - 1) > 0.02 ? 'Corretta del ' + ((t as any).factor > 1 ? '+' : '') + Math.round(((t as any).factor - 1) * 100) + '% con lo storico reale di questo tipo di schedina. ' : ''}Misurata su {cal?.backtestSamples ? cal.backtestSamples.toLocaleString('it-IT') + ' esiti del backtest' : 'stima del modello'}{cal?.liveSamples ? ' e ' + cal.liveSamples.toLocaleString('it-IT') + ' esiti reali chiusi' : ''}.{real && real.n ? ' Schedine di questo tipo già chiuse: ' + real.won + ' vinte su ' + real.n + ' (attese ' + Math.round(real.exp) + ').' : ''}</small>
-      {h && h.n >= 5 && <small className="history-line"><b>Nel passato, con quote reali:</b> vinte {h.won} su {h.n} ({percent(h.hit, 0)}; QUORUM ne prevedeva {percent(h.expected, 0)}), rendimento {h.roi >= 0 ? '+' : ''}{percent(h.roi, 0)} sulla puntata.</small>}
+      <small>Intervallo probabile {pc(t.low)}–{pc(t.high)}.{real && real.n ? ' Schedine QUORUM già chiuse: ' + real.won + ' vinte su ' + real.n + '.' : ''}</small>
+      {h && h.n >= 5 && <small className="history-line">Storico con quote reali: {h.won} vinte su {h.n}.</small>}
     </div>
     <p className="small-note">{t.description}</p>
     <ul className="legs">{t.legs.map(l => <li key={l.fixtureId + l.market}><div><strong>{l.fixture}</strong><small>{l.competition} · {when(l.kickoff)}</small></div><div className="leg-pick"><b>{l.label}</b><span>{l.odds.toFixed(2)}</span><small>{percent(l.p, 0)}{l.italian ? '' : ' · estera'}</small></div></li>)}</ul>
@@ -55,9 +55,6 @@ export function TicketsView({ equityCents, onLab, notify }: { equityCents: numbe
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Schedine non disponibili</h3><p>{error}</p></div>
       : !data?.run ? <div className="empty"><span className="empty-icon"><TicketIcon /></span><h3>Nessun dato ancora.</h3><p>Premi “Aggiorna ora”.</p></div>
       : <>
-        {data.history && data.history.byKind.length > 0 && <section className="panel history-panel"><h3>Come sarebbero andate queste schedine nel passato</h3><p className="small-note">Backtest con quote reali (media dei bookmaker, football-data.co.uk): {data.history.weeks} settimane, {data.history.matches} partite, stesse regole di oggi e solo dati disponibili prima di ogni partita. Mercati del backtest: 1X2, doppia chance, Over/Under 2,5.</p>
-          <table><thead><tr><th>Schedina</th><th>Giocate</th><th>Vinte</th><th>Prevista</th><th>Rendimento</th></tr></thead><tbody>{[...data.history.byKind].sort((a, b) => b.hit - a.hit).map(k => <tr key={k.kind}><td>{k.title}<small> · quota media {k.avgOdds.toFixed(2)}</small></td><td>{k.n}</td><td><b>{percent(k.hit, 0)}</b></td><td>{percent(k.expected, 0)}</td><td className={k.roi >= 0 ? 'pos' : 'neg'}>{k.roi >= 0 ? '+' : ''}{percent(k.roi, 0)}</td></tr>)}</tbody></table>
-          <p className="small-note">“Vinte” è la percentuale reale, “Prevista” quella che QUORUM stimava. Se sono vicine, l’affidabilità è credibile. Rendimento = guadagno medio per euro puntato.</p></section>}
         {(() => {
           const p3 = data.probable?.find(t => t.kind === 'probabile-3'), rm = data.tickets.find(t => t.kind === 'raddoppio-multipla'), q3 = data.tickets.find(t => t.kind === 'quota10-3');
           const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} />;
