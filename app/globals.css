@@ -526,3 +526,7 @@ body{background:#eef3ee}
 .share-chip.ghost{background:#fff;color:#8a3a22;border-color:#ecd3c9;box-shadow:0 2px 0 #ecd3c9}
 .share-chip.danger{background:linear-gradient(180deg,#e2643e,#c2512e);border-color:#a8431f;color:#fff;box-shadow:0 2px 0 #7f2f14}
 .settle-buttons .settle-delete{color:#a8431f!important;border-color:#ecd3c9!important}
+.play-too{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin-top:8px;padding:10px;border-radius:12px;background:#f3f8ef;border:1px solid #d6e6cc}
+.play-too label{display:grid;gap:3px;font-size:12px;font-weight:700;color:#4c6b57}.play-too input{width:100px;padding:8px 10px;border:1px solid #cfdacb;border-radius:9px;font-size:15px}
+.play-too span{font-size:12px;color:#5d6f63;flex:1}
+.copy-note{margin-top:6px}

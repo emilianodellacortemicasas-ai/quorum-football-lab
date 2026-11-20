@@ -133,6 +133,7 @@ export async function myPlays(owner: string) {
     bySource: [
       { key: 'quorum', label: 'Schedine proposte da QUORUM', ...group(x => String(x.source).startsWith('mine:schedina')) },
       { key: 'builder', label: 'Costruite da te', ...group(x => x.source === 'mine:builder') },
+      { key: 'copied', label: 'Copiate da altri utenti', ...group(x => x.source === 'mine:builder:copiata') },
       { key: 'value', label: 'Value bet', ...group(x => x.source === 'mine:value') },
       { key: 'match', label: 'Dal Centro partita', ...group(x => !String(x.source).startsWith('mine:')) },
     ],
