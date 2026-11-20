@@ -4,6 +4,7 @@ import { FlaskConical, Info, RefreshCw, Ticket as TicketIcon } from 'lucide-reac
 import { money, percent } from '../lib/math';
 import type { Selection } from '../lib/types';
 import type { Ticket } from '../lib/tickets';
+import { Count, Ring } from './motion';
 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
@@ -22,13 +23,13 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core' 
   return <article className={'value-card ticket ' + t.kind}>
     <div className="value-head"><span>{t.title}</span><b className={t.ev > 0 ? 'edge' : 'edge neutral'}>{t.ev > 0 ? '+' + percent(t.ev) + ' valore' : 'valore ' + percent(t.ev)}</b></div>
     <div className={'reliability r-' + verdict(t.p).replace(' ', '-')}>
-      <div><span>Affidabilità misurata</span><strong>{pc(t.p)}</strong><em>{verdict(t.p)} · {oneIn(t.p)}</em></div>
+      <div><Ring p={t.p} size={58} /><span>Affidabilità misurata</span><strong><Count value={t.p} format={pc} /></strong><em>{verdict(t.p)} · {oneIn(t.p)}</em></div>
       <small>Intervallo probabile {pc(t.low)}–{pc(t.high)}.{real && real.n ? ' Schedine QUORUM già chiuse: ' + real.won + ' vinte su ' + real.n + '.' : ''}</small>
       {h && h.n >= 5 && <small className="history-line">Storico con quote reali: {h.won} vinte su {h.n}.</small>}
     </div>
     <p className="small-note">{t.description}</p>
     <ul className="legs">{t.legs.map(l => <li key={l.fixtureId + l.market}><div><strong>{l.fixture}</strong><small>{l.competition} · {when(l.kickoff)}</small></div><div className="leg-pick"><b>{l.label}</b><span>{l.odds.toFixed(2)}</span><small>{percent(l.p, 0)}{l.italian ? '' : ' · estera'}</small></div></li>)}</ul>
-    <div className="value-pick"><strong>Quota totale</strong><span className="odds">{t.odds.toFixed(2)}</span><small>{t.italian ? 'su Lottomatica / Planetwin365' : 'quote migliori (anche estere)'}</small></div>
+    <div className="value-pick"><strong>Quota totale</strong><span className="odds"><Count value={t.odds} format={v => v.toFixed(2)} /></span><small>{t.italian ? 'su Lottomatica / Planetwin365' : 'quote migliori (anche estere)'}</small></div>
     <p className={'stake-line ' + (role === 'min' ? 'min' : stake > 0 ? 'go' : 'skip')}>{started ? 'Già iniziata: non più giocabile, la vedi per seguirne l’esito.' : role === 'min' ? 'Puntata minima: ' + money(stake) + '. Giocata da sogno, non serve a far crescere il capitale.' : stake > 0 ? 'Puntata consigliata: ' + money(stake) + ' (' + percent(Math.max(t.kelly, 200 / Math.max(equityCents, 1))) + ' del capitale).' : 'Oggi la quota non ripaga il rischio: per far crescere il capitale meglio saltarla.'}</p>
     <p className="small-note">{t.italian ? 'Tutte le quote sono di Lottomatica / Planetwin365.' : 'Quote: ' + [...new Set(t.legs.map(l => l.bookmaker))].join(', ') + (t.legs.some(l => !l.italian) ? ' (alcuni esiti non sono quotati da Lottomatica / Planetwin365).' : '.')} Gioca solo se la quota sul tuo conto è uguale o più alta.</p>
     <button className="text-button" onClick={() => onLab(t.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds })))}><FlaskConical size={15} />Analizza nel Laboratorio</button>

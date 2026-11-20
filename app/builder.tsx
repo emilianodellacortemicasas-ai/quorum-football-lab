@@ -7,6 +7,7 @@ import { Copy, FlaskConical, Info, Plus, RefreshCw, Search, Star, Trash2, X } fr
 import { marketLabel, money, percent } from '../lib/math';
 import { ticketReliability } from '../lib/calibration';
 import type { Selection } from '../lib/types';
+import { Count, Ring } from './motion';
 
 type Opt = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
 type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string> };
@@ -126,8 +127,8 @@ export function BuilderView({ equityCents, onLab, notify }: { equityCents: numbe
       <div className="slip-head"><h3>La tua schedina</h3><span>{slip.length} {slip.length === 1 ? 'evento' : 'eventi'}</span>{slip.length > 0 && <button className="icon-button" onClick={() => { setSlip([]); setStakeText(''); }} title="Svuota"><Trash2 size={16} /></button>}</div>
       {!slip.length ? <p className="small-note"><Plus size={14} /> Tocca una quota per aggiungerla. Un solo esito per partita.</p> : <>
         <ul className="slip-legs">{slip.map(l => <li key={l.fixtureId}><div><strong>{l.label}</strong><small>{l.fixture} · {when(l.kickoff)}</small></div><b>{l.odds.toFixed(2)}</b><button onClick={() => toggle(l)} title="Togli"><X size={14} /></button></li>)}</ul>
-        <div className="slip-total"><span>Quota totale</span><strong>{odds >= 1000 ? Math.round(odds).toLocaleString('it-IT') : odds.toFixed(2)}</strong></div>
-        {rel && <div className={'reliability r-' + verdict.replace(' ', '-')}><div><span>Affidabilità misurata</span><strong>{pc(rel.p)}</strong><em>{verdict} · {oneIn}</em></div>
+        <div className="slip-total"><span>Quota totale</span><strong><Count value={odds} duration={500} format={v => v >= 1000 ? Math.round(v).toLocaleString('it-IT') : v.toFixed(2)} /></strong></div>
+        {rel && <div className={'reliability r-' + verdict.replace(' ', '-')}><div><Ring p={rel.p} size={54} /><span>Affidabilità misurata</span><strong><Count value={rel.p} duration={500} format={pc} /></strong><em>{verdict} · {oneIn}</em></div>
           <small>Intervallo probabile {pc(rel.low)}–{pc(rel.high)}. Valore {ev >= 0 ? '+' : ''}{percent(ev, 0)}: {ev > 0 ? 'la quota paga più del rischio.' : 'la quota paga meno del rischio.'}</small></div>}
         <label className="slip-stake">Puntata (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value)} placeholder={(suggested / 100).toFixed(2).replace('.', ',')} /></label>
         <p className={'stake-line ' + (ev > 0 ? 'go' : 'min')}>{ev > 0 ? 'Puntata consigliata ' + money(suggested) + ' (gestione del capitale).' : 'La quota non ripaga il rischio: se la giochi, punta il minimo (' + money(200) + ').'} Vincita potenziale: <b>{money(Math.round(stake * odds))}</b></p>
