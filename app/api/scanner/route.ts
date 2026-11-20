@@ -15,6 +15,7 @@ export async function GET(request:Request){
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='performance')return reply(await performance());
+  if(view==='shared-check'&&await isOwner(request,await getIdentity(request))){const r=await env.DB!.prepare("SELECT COALESCE(author,'?') AS author,shared,status,source,COUNT(*) AS n,MAX(created_at) AS last FROM bets GROUP BY owner,author,shared,status,source ORDER BY last DESC").all();return reply(r.results);}
   if(view==='shared'){const who=await getIdentity(request);return reply(await sharedPlays(who!.userId));}
   if(view==='mine'){const who=await getIdentity(request);return reply(await myPlays(who!.userId));}
   if(view==='tickets'){
