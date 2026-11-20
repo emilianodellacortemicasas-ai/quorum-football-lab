@@ -135,6 +135,7 @@ function Laboratory({selections:s,setSelections,onBrowse,onExample,onRecordSyste
   const preset=(kind:'multi'|'full')=>setCls(Object.fromEntries(ks.map(k=>[k,{on:kind==='full'||k===n,unit:row(k).unit}])));
   const assignAll=()=>{const v=Number(amount.replace(',','.'));if(v>0)setCls(Object.fromEntries(ks.map(k=>[k,{...row(k),unit:v.toFixed(2)}])));};
   const divide=()=>{const v=Number(amount.replace(',','.')),on=ks.filter(k=>row(k).on),tot=on.reduce((x,k)=>x+nCk(k),0);if(v>0&&tot)setCls(Object.fromEntries(ks.map(k=>[k,{...row(k),unit:(Math.floor(v*100/tot)/100).toFixed(2)}])));};
+  const short=(x:Selection)=>x.fixture.split(' – ')[0];
   const label=(k:number)=>k===n&&n>1?'Multipla ('+className(k,n).toLowerCase()+')':className(k,n);
   const sysName=active.length===1&&active[0].k===n?(n===1?'Singola':'Multipla'):'Sistema '+n+' eventi · '+active.map(c=>className(c.k,n)).join(' + ');
   const [share,setShare]=useState(()=>{try{return localStorage.getItem('quorum-share')==='1';}catch{return false;}}),[saving,setSaving]=useState(false),[saveMsg,setSaveMsg]=useState('');
@@ -155,7 +156,20 @@ function Laboratory({selections:s,setSelections,onBrowse,onExample,onRecordSyste
       <label className="sys-check"><input type="checkbox" checked={r.on} onChange={e=>setRow(k,{on:e.target.checked})}/><b>{label(k)}</b><small>{nCk(k)}x</small></label>
       <div className="sys-stake"><button onClick={()=>setRow(k,{unit:Math.max(0.05,Number(r.unit)-0.05).toFixed(2)})}>−</button><input inputMode="decimal" value={r.unit} onChange={e=>setRow(k,{unit:e.target.value.replace(',','.')})} aria-label={'Puntata per combinazione '+label(k)}/><button onClick={()=>setRow(k,{unit:(Number(r.unit)+0.05).toFixed(2)})}>+</button></div>
       {r.on&&<div className="sys-class-win"><span>Vincita min <b>{money(mn)}</b></span><span>Vincita max <b>{money(mx)}</b></span></div>}
+      <details className="sys-combos"><summary>Quali sono le {nCk(k)} {nCk(k)===1?'combinazione':'combinazioni'}</summary><ul>{combinations(n,k).map(c=>{const q=c.reduce((o,i)=>o*s[i].odds,1);return <li key={c.join()}><span>{c.map(i=>short(s[i])).join(' + ')}</span><i>quota {q.toFixed(2)}</i>{r.on&&Number(r.unit)>0&&<b>vince {money(Math.round(Number(r.unit)*100*q))}</b>}</li>;})}</ul></details>
     </div>;})}
+    <details className="sys-legend" open={n>1&&n<=4}><summary>Come funziona il sistema, spiegato semplice</summary>
+      <p>Hai <b>{n} partite</b>: {s.map((x,i)=><span key={x.fixtureId}>{i>0?(i===n-1?' e ':', '):''}<b>{short(x)}</b> ({x.label})</span>)}.</p>
+      <p>Un sistema è un <b>pacchetto di tante schedine piccole</b> fatte con le stesse partite. Ogni schedina piccola è una <b>combinazione</b>: vince solo se indovini <b>tutte</b> le partite che contiene, e ha la sua puntata.</p>
+      <ul>
+        <li><b>Singole</b>: ogni partita da sola → {nCk(1)} schedine.</li>
+        {n>=2&&<li><b>Doppie</b>: le partite a coppie → {nCk(2)} schedine{n===3?' ('+combinations(3,2).map(c=>c.map(i=>short(s[i])).join('+')).join(', ')+')':''}.</li>}
+        {n>=3&&n!==3&&<li><b>Triple</b>: a gruppi di tre → {nCk(3)} schedine.</li>}
+        {n>=2&&<li><b>Multipla</b>: tutte insieme → 1 schedina.</li>}
+      </ul>
+      <p>Il numero accanto (“3x”, “1x”) è <b>quante schedine</b> ci sono in quella classe. Con {n} partite i gruppi possibili sono in tutto <b>{Math.pow(2,n)-1}</b>{n===3?' = 3 singole + 3 doppie + 1 tripla. Non 10: con 3 partite non esistono altri modi di raggrupparle':''}. Ogni partita in più quasi raddoppia le combinazioni (4 partite = 15, 5 = 31).</p>
+      <p><b>Cosa cambia spuntando più classi:</b> solo la Multipla = paghi poco e vinci tanto, ma basta un errore per perdere tutto. Aggiungendo Doppie e Singole paghi di più (ogni schedina piccola ha la sua puntata), ma <b>resti in gioco anche se ne sbagli qualcuna</b>: le combinazioni senza la partita sbagliata vincono lo stesso. La tabella “Se ne vincono” qui a destra ti dice, per ogni numero di partite indovinate, quanto incassi e se sei in profitto.</p>
+    </details>
     <p className="tiny">Puntata per singola combinazione, come sulla schedina di Lottomatica / Planetwin365. Un esito per partita.</p>
   </div>}</section><section className="panel system-result"><div className="panel-heading"><h3>Il risultato del confronto</h3><Tag tone="amber">{sysName}</Tag></div>{result?<>
     <div className="sys-summary"><div><span>Combinazioni</span><b>{result.tickets}</b></div><div><span>Importo sistema</span><b>{money(result.costCents)}</b></div><div><span>Vincita min</span><b className="positive">{money(result.minWinCents)}</b></div><div><span>Vincita max</span><b className="positive">{money(result.maxReturnCents)}</b></div></div>
