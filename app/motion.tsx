@@ -66,3 +66,39 @@ export function useTilt() {
     return () => window.removeEventListener('pointermove', move);
   }, []);
 }
+
+// Scrolling ticker with the most probable outcomes of the week (Italian prices).
+export function Ticker() {
+  const [items, setItems] = useState<{ t: string; p: number; o: number }[]>([]);
+  useEffect(() => {
+    fetch('/api/scanner?view=predictions', { cache: 'no-store' }).then(r => r.json()).then((d: any) => {
+      const names: Record<string, string> = { home: '1', draw: 'X', away: '2', homeDraw: '1X', drawAway: 'X2', homeAway: '12', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5', btts: 'Goal', noGoal: 'No Goal' };
+      const out: { t: string; p: number; o: number }[] = [];
+      for (const m of d.matches || []) {
+        let best: { t: string; p: number; o: number } | null = null;
+        for (const k of Object.keys(names)) { const x = m.markets?.[k]; const it = x?.it ? Math.max(...Object.values<number>(x.it)) : 0; if (x && it >= 1.15 && (!best || x.pBlend > best.p)) best = { t: m.fixture + ' · ' + names[k], p: x.pBlend, o: it }; }
+        if (best) out.push(best);
+      }
+      setItems(out.sort((a, b) => b.p - a.p).slice(0, 14));
+    }).catch(() => undefined);
+  }, []);
+  if (!items.length) return null;
+  const row = items.map((x, i) => <span key={i}><b>{Math.round(x.p * 100)}%</b>{x.t}<i>{x.o.toFixed(2)}</i></span>);
+  return <div className="q-ticker" aria-label="Esiti più probabili della settimana"><span className="q-ticker-label">PIÙ PROBABILI</span><div className="q-ticker-track"><div className="q-ticker-run">{row}{row}</div></div></div>;
+}
+
+// Ripple on tap / click for buttons.
+export function useRipple() {
+  useEffect(() => {
+    if (reduced()) return;
+    const down = (e: PointerEvent) => {
+      const b = (e.target as HTMLElement)?.closest?.('button, .pick-chip') as HTMLElement | null; if (!b) return;
+      const r = b.getBoundingClientRect(), s = document.createElement('span'), d = Math.max(r.width, r.height) * 2;
+      s.className = 'q-ripple'; s.style.width = s.style.height = d + 'px'; s.style.left = e.clientX - r.left - d / 2 + 'px'; s.style.top = e.clientY - r.top - d / 2 + 'px';
+      if (getComputedStyle(b).position === 'static') b.style.position = 'relative';
+      b.style.overflow = 'hidden'; b.appendChild(s); setTimeout(() => s.remove(), 650);
+    };
+    window.addEventListener('pointerdown', down, { passive: true });
+    return () => window.removeEventListener('pointerdown', down);
+  }, []);
+}

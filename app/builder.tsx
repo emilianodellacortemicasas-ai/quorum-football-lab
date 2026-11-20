@@ -48,7 +48,7 @@ function toOptions(r: any): Match | null {
 export function BuilderView({ equityCents, onLab, notify }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void }) {
   const [matches, setMatches] = useState<Match[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [slip, setSlip] = useState<Opt[]>([]), [league, setLeague] = useState('Tutte'), [q, setQ] = useState(''), [sort, setSort] = useState<'time' | 'prob'>('time');
-  const [open, setOpen] = useState<Record<string, boolean>>({}), [stakeText, setStakeText] = useState('');
+  const [open, setOpen] = useState<Record<string, boolean>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem(SLIP_KEY) || '[]'); if (Array.isArray(s)) setSlip(s.filter((x: Opt) => Date.parse(x.kickoff) > Date.now())); } catch { } }, []);
   useEffect(() => { try { localStorage.setItem(SLIP_KEY, JSON.stringify(slip)); } catch { } }, [slip]);
   async function load() {
@@ -123,7 +123,8 @@ export function BuilderView({ equityCents, onLab, notify }: { equityCents: numbe
           <p className="footnote">Percentuale = probabilità stimata da QUORUM (modello + mercato, corretta con il backtest). * = quota estera, l’esito non è quotato da Lottomatica / Planetwin365. Le quote italiane si aggiornano ogni 12 ore: controlla sempre quella sul tuo conto.</p>
         </>}
     </div>
-    <aside className={'panel builder-slip' + (slip.length ? ' has' : '')}>
+    <aside className={'panel builder-slip' + (slip.length ? ' has' : '') + (sheet ? ' open' : '')}>
+      <button className="slip-grip" onClick={() => setSheet(!sheet)} aria-label={sheet ? 'Chiudi schedina' : 'Apri schedina'}><i /><span>{slip.length} {slip.length === 1 ? 'evento' : 'eventi'} · quota <b>{odds.toFixed(2)}</b>{rel ? ' · ' + pc(rel.p) : ''}</span><em>{sheet ? 'Chiudi' : 'Apri'}</em></button>
       <div className="slip-head"><h3>La tua schedina</h3><span>{slip.length} {slip.length === 1 ? 'evento' : 'eventi'}</span>{slip.length > 0 && <button className="icon-button" onClick={() => { setSlip([]); setStakeText(''); }} title="Svuota"><Trash2 size={16} /></button>}</div>
       {!slip.length ? <p className="small-note"><Plus size={14} /> Tocca una quota per aggiungerla. Un solo esito per partita.</p> : <>
         <ul className="slip-legs">{slip.map(l => <li key={l.fixtureId}><div><strong>{l.label}</strong><small>{l.fixture} · {when(l.kickoff)}</small></div><b>{l.odds.toFixed(2)}</b><button onClick={() => toggle(l)} title="Togli"><X size={14} /></button></li>)}</ul>
