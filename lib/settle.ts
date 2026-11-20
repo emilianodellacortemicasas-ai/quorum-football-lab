@@ -65,6 +65,32 @@ export async function settleAll(limit = 80) {
     ]);
     settledBets++;
   }
+  // 1c. Systems from the Laboratorio: every winning combination pays unit × product of its odds (void legs = 1).
+  const systems = (await db().prepare("SELECT id,portfolio_id,stake_cents,snapshot FROM bets WHERE status='pending' AND fixture_id LIKE 'system:%' LIMIT ?").bind(limit).all<any>()).results;
+  for (const bet of systems) {
+    let snap: any; try { snap = JSON.parse(bet.snapshot); } catch { continue; }
+    const legs: { fixtureId: string; market: string; kickoff: string; odds: number }[] = snap.legs || [], k = snap.system?.k, unit = snap.system?.unitCents;
+    if (!legs.length || !k || !unit) continue;
+    const res: Outcome[] = [];
+    for (const l of legs) {
+      if (l.kickoff > cutoff) { res.push(null); continue; }
+      const v = cache.has(l.fixtureId) || cache.size < limit ? await finalOf(l.fixtureId, cache) : { status: 'pending' };
+      res.push(v.status === 'pending' ? null : resultFor(v as any, l.market) ?? 'void');
+    }
+    if (res.some(x => x === null)) continue;
+    let payout = 0;
+    const visit = (start: number, combo: number[]) => {
+      if (combo.length === k) { if (combo.every(i => res[i] !== 'lost')) payout += Math.round(unit * combo.reduce((o, i) => o * (res[i] === 'void' ? 1 : legs[i].odds), 1)); return; }
+      for (let i = start; i < legs.length; i++) visit(i + 1, [...combo, i]);
+    };
+    visit(0, []);
+    const allVoid = res.every(x => x === 'void'), pnl = allVoid ? 0 : payout - bet.stake_cents, status = allVoid ? 'void' : pnl > 0 ? 'won' : 'lost';
+    await db().batch([
+      db().prepare("UPDATE bets SET status=?,pnl_cents=?,settled_at=? WHERE id=? AND status='pending'").bind(status, pnl, now(), bet.id),
+      db().prepare('INSERT INTO portfolio_revisions (portfolio_id,revision) VALUES (?,1) ON CONFLICT(portfolio_id) DO UPDATE SET revision=revision+1').bind(bet.portfolio_id),
+    ]);
+    settledBets++;
+  }
   // 2. Every evaluated outcome of the scanner (all runs share the same fixture/market result).
   const pairs = (await db().prepare('SELECT DISTINCT fixture_id,market FROM scanner_rows WHERE result IS NULL AND kickoff < ? LIMIT 2000').bind(cutoff).all<any>()).results;
   const updates: D1PreparedStatement[] = [];
@@ -121,9 +147,10 @@ export async function myPlays(owner: string) {
   const rows = (await db().prepare("SELECT id,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,snapshot,status,pnl_cents,created_at,settled_at,shared FROM bets WHERE owner=? ORDER BY created_at DESC LIMIT 300").bind(owner).all<any>()).results;
   const plays = rows.map(r => {
     let legs: any[] = [];
-    if (String(r.fixture_id).startsWith('multi:')) { try { legs = JSON.parse(r.snapshot).legs || []; } catch { } }
+    let system: any = null;
+    if (/^(multi|system):/.test(String(r.fixture_id))) { try { const sn = JSON.parse(r.snapshot); legs = sn.legs || []; system = sn.system || null; } catch { } }
     else legs = [{ fixture: r.fixture, label: r.market_label, odds: r.odds }];
-    return { id: r.id, portfolioId: r.portfolio_id, shared: !!r.shared, kind: legs.length > 1 ? 'multipla' : 'singola', source: r.source, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at, settledAt: r.settled_at };
+    return { id: r.id, portfolioId: r.portfolio_id, shared: !!r.shared, system, name: r.fixture, kind: system ? 'sistema' : legs.length > 1 ? 'multipla' : 'singola', source: r.source, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at, settledAt: r.settled_at };
   });
   const closed = plays.filter(x => x.status === 'won' || x.status === 'lost'), staked = closed.reduce((s, x) => s + x.stakeCents, 0), pnl = closed.reduce((s, x) => s + x.pnlCents, 0);
   const group = (f: (x: typeof plays[number]) => boolean) => { const c = closed.filter(f), st = c.reduce((s, x) => s + x.stakeCents, 0); return { n: c.length, won: c.filter(x => x.status === 'won').length, expected: c.reduce((s, x) => s + x.p, 0), pnlCents: c.reduce((s, x) => s + x.pnlCents, 0), roi: st ? c.reduce((s, x) => s + x.pnlCents, 0) / st : null }; };
@@ -135,9 +162,10 @@ export async function myPlays(owner: string) {
       { key: 'builder', label: 'Costruite da te', ...group(x => x.source === 'mine:builder') },
       { key: 'copied', label: 'Copiate da altri utenti', ...group(x => x.source === 'mine:builder:copiata') },
       { key: 'value', label: 'Value bet', ...group(x => x.source === 'mine:value') },
+      { key: 'lab', label: 'Sistemi dal Laboratorio', ...group(x => x.source === 'mine:lab') },
       { key: 'match', label: 'Dal Centro partita', ...group(x => !String(x.source).startsWith('mine:')) },
     ],
-    byKind: [{ key: 'singola', label: 'Singole', ...group(x => x.kind === 'singola') }, { key: 'multipla', label: 'Multiple', ...group(x => x.kind === 'multipla') }],
+    byKind: [{ key: 'singola', label: 'Singole', ...group(x => x.kind === 'singola') }, { key: 'multipla', label: 'Multiple', ...group(x => x.kind === 'multipla') }, { key: 'sistema', label: 'Sistemi', ...group(x => x.kind === 'sistema') }],
   };
 }
 
@@ -146,9 +174,10 @@ export async function sharedPlays(owner: string) {
   const rows = (await db().prepare("SELECT id,owner,author,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,snapshot,status,pnl_cents,created_at FROM bets WHERE shared=1 ORDER BY created_at DESC LIMIT 120").all<any>()).results;
   const plays = rows.map(r => {
     let legs: any[] = [];
-    if (String(r.fixture_id).startsWith('multi:')) { try { legs = JSON.parse(r.snapshot).legs || []; } catch { } }
+    let system: any = null;
+    if (/^(multi|system):/.test(String(r.fixture_id))) { try { const sn = JSON.parse(r.snapshot); legs = sn.legs || []; system = sn.system || null; } catch { } }
     else { let k = ''; try { k = JSON.parse(r.snapshot)?.legs?.[0]?.kickoff ?? ''; } catch { } legs = [{ fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, market: r.market, label: r.market_label, odds: r.odds, p: r.probability, kickoff: k }]; }
-    return { id: r.id, mine: r.owner === owner, author: r.author || 'Utente', legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at };
+    return { id: r.id, mine: r.owner === owner, author: r.author || 'Utente', system, name: r.fixture, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at };
   });
   const authors = [...new Set(plays.map(x => x.author))].map(a => {
     const c = plays.filter(x => x.author === a && (x.status === 'won' || x.status === 'lost')), st = c.reduce((s, x) => s + x.stakeCents, 0), pnl = c.reduce((s, x) => s + x.pnlCents, 0);
