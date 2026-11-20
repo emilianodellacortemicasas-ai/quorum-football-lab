@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Copy, Info, ListPlus, RefreshCw, Share2, Trophy, Users } from 'lucide-react';
+import { Copy, Trash2, Info, ListPlus, RefreshCw, Share2, Trophy, Users } from 'lucide-react';
 import { money, percent } from '../lib/math';
 
 type Agg = { n: number; won: number; hit: number | null; profit: number; roi: number | null; expectedHit?: number | null };
@@ -12,8 +12,8 @@ function Box({ title, a, note }: { title: string; a: Agg; note?: string }) {
   return <div className="res-box"><span>{title}</span>{a.n ? <><b>{percent(a.hit ?? 0, 0)} prese</b><small>{a.won} su {a.n} · profitto {signed(a.profit)} unità · ROI {a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)}</small>{note && <small>{note}</small>}</> : <><b>—</b><small>Nessuna giocata conclusa ancora.</small></>}</div>;
 }
 
-function MyPlays({ onGo, refreshKey, onShare }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean> }) {
-  const [m, setM] = useState<any>(null), [tick, setTick] = useState(0);
+function MyPlays({ onGo, refreshKey, onShare, onRemove }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean> }) {
+  const [m, setM] = useState<any>(null), [tick, setTick] = useState(0), [ask, setAsk] = useState('');
   useEffect(() => { fetch('/api/scanner?view=mine', { cache: 'no-store' }).then(r => r.json()).then(setM).catch(() => setM({ plays: [], summary: { total: 0 } })); }, [refreshKey, tick]);
   if (!m) return null;
   const s = m.summary, euro = (c: number) => (c >= 0 ? '+' : '−') + money(Math.abs(c));
@@ -32,7 +32,11 @@ function MyPlays({ onGo, refreshKey, onShare }: { onGo?: (v: string) => void; re
         <div className="my-play-head"><span>{x.kind === 'multipla' ? 'Multipla · ' + x.legs.length + ' eventi' : 'Singola'} · {when(x.createdAt)}</span><b>{x.status === 'pending' ? 'In corso' : x.status === 'won' ? 'Vinta ' + euro(x.pnlCents) : x.status === 'lost' ? 'Persa ' + euro(x.pnlCents) : 'Rimborsata'}</b></div>
         <ul>{x.legs.map((l: any, i: number) => <li key={i}><span>{l.fixture}</span><b>{l.label}</b><i>{Number(l.odds).toFixed(2)}</i></li>)}</ul>
         <div className="my-play-foot"><span>Quota {Number(x.odds).toFixed(2)} · puntata {money(x.stakeCents)}</span><span>Probabilità QUORUM {percent(x.p, x.p < 0.1 ? 1 : 0)}</span></div>
-        {onShare && <button className={'share-chip' + (x.shared ? ' on' : '')} onClick={async () => { if (await onShare(x.id, x.portfolioId, !x.shared)) setTick(t => t + 1); }}><Share2 size={13} />{x.shared ? 'Condivisa · tocca per nasconderla' : 'Condividi con gli altri'}</button>}
+        <div className="play-actions">{onShare && <button className={'share-chip' + (x.shared ? ' on' : '')} onClick={async () => { if (await onShare(x.id, x.portfolioId, !x.shared)) setTick(t => t + 1); }}><Share2 size={13} />{x.shared ? 'Condivisa · tocca per nasconderla' : 'Condividi con gli altri'}</button>}
+          {onRemove && (ask === x.id
+            ? <><button className="share-chip danger" onClick={async () => { setAsk(''); if (await onRemove(x.id, x.portfolioId)) setTick(t => t + 1); }}><Trash2 size={13} />Sì, elimina</button><button className="share-chip" onClick={() => setAsk('')}>Annulla</button></>
+            : <button className="share-chip ghost" onClick={() => setAsk(x.id)}><Trash2 size={13} />Elimina</button>)}</div>
+        {ask === x.id && <p className="small-note">La giocata sparisce dal portafoglio e dai risultati{x.status !== 'pending' ? ' e il capitale viene ricalcolato senza il suo esito' : ''}. Non si può annullare.</p>}
       </article>)}</div>
     </>}
   </section>;
@@ -65,7 +69,7 @@ function SharedPlays({ onGo, refreshKey }: { onGo?: (v: string) => void; refresh
   </section>;
 }
 
-export function ResultsView({ onGo, refreshKey, onShare }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean> }) {
+export function ResultsView({ onGo, refreshKey, onShare, onRemove }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean> }) {
   const [d, setD] = useState<any>(null), [err, setErr] = useState(''), [loading, setLoading] = useState(true), [t, setT] = useState(0);
   const share = onShare ? async (id: string, pid: string, v: boolean) => { const ok = await onShare(id, pid, v); if (ok) setT(x => x + 1); return ok; } : undefined;
   useEffect(() => { fetch('/api/scanner?view=performance', { cache: 'no-store' }).then(async r => { const j: any = await r.json(); if (!r.ok) throw new Error(j.error); setD(j); }).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, []);
@@ -74,7 +78,7 @@ export function ResultsView({ onGo, refreshKey, onShare }: { onGo?: (v: string) 
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Calcolo il rendimento…</h3></div>
       : err ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Risultati non disponibili</h3><p>{err}</p></div>
       : <>
-        <MyPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} onShare={share} />
+        <MyPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} onShare={share} onRemove={onRemove ? async (id, pid) => { const ok = await onRemove(id, pid); if (ok) setT(x => x + 1); return ok; } : undefined} />
         <SharedPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} />
         <section className="reliability"><div className="rel-head"><strong>Value bet</strong><span>Puntata fissa di 1 unità alla quota migliore vista prima del calcio d'inizio.</span></div>
           <div className="rel-grid"><Box title="Tutte le value bet" a={d.value} note={d.value.expectedHit !== null && d.value.n ? 'attese ' + percent(d.value.expectedHit, 0) : undefined} />{d.valueByMarket.map((g: any) => <Box key={g.group} title={g.group} a={g} />)}</div></section>

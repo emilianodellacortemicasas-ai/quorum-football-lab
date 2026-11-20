@@ -91,6 +91,11 @@ export async function POST(request:Request) {
         const source='mine:'+t.source+(t.kind?':'+t.kind:''),now=new Date().toISOString(),authorName=(p as any).name||'Utente';
         statement=raw.prepare('INSERT INTO bets (id,owner,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,model_version,snapshot,status,pnl_cents,created_at,shared,author) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?')
           .bind(crypto.randomUUID(),owner,portfolioId,one?one.fixtureId:'multi:'+crypto.randomUUID(),one?one.fixture:'Multipla · '+t.legs.length+' eventi',one?one.competition:'Multipla',one?one.market:'multi',one?one.label:t.legs.map(l=>l.label).join(' + ').slice(0,200),prob,odds,t.stakeCents,source,'quorum-v2.1',JSON.stringify({legs:t.legs,kickoff:t.legs.map(l=>l.kickoff).sort()[0]}),'pending',0,now,t.shared?1:0,authorName,portfolioId,revision);
+      } else if(body.action==='remove'){
+        // The user deletes one of their own recorded plays (e.g. registered but not actually played).
+        // The row disappears: capital, Risultati and shared plays are recalculated without it.
+        const b=z.object({id:z.string().max(80)}).parse(body);
+        statement=raw.prepare('DELETE FROM bets WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(b.id,owner,portfolioId,portfolioId,revision);
       } else if(body.action==='share'){
         // Show or hide one of the user's own plays to the other users of QUORUM.
         const b=z.object({id:z.string().max(80),shared:z.boolean()}).parse(body);

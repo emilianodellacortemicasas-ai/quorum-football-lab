@@ -522,3 +522,7 @@ body{background:#eef3ee}
 .my-plays .my-play *,.shared-plays .my-play *,.author-card *{text-transform:none!important;letter-spacing:normal!important}
 .my-list{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 .my-play li span,.my-play-foot span{font-size:13px}
+.play-actions{display:flex;flex-wrap:wrap;gap:6px}
+.share-chip.ghost{background:#fff;color:#8a3a22;border-color:#ecd3c9;box-shadow:0 2px 0 #ecd3c9}
+.share-chip.danger{background:linear-gradient(180deg,#e2643e,#c2512e);border-color:#a8431f;color:#fff;box-shadow:0 2px 0 #7f2f14}
+.settle-buttons .settle-delete{color:#a8431f!important;border-color:#ecd3c9!important}
