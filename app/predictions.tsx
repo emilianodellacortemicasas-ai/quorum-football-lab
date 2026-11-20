@@ -36,25 +36,40 @@ function Extras({ meta, markets }: { meta: any; markets: Record<string, any> }) 
     return (over >= 0.5 ? 'Over ' : 'Under ') + String(L).replace('.', ',') + ' · ' + percent(over >= 0.5 ? over : 1 - over, 0) + (q ? ' · q ' + q.bestOdds.toFixed(2) : '');
   };
   const cards = c ? [c.yellow[0] + c.red[0], c.yellow[1] + c.red[1]] : null;
-  return <div className="ctx extras">
-    {c && <div><span>Corner attesi</span><b>{(c.corners[0] + c.corners[1]).toFixed(1)} ({c.corners[0].toFixed(1)}–{c.corners[1].toFixed(1)})</b><b>{line('corners', c.corners[0] + c.corners[1], 12)}</b></div>}
-    {cards && <div><span>Cartellini attesi</span><b>{(cards[0] + cards[1]).toFixed(1)} ({cards[0].toFixed(1)}–{cards[1].toFixed(1)})</b><b>{line('cards', cards[0] + cards[1], 6)}</b></div>}
-    {pen && <div><span>Rigori</span><b>Assegnato: {percent(pen.awarded, 0)}</b><b>Sbagliato: {percent(pen.missed, 0)}</b></div>}
-    {sc && (sc.home.length || sc.away.length) ? <div><span>Marcatori</span><b className="out">{sc.home.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0) + (markets['scorer:' + p.id] ? ' (q ' + markets['scorer:' + p.id].bestOdds.toFixed(2) + ')' : '')).join(' · ') || '—'}</b><b className="out">{sc.away.slice(0, 3).map((p: any) => p.name + ' ' + percent(p.p, 0) + (markets['scorer:' + p.id] ? ' (q ' + markets['scorer:' + p.id].bestOdds.toFixed(2) + ')' : '')).join(' · ') || '—'}</b></div> : null}
+  const scorer = (p: any) => <span key={p.id ?? p.name} className="sc-chip"><b>{p.name}</b><i>{percent(p.p, 0)}</i>{markets['scorer:' + p.id] && <em>q {markets['scorer:' + p.id].bestOdds.toFixed(2)}</em>}</span>;
+  return <div className="xtra">
+    <div className="xtra-tiles">
+      {c && <div className="xtra-tile"><span>Corner attesi</span><b>{(c.corners[0] + c.corners[1]).toFixed(1)}</b><small>{c.corners[0].toFixed(1)} – {c.corners[1].toFixed(1)}</small><em>{line('corners', c.corners[0] + c.corners[1], 12)}</em></div>}
+      {cards && <div className="xtra-tile"><span>Cartellini attesi</span><b>{(cards[0] + cards[1]).toFixed(1)}</b><small>{cards[0].toFixed(1)} – {cards[1].toFixed(1)}</small><em>{line('cards', cards[0] + cards[1], 6)}</em></div>}
+      {pen && <div className="xtra-tile"><span>Rigori</span><b>{percent(pen.awarded, 0)}</b><small>assegnato</small><em>sbagliato {percent(pen.missed, 0)}</em></div>}
+    </div>
+    {sc && (sc.home.length || sc.away.length) ? <div className="xtra-scorers"><span>Marcatori più probabili</span><div className="sc-cols"><div>{sc.home.slice(0, 3).map(scorer)}</div><div>{sc.away.slice(0, 3).map(scorer)}</div></div></div> : null}
   </div>;
 }
 
-function Context({ meta }: { meta: any }) {
+function Context({ meta, fixture }: { meta: any; fixture?: string }) {
   if (!meta) return null;
-  const pos = (p: number | null | undefined, pts: number | null | undefined) => p ? p + 'ª · ' + pts + ' pt' : '—';
-  const dots = (f: string) => f ? <span className="form-dots">{f.split('').map((c, i) => <i key={i} className={c === 'V' ? 'w' : c === 'P' ? 'l' : 'd'}>{c}</i>)}</span> : '—';
-  const eff = (a: { factor: number; missing: string[]; bench: string[] }) => a.factor < 0.995 ? '−' + Math.round((1 - a.factor) * 100) + '% (' + [...a.missing, ...a.bench.map(b => b + ' in panchina')].slice(0, 3).join(', ') + ')' : 'nessuno';
-  const out = (o: string[] | null | undefined) => o === null || o === undefined ? 'n.d.' : o.length ? o.length + ': ' + o.join(', ') : 'nessuno';
-  return <div className="ctx"><div><span>Classifica</span><b>{pos(meta.homePos, meta.homePts)}</b><b>{pos(meta.awayPos, meta.awayPts)}</b></div>
-    <div><span>Forma (ultime 5)</span><b>{dots(meta.homeForm)}</b><b>{dots(meta.awayForm)}</b></div>
-    <div><span>Indisponibili</span><b className="out">{out(meta.homeOut)}</b><b className="out">{out(meta.awayOut)}</b></div>
-    {meta.adjust && <div><span>Effetto sui gol</span><b>{eff(meta.adjust.home)}</b><b>{eff(meta.adjust.away)}</b></div>}
-    <div><span>Formazioni</span><b className={meta.lineupConfirmed ? 'ok-txt' : ''}>{meta.lineupConfirmed ? '✓ Ufficiali, calcolo aggiornato' : 'In attesa · ricalcolo ~1 ora prima'}</b><b></b></div></div>;
+  const [home, away] = (fixture || ' – ').split(' – ');
+  const pos = (p: number | null | undefined, pts: number | null | undefined) => p ? <><b>{p}ª</b><small>{pts} pt</small></> : <small>—</small>;
+  const dots = (f: string) => f ? <span className="form-dots">{f.split('').map((c, i) => <i key={i} className={c === 'V' ? 'w' : c === 'P' ? 'l' : 'd'}>{c}</i>)}</span> : <small>—</small>;
+  const out = (o: string[] | null | undefined) => {
+    if (o === null || o === undefined) return <small>n.d.</small>;
+    if (!o.length) return <small className="ok-txt">nessuno</small>;
+    const names = o.map(x => x.replace(/\s*\(.*\)\s*$/, ''));
+    return <details className="out-list"><summary><b className="out-n">{o.length}</b><span>{names.slice(0, 2).join(', ')}{o.length > 2 ? ' +' + (o.length - 2) : ''}</span></summary><ul>{o.map(x => <li key={x}>{x}</li>)}</ul></details>;
+  };
+  const eff = (a: { factor: number; missing: string[]; bench: string[] }) => a.factor < 0.995
+    ? <span className={'eff-chip ' + (a.factor < 0.86 ? 'hi' : 'mid')} title={[...a.missing, ...a.bench.map(b => b + ' in panchina')].join(', ')}>−{Math.round((1 - a.factor) * 100)}% gol</span>
+    : <small className="ok-txt">nessuno</small>;
+  const row = (label: string, l: any, r: any, key?: string) => <div className="vs-row" key={key ?? label}><div className="vs-l">{l}</div><span className="vs-label">{label}</span><div className="vs-r">{r}</div></div>;
+  return <div className="vs">
+    <div className="vs-head"><b>{home}</b><span>casa · ospite</span><b>{away}</b></div>
+    {row('Classifica', pos(meta.homePos, meta.homePts), pos(meta.awayPos, meta.awayPts))}
+    {row('Forma', dots(meta.homeForm), dots(meta.awayForm))}
+    {row('Indisponibili', out(meta.homeOut), out(meta.awayOut))}
+    {meta.adjust && row('Effetto assenze', eff(meta.adjust.home), eff(meta.adjust.away))}
+    <div className={'vs-lineup' + (meta.lineupConfirmed ? ' ok' : '')}>{meta.lineupConfirmed ? '✓ Formazioni ufficiali: calcolo aggiornato' : '⏳ Formazioni in attesa · ricalcolo ~1 ora prima'}</div>
+  </div>;
 }
 
 function Reliability() {
@@ -100,7 +115,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
         if (!p) {
           const fav = (['home', 'draw', 'away'] as const).map(k => [k, r.markets[k]?.pMarket ?? 0] as const).sort((x, y) => y[1] - x[1])[0];
           return <article className="value-card muted" key={r.id}><div className="value-head"><span>{r.competition} · {when(r.kickoff)}</span></div><h3>{r.fixture}</h3>
-            <span className="value-check warn">Dati insufficienti per stimare una delle due squadre</span><Context meta={r.markets.meta} />
+            <span className="value-check warn">Dati insufficienti per stimare una delle due squadre</span><Context meta={r.markets.meta} fixture={r.fixture} />
             <p className="small-note">Solo riferimento di mercato: favorito {({ home: '1', draw: 'X', away: '2' })[fav[0]]} al {percent(fav[1])}.</p></article>;
         }
         const ref = mk(p.main.key), gap = ref && ref.pModel !== null ? ref.pModel - ref.pMarket : null;
@@ -118,7 +133,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
             <div><dt>Gol attesi</dt><dd>{p.xg[0].toFixed(2)} – {p.xg[1].toFixed(2)}<small>su {r.markets.meta?.sampleHome ?? '?'} / {r.markets.meta?.sampleAway ?? '?'} partite</small></dd></div>
           </dl>
           <Extras meta={r.markets.meta} markets={r.markets} />
-          <Context meta={r.markets.meta} />
+          <Context meta={r.markets.meta} fixture={r.fixture} />
           {gap !== null && <p className="small-note">Mercato: {percent(ref!.pMarket, 0)}{Math.abs(gap) > 0.1 ? ' · le statistiche si discostano molto dal mercato, verifica assenze e formazioni.' : ' · in linea con le statistiche.'}</p>}
           <button className="text-button" onClick={() => onOpen(r.fixture_id)}>Tutti i mercati della partita<ArrowRight size={15} /></button>
         </article>;

@@ -38,7 +38,7 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core',
 }
 
 export function TicketsView({ equityCents, onLab, notify, onRecord }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
-  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=tickets', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -61,6 +61,11 @@ export function TicketsView({ equityCents, onLab, notify, onRecord }: { equityCe
           const p3 = data.probable?.find(t => t.kind === 'probabile-3'), rm = data.tickets.find(t => t.kind === 'raddoppio-multipla'), q3 = data.tickets.find(t => t.kind === 'quota10-3');
           const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} onRecord={onRecord} />;
           return <>
+            {data.sure && data.sure.length > 0 && <>
+              <h3 className="day-title">🛡️ Raddoppi sicuri</h3>
+              <p className="small-note">Il metodo dei tipster: 2 o al massimo 3 esiti molto probabili per arrivare a quota 2. QUORUM sceglie i più affidabili tra le partite delle prossime 72 ore, solo con quote Lottomatica / Planetwin365 e senza squadre con assenze pesanti. Tre schedine su partite diverse.</p>
+              <div className="value-list">{data.sure.map(t => card(t))}</div>
+            </>}
             <h3 className="day-title">📈 Per far crescere il capitale</h3>
             <p className="small-note">Le schedine con lo storico migliore. Giocale con la puntata consigliata, calcolata sul tuo capitale: quando una non ripaga il rischio, QUORUM ti dice di saltarla.</p>
             <div className="value-list">{p3 && card(p3)}{rm && card(rm)}</div>

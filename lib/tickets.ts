@@ -116,5 +116,19 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const bombPool = perMatchTop(c, l => l.p >= 0.45 && l.odds >= 1.55 && l.odds <= 3.6 && l.edge > -0.03, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 22);
   const b = bestCombo(bombPool, [5, 6, 7, 8], 50, 200, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
   const bomb = b ? ticket('bomba', 'Bomba della settimana', 'Quota altissima per sbancare: 5–8 esiti scelti tra le partite della settimana con la probabilità più alta per quella quota. Vince di rado: punta solo una piccola cifra.', b) : null;
-  return { singles, tickets, bomb, probable, candidates: c.length };
+  // 8. Tre raddoppi sicuri, filosofia dei tipster: 2 (massimo 3) eventi molto probabili, quota totale ~2,00,
+  // solo quote italiane, partite nelle prossime 72 ore, niente squadre con assenze pesanti, partite diverse tra i tre.
+  const meta = new Map(matches.map(m => [m.fixture_id, m.markets?.meta]));
+  const heavyAbsence = (id: string) => { const a = meta.get(id)?.adjust; return !!a && (a.home?.factor < 0.85 || a.away?.factor < 0.85); };
+  const surePool = perMatchTop(c, l => l.italian && l.p >= 0.68 && l.odds >= 1.25 && l.odds <= 1.65 && familyOf(l.market) !== null
+    && Date.parse(l.kickoff) - now <= 72 * 3600000 && !heavyAbsence(l.fixtureId), l => l.p, 3).slice(0, 40);
+  const sure: Ticket[] = [], used = new Set<string>();
+  for (let i = 0; i < 3; i++) {
+    const pool = surePool.filter(l => !used.has(l.fixtureId));
+    const t = bestCombo(pool, [2, 3], 1.85, 2.3, legs => Math.log(prob(legs)) - (legs.length - 2) * 0.03);
+    if (!t) break;
+    t.forEach(l => used.add(l.fixtureId));
+    sure.push(ticket('raddoppio-sicuro-' + (i + 1), 'Raddoppio sicuro #' + (i + 1), 'Metodo dei tipster: 2–3 esiti molto probabili, quota totale circa 2, quote Lottomatica / Planetwin365, partite entro 72 ore, nessuna assenza pesante.', t));
+  }
+  return { singles, tickets, bomb, probable, sure, candidates: c.length };
 }
