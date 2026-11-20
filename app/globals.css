@@ -455,3 +455,4 @@ body{background:#eef3ee}
 /* L'ingresso pagina usa solo l'opacità: una trasformazione intrappolerebbe gli elementi fissi (schedina a cassetto). */
 .q-view{animation:q-fade .4s ease both}
 @keyframes q-fade{from{opacity:0}to{opacity:1}}
+@media (max-width:760px){.builder-slip.open>.slip-grip{display:flex}.builder-slip.open>.slip-stake{display:grid}.builder-slip.open>.slip-legs{display:grid}.builder-slip.open{display:grid;gap:10px}}
