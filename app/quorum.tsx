@@ -122,6 +122,28 @@ function Limits({portfolio:p,metrics:m,busy,onSave,onAction}:{portfolio:Portfoli
   return <form className="panel limits" onSubmit={e=>{e.preventDefault();onSave({stakeBps:Math.round(stake*100),exposureBps:Math.round(exposure*100),dayBps:Math.round(day*100),drawdownBps:Math.round(drawdown*100)});}}><div className="panel-heading"><h3>Il tuo portafoglio</h3><Shield size={18}/></div><div className="portfolio-admin"><label>Nome<input maxLength={40} value={name} onChange={e=>setName(e.target.value)}/></label><button type="button" className="secondary small-button" disabled={busy||!name.trim()||name===p.name} onClick={()=>onAction({action:'rename',name})}>Rinomina</button><button type="button" className="text-button danger" disabled={busy} onClick={()=>{if(window.confirm('Eliminare questo portafoglio? Possibile solo se è vuoto.'))onAction({action:'delete'});}}>Elimina</button></div><label className="rules-toggle"><input type="checkbox" checked={rules} disabled={busy} onChange={e=>{setRules(e.target.checked);onAction({action:'limits',enabled:e.target.checked});}}/><span><strong>Regole di gestione del capitale</strong><small>{rules?'Attive: QUORUM blocca le puntate oltre i limiti qui sotto.':'Disattivate: puoi puntare liberamente. I limiti restano solo come riferimento.'}</small></span></label><p className="muted">Limiti di prova modificabili. Non rappresentano un profilo di rischio consigliato.</p>{[{label:'Singola operazione',value:stake,set:setStake,max:5},{label:'Esposizione aperta',value:exposure,set:setExposure,max:20},{label:'Perdita giornaliera',value:day,set:setDay,max:20},{label:'Stop drawdown',value:drawdown,set:setDrawdown,max:50}].map(s=><label className="limit-field" key={s.label}><span>{s.label}</span><div><input type="number" required min="0.01" max={s.max} step="0.01" value={s.value} onChange={e=>s.set(Number(e.target.value))}/><b>%</b></div></label>)}<div className="budget-note"><span>Budget giornaliero residuo*</span><strong>{money(Math.max(0,Math.floor(m.dayStartCents*p.dayBps/10000)-m.dayLossCents-m.openCents))}</strong></div><p className="tiny">*Perdita netta di oggi più tutte le puntate ancora aperte. Il giorno segue l’ora di Roma. Il drawdown si misura dal massimo capitale raggiunto.</p><button className="primary" disabled={busy}>Salva limiti<Check size={16}/></button></form>;
 }
 
+// Every possible outcome of the user's system, in plain words: which matches are right, which small tickets win,
+// how much comes back. Shown inline (key cases) and in the ⓘ window (all cases).
+function systemScenarios(s:Selection[],active:{k:number;unitCents:number}[]){
+  const n=s.length,groups=active.map(c=>({...c,combos:combinations(n,c.k)})),cost=groups.reduce((x,g)=>x+g.combos.length*g.unitCents,0);
+  const out:{mask:number;right:number[];wrong:number[];wins:{c:number[];cents:number}[];back:number;net:number;p:number}[]=[];
+  for(let mask=(1<<n)-1;mask>=0;mask--){
+    const right=[...Array(n).keys()].filter(i=>mask&(1<<i)),wrong=[...Array(n).keys()].filter(i=>!(mask&(1<<i)));
+    const wins=groups.flatMap(g=>g.combos.filter(c=>c.every(i=>mask&(1<<i))).map(c=>({c,cents:Math.round(g.unitCents*c.reduce((o,i)=>o*s[i].odds,1))})));
+    const back=wins.reduce((x,w)=>x+w.cents,0),p=s.reduce((v,x,i)=>v*((mask&(1<<i))?x.p:1-x.p),1);
+    out.push({mask,right,wrong,wins,back,net:back-cost,p});
+  }
+  return {cost,list:out.sort((a,b)=>b.right.length-a.right.length||b.net-a.net)};
+}
+function ScenarioCard({x,s}:{x:ReturnType<typeof systemScenarios>['list'][number];s:Selection[]}){
+  const nm=(i:number)=>s[i].fixture.split(' – ')[0];
+  return <div className={'scn '+(x.net>0?'gain':x.back>0?'part':'loss')}>
+    <div className="scn-head"><span>{x.right.length===s.length?'Indovini tutte':x.right.length===0?'Sbagli tutte':'Indovini '+x.right.length+' su '+s.length}</span><b>{x.net>=0?'+':'−'}{money(Math.abs(x.net))}</b></div>
+    <div className="scn-picks">{x.right.map(i=><span key={i} className="ok">✓ {nm(i)}</span>)}{x.wrong.map(i=><span key={i} className="ko">✗ {nm(i)}</span>)}</div>
+    <p>{x.wins.length?<>Vincono {x.wins.length===1?'questa schedina':'queste '+x.wins.length+' schedine'}: {x.wins.map((w,j)=><span key={j} className="scn-win">{w.c.map(nm).join(' + ')} <i>{money(w.cents)}</i></span>)}</>:'Nessuna schedina vince: ogni schedina piccola contiene almeno una partita sbagliata.'}</p>
+    <p className="scn-sum">Incassi <b>{money(x.back)}</b> · hai speso {money(x.back-x.net)} · {x.net>0?'sei in guadagno':x.back>0?'recuperi una parte':'perdi tutto'} · probabilità {percent(x.p,x.p<0.1?1:0)}</p>
+  </div>;
+}
 function Laboratory({selections:s,setSelections,onBrowse,onExample,onRecordSystem}:{selections:Selection[];setSelections:(s:Selection[])=>void;onBrowse:()=>void;onExample:()=>void;onRecordSystem?:(legs:any[],classes:{k:number;unitCents:number}[],shared:boolean)=>Promise<boolean>}){
   const n=s.length;
   // Classes like the bookmaker's slip: Singole, Doppie, Triple… each with its own stake per combination.
@@ -136,6 +158,8 @@ function Laboratory({selections:s,setSelections,onBrowse,onExample,onRecordSyste
   const assignAll=()=>{const v=Number(amount.replace(',','.'));if(v>0)setCls(Object.fromEntries(ks.map(k=>[k,{...row(k),unit:v.toFixed(2)}])));};
   const divide=()=>{const v=Number(amount.replace(',','.')),on=ks.filter(k=>row(k).on),tot=on.reduce((x,k)=>x+nCk(k),0);if(v>0&&tot)setCls(Object.fromEntries(ks.map(k=>[k,{...row(k),unit:(Math.floor(v*100/tot)/100).toFixed(2)}])));};
   const short=(x:Selection)=>x.fixture.split(' – ')[0];
+  const [info,setInfo]=useState(false);
+  const scen=useMemo(()=>n&&n<=8&&active.length?systemScenarios(s,active):null,[s,JSON.stringify(active)]);
   const label=(k:number)=>k===n&&n>1?'Multipla ('+className(k,n).toLowerCase()+')':className(k,n);
   const sysName=active.length===1&&active[0].k===n?(n===1?'Singola':'Multipla'):'Sistema '+n+' eventi · '+active.map(c=>className(c.k,n)).join(' + ');
   const [share,setShare]=useState(()=>{try{return localStorage.getItem('quorum-share')==='1';}catch{return false;}}),[saving,setSaving]=useState(false),[saveMsg,setSaveMsg]=useState('');
@@ -171,15 +195,28 @@ function Laboratory({selections:s,setSelections,onBrowse,onExample,onRecordSyste
       <p><b>Cosa cambia spuntando più classi:</b> solo la Multipla = paghi poco e vinci tanto, ma basta un errore per perdere tutto. Aggiungendo Doppie e Singole paghi di più (ogni schedina piccola ha la sua puntata), ma <b>resti in gioco anche se ne sbagli qualcuna</b>: le combinazioni senza la partita sbagliata vincono lo stesso. La tabella “Se ne vincono” qui a destra ti dice, per ogni numero di partite indovinate, quanto incassi e se sei in profitto.</p>
     </details>
     <p className="tiny">Puntata per singola combinazione, come sulla schedina di Lottomatica / Planetwin365. Un esito per partita.</p>
-  </div>}</section><section className="panel system-result"><div className="panel-heading"><h3>Il risultato del confronto</h3><Tag tone="amber">{sysName}</Tag></div>{result?<>
+  </div>}</section><section className="panel system-result"><div className="panel-heading"><h3>Il risultato del confronto <button className="info-dot" onClick={()=>setInfo(true)} aria-label="Cosa succede con la tua schedina" title="Cosa succede con la tua schedina">i</button></h3><Tag tone="amber">{sysName}</Tag></div>{result?<>
     <div className="sys-summary"><div><span>Combinazioni</span><b>{result.tickets}</b></div><div><span>Importo sistema</span><b>{money(result.costCents)}</b></div><div><span>Vincita min</span><b className="positive">{money(result.minWinCents)}</b></div><div><span>Vincita max</span><b className="positive">{money(result.maxReturnCents)}</b></div></div>
     <div className={'sys-breakeven'+(result.breakEven===null?' no':'')}>{result.breakEven===null?'Con queste puntate non vai mai in profitto: alza le classi più alte.':result.breakEven===n?'Vai in profitto solo se vincono tutte e '+n+'.':<>Vai in profitto se ne vincono <b>almeno {result.breakEven} su {n}</b>: puoi sbagliarne {n-result.breakEven}.</>}</div>
     <span className="muted">Probabilità di chiudere in profitto</span><div className="big-probability">{percent(result.pProfit)}</div><div className="prob-track"><span style={{width:result.pProfit*100+'%'}}/></div>
     <div className="sys-table"><div className="sys-tr head"><span>Se ne vincono</span><span>Incasso</span><span>Netto</span><span>Probabilità</span></div>{result.byWinners.slice().reverse().map(b=>{const netMin=b.minReturnCents-result.costCents,netMax=b.maxReturnCents-result.costCents;return <div key={b.winners} className={'sys-tr'+(netMin>0?' gain':netMax<=0?' loss':' mixed')}><span>{b.winners} su {n}</span><span>{b.minReturnCents===b.maxReturnCents?money(b.maxReturnCents):money(b.minReturnCents)+' – '+money(b.maxReturnCents)}</span><span>{netMin===netMax?(netMax>=0?'+':'')+money(netMax):(netMin>=0?'+':'')+money(netMin)+' / '+(netMax>=0?'+':'')+money(netMax)}</span><span>{percent(b.p,0)}</span></div>;})}</div>
+    {scen&&<div className="scn-inline"><div className="scn-title"><b>Cosa succede con la tua schedina</b><button className="info-dot" onClick={()=>setInfo(true)} aria-label="Tutti i casi">i</button></div>
+      <p className="tiny">Hai {result.tickets===1?'1 schedina':result.tickets+' schedine piccole'} per {money(result.costCents)} in tutto. Ecco i casi principali; tocca <b>i</b> per vederli tutti.</p>
+      {[scen.list[0],scen.list.find(x=>x.right.length===n-1&&n>1),scen.list.filter(x=>x.right.length===n-1).slice(-1)[0],scen.list.find(x=>x.right.length===1&&n>2),scen.list[scen.list.length-1]].filter((x,i,a)=>x&&a.indexOf(x)===i).map(x=><ScenarioCard key={x!.mask} x={x!} s={s}/>)}
+    </div>}
     <div className="calc-row"><span>Almeno una combinazione vincente</span><strong>{percent(result.pWin)}</strong></div><div className="calc-row"><span>Valore atteso netto</span><strong className={result.expectedCents<0?'negative':'positive'}>{money(result.expectedCents)}</strong></div>
     <p className="tiny">Incasso = quanto ti paga il bookmaker (puntata compresa). Quando ne vincono lo stesso numero l’incasso cambia in base a quali vincono: per questo c’è un intervallo. Probabilità stimate da QUORUM, partite considerate indipendenti.</p>
     {onRecordSystem&&<div className="lab-save"><label className="share-toggle"><input type="checkbox" checked={share} onChange={e=>{setShare(e.target.checked);try{localStorage.setItem('quorum-share',e.target.checked?'1':'0');}catch{}}}/><span>Condividi con gli altri utenti di QUORUM</span></label><button className="lime-button" disabled={saving||result.costCents<200} onClick={saveSystem}><Check size={16}/>{saving?'Registro…':'Registra · '+money(result.costCents)}</button>{result.costCents<200&&<small className="tiny">Importo minimo: 2 €.</small>}{saveMsg&&<p className="connection-success">{saveMsg}</p>}</div>}
-  </>:<Empty compact icon={<BarChart3/>} title="Il confronto apparirà qui." text="Aggiungi almeno una partita e scegli una classe con la puntata."/>}</section></div></>;
+  </>:<Empty compact icon={<BarChart3/>} title="Il confronto apparirà qui." text="Aggiungi almeno una partita e scegli una classe con la puntata."/>}</section></div>
+  {info&&scen&&result&&<Dialog title="Cosa succede con la tua schedina" onClose={()=>setInfo(false)} wide><div className="scn-dialog">
+    <h3>Come funziona, in 3 righe</h3>
+    <ol><li>Il sistema è un <b>pacchetto di schedine piccole</b> fatte con le tue {n} partite: qui sono <b>{result.tickets}</b>, per {money(result.costCents)} in tutto.</li><li>Ogni schedina piccola <b>vince solo se indovini tutte le partite che contiene</b>, e paga la sua puntata × le sue quote.</li><li>Alla fine incassi la <b>somma</b> delle schedine piccole che hanno vinto. Se è più di quanto hai speso, sei in guadagno.</li></ol>
+    <h3>Le tue {result.tickets} schedine piccole</h3>
+    <div className="scn-tickets">{active.map(c=><div key={c.k}><b>{label(c.k)} · {nCk(c.k)}x · {money(c.unitCents)} ciascuna</b><ul>{combinations(n,c.k).map(cb=><li key={cb.join()}>{cb.map(i=>short(s[i])).join(' + ')} <i>quota {cb.reduce((o,i)=>o*s[i].odds,1).toFixed(2)} → vince {money(Math.round(c.unitCents*cb.reduce((o,i)=>o*s[i].odds,1)))}</i></li>)}</ul></div>)}</div>
+    <h3>Tutti i casi possibili ({scen.list.length})</h3>
+    <p className="tiny">Verde = guadagni · giallo = recuperi una parte · rosso = perdi tutto. La probabilità è la stima QUORUM.</p>
+    <div className="scn-grid">{scen.list.map(x=><ScenarioCard key={x.mask} x={x} s={s}/>)}</div>
+  </div></Dialog>}</>;
 }
 
 function Method({portfolio:p}:{portfolio:Portfolio}){

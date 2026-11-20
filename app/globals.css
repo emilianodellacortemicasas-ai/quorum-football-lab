@@ -564,3 +564,21 @@ body{background:#eef3ee}
 .sys-legend{border:1px solid #d6e6cc;background:linear-gradient(180deg,#f3fbe9,#fff);border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.55}
 .sys-legend summary{cursor:pointer;font-weight:800;color:#0b3d2a;font-family:Manrope,var(--font);font-size:15px}
 .sys-legend p{color:#2f4a3a;margin-top:8px}.sys-legend ul{margin:6px 0 0 18px;padding:0;color:#2f4a3a}
+.info-dot{display:inline-grid;place-items:center;width:24px;height:24px;margin-left:6px;border-radius:50%;background:linear-gradient(180deg,#14895a,#0f6b46);color:#fff!important;font:800 14px/1 Georgia,serif;font-style:italic;box-shadow:0 2px 0 #073d27,0 0 0 0 rgba(182,242,62,.6);animation:q-pulse 2.4s ease-in-out infinite;vertical-align:middle;cursor:pointer}
+.info-dot:active{transform:translateY(2px);box-shadow:none}
+.scn-inline{display:grid;gap:8px;margin:14px 0;padding:12px;border-radius:14px;background:#f6f9f3;border:1px solid #dbe6d4}
+.scn-title{display:flex;align-items:center;justify-content:space-between}.scn-title b{font-family:Manrope,var(--font);font-size:15px}
+.scn{border-radius:12px;padding:10px 12px;border:1px solid;display:grid;gap:5px;font-size:13px;animation:q-rise .35s ease both}
+.scn.gain{background:#e8f7dd;border-color:#a8dd7c}.scn.part{background:#fbf7e8;border-color:#eadfb0}.scn.loss{background:#fbf0ec;border-color:#efcfc3}
+.scn-head{display:flex;justify-content:space-between;font-weight:800}.scn.gain .scn-head b{color:#0f6b46}.scn.part .scn-head b{color:#8a6a10}.scn.loss .scn-head b{color:#b23c1f}
+.scn-picks{display:flex;flex-wrap:wrap;gap:5px}.scn-picks span{font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px}
+.scn-picks .ok{background:#cfeebc;color:#0f5a3b}.scn-picks .ko{background:#f6d5cb;color:#8a2c14}
+.scn p{color:#2f4a3a;margin:0;line-height:1.5}
+.scn-win{display:inline-block;margin:2px 6px 2px 0;padding:1px 8px;border-radius:7px;background:rgba(255,255,255,.7);font-weight:600}.scn-win i{font-style:normal;color:#0f6b46;margin-left:4px}
+.scn-sum{font-size:12.5px}
+.scn-dialog{padding:8px 26px 26px;display:grid;gap:10px}
+.scn-dialog h3{margin-top:10px}.scn-dialog ol{margin:0 0 0 18px;padding:0;display:grid;gap:4px;color:#2f4a3a}
+.scn-tickets{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.scn-tickets>div{border:1px solid #dfe7da;border-radius:12px;padding:10px;background:#fafcf8}
+.scn-tickets ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px;font-size:13px}.scn-tickets i{font-style:normal;color:#5d6f63;margin-left:4px}
+.scn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
