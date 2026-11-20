@@ -45,6 +45,26 @@ export async function settleAll(limit = 80) {
     ]);
     settledBets++;
   }
+  // 1b. The user's own accumulators (fixture_id 'multi:…', legs in the snapshot). Void legs count as odds 1.
+  const multis = (await db().prepare("SELECT id,portfolio_id,stake_cents,snapshot FROM bets WHERE status='pending' AND fixture_id LIKE 'multi:%' LIMIT ?").bind(limit).all<any>()).results;
+  for (const bet of multis) {
+    let legs: { fixtureId: string; market: string; kickoff: string; odds: number }[] = [];
+    try { legs = JSON.parse(bet.snapshot).legs || []; } catch { continue; }
+    const res: Outcome[] = [];
+    for (const l of legs) {
+      if (l.kickoff > cutoff) { res.push(null); continue; }
+      const v = cache.has(l.fixtureId) || cache.size < limit ? await finalOf(l.fixtureId, cache) : { status: 'pending' };
+      res.push(v.status === 'pending' ? null : resultFor(v as any, l.market) ?? 'void');
+    }
+    const r = ticketOutcome(res); if (!r) continue;
+    const eff = legs.reduce((s, l, i) => s * (res[i] === 'void' ? 1 : l.odds), 1);
+    const pnl = r === 'won' ? Math.round(bet.stake_cents * (eff - 1)) : r === 'lost' ? -bet.stake_cents : 0;
+    await db().batch([
+      db().prepare("UPDATE bets SET status=?,pnl_cents=?,settled_at=? WHERE id=? AND status='pending'").bind(r, pnl, now(), bet.id),
+      db().prepare('INSERT INTO portfolio_revisions (portfolio_id,revision) VALUES (?,1) ON CONFLICT(portfolio_id) DO UPDATE SET revision=revision+1').bind(bet.portfolio_id),
+    ]);
+    settledBets++;
+  }
   // 2. Every evaluated outcome of the scanner (all runs share the same fixture/market result).
   const pairs = (await db().prepare('SELECT DISTINCT fixture_id,market FROM scanner_rows WHERE result IS NULL AND kickoff < ? LIMIT 2000').bind(cutoff).all<any>()).results;
   const updates: D1PreparedStatement[] = [];
@@ -94,4 +114,28 @@ export async function weeklyBomb() {
   const d = new Date(day + 'T12:00:00Z'), monday = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
   const r = await db().prepare('SELECT id,kind,title,legs,odds,p,created_at,result FROM scanner_tickets WHERE id=?').bind('bomba2:' + monday).first<any>();
   return r ? { ...r, legs: JSON.parse(r.legs), week: monday } : null;
+}
+
+// The user's own recorded plays (all portfolios), with QUORUM's expectation next to the real outcome.
+export async function myPlays(owner: string) {
+  const rows = (await db().prepare("SELECT id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,snapshot,status,pnl_cents,created_at,settled_at FROM bets WHERE owner=? ORDER BY created_at DESC LIMIT 300").bind(owner).all<any>()).results;
+  const plays = rows.map(r => {
+    let legs: any[] = [];
+    if (String(r.fixture_id).startsWith('multi:')) { try { legs = JSON.parse(r.snapshot).legs || []; } catch { } }
+    else legs = [{ fixture: r.fixture, label: r.market_label, odds: r.odds }];
+    return { id: r.id, kind: legs.length > 1 ? 'multipla' : 'singola', source: r.source, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at, settledAt: r.settled_at };
+  });
+  const closed = plays.filter(x => x.status === 'won' || x.status === 'lost'), staked = closed.reduce((s, x) => s + x.stakeCents, 0), pnl = closed.reduce((s, x) => s + x.pnlCents, 0);
+  const group = (f: (x: typeof plays[number]) => boolean) => { const c = closed.filter(f), st = c.reduce((s, x) => s + x.stakeCents, 0); return { n: c.length, won: c.filter(x => x.status === 'won').length, expected: c.reduce((s, x) => s + x.p, 0), pnlCents: c.reduce((s, x) => s + x.pnlCents, 0), roi: st ? c.reduce((s, x) => s + x.pnlCents, 0) / st : null }; };
+  return {
+    plays,
+    summary: { total: plays.length, open: plays.filter(x => x.status === 'pending').length, closed: closed.length, won: closed.filter(x => x.status === 'won').length, expected: closed.reduce((s, x) => s + x.p, 0), stakedCents: staked, pnlCents: pnl, roi: staked ? pnl / staked : null },
+    bySource: [
+      { key: 'quorum', label: 'Schedine proposte da QUORUM', ...group(x => String(x.source).startsWith('mine:schedina')) },
+      { key: 'builder', label: 'Costruite da te', ...group(x => x.source === 'mine:builder') },
+      { key: 'value', label: 'Value bet', ...group(x => x.source === 'mine:value') },
+      { key: 'match', label: 'Dal Centro partita', ...group(x => !String(x.source).startsWith('mine:')) },
+    ],
+    byKind: [{ key: 'singola', label: 'Singole', ...group(x => x.kind === 'singola') }, { key: 'multipla', label: 'Multiple', ...group(x => x.kind === 'multipla') }],
+  };
 }

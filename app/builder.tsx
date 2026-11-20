@@ -3,10 +3,10 @@
 // (Lottomatica / Planetwin365 when available), the most probable outcomes and the value ones highlighted.
 // The user builds a free ticket of any size; QUORUM measures it (reliability, value, stake, potential win).
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, FlaskConical, Info, Plus, RefreshCw, Search, Star, Trash2, X } from 'lucide-react';
+import { Check, Copy, FlaskConical, Info, Plus, RefreshCw, Search, Star, Trash2, X } from 'lucide-react';
 import { marketLabel, money, percent } from '../lib/math';
 import { ticketReliability } from '../lib/calibration';
-import type { Selection } from '../lib/types';
+import type { RecordPlay, Selection } from '../lib/types';
 import { Count, Ring } from './motion';
 
 type Opt = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
@@ -45,7 +45,8 @@ function toOptions(r: any): Match | null {
   return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best };
 }
 
-export function BuilderView({ equityCents, onLab, notify }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void }) {
+export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
+  const [saving, setSaving] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [slip, setSlip] = useState<Opt[]>([]), [league, setLeague] = useState('Tutte'), [q, setQ] = useState(''), [sort, setSort] = useState<'time' | 'prob'>('time');
   const [open, setOpen] = useState<Record<string, boolean>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
@@ -134,6 +135,7 @@ export function BuilderView({ equityCents, onLab, notify }: { equityCents: numbe
         <label className="slip-stake">Puntata (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value)} placeholder={(suggested / 100).toFixed(2).replace('.', ',')} /></label>
         <p className={'stake-line ' + (ev > 0 ? 'go' : 'min')}>{ev > 0 ? 'Puntata consigliata ' + money(suggested) + ' (gestione del capitale).' : 'La quota non ripaga il rischio: se la giochi, punta il minimo (' + money(200) + ').'} Vincita potenziale: <b>{money(Math.round(stake * odds))}</b></p>
         {slip.some(l => !l.italian) && <p className="small-note">Alcuni esiti non sono quotati da Lottomatica / Planetwin365 (*): la quota reale può essere diversa.</p>}
+        <button className="lime-button slip-record" disabled={saving || !onRecord || stake < 100} onClick={async () => { if (!onRecord) return; setSaving(true); const ok = await onRecord(slip, stake, 'builder'); setSaving(false); if (ok) { setSlip([]); setStakeText(''); setSheet(false); notify('Giocata registrata: la trovi in Risultati, si regola da sola a fine partite.'); } }}><Check size={16} />{saving ? 'Registro…' : 'Registra la giocata'}</button>
         <div className="slip-actions"><button className="primary" onClick={copy}><Copy size={15} />Copia schedina</button><button className="secondary" onClick={() => onLab(slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds })))}><FlaskConical size={15} />Sistemi nel Laboratorio</button></div>
       </>}
     </aside>

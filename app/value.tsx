@@ -1,6 +1,7 @@
 'use client';
+import type { RecordPlay } from '../lib/types';
 import { useEffect, useState } from 'react';
-import { ArrowRight, Info, RefreshCw, TrendingUp } from 'lucide-react';
+import { Check, ArrowRight, Info, RefreshCw, TrendingUp } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import { evaluateOutcome } from '../lib/scanner-contract';
 
@@ -11,7 +12,7 @@ type Data = { run: Run | null; last: Run | null; picks: Pick[]; evaluated: numbe
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const signed = (p: number) => (p >= 0 ? '+' : '') + percent(p);
 
-export function ValueView({ equityCents, onOpen, notify }: { equityCents: number; onOpen: (fixtureId: string) => void; notify: (m: string) => void }) {
+export function ValueView({ equityCents, onOpen, notify, onRecord }: { equityCents: number; onOpen: (fixtureId: string) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
   const [data, setData] = useState<Data | null>(null), [loading, setLoading] = useState(true), [scanning, setScanning] = useState(false), [error, setError] = useState('');
   const [league, setLeague] = useState('Tutte'), [onlyChecked, setOnlyChecked] = useState(false), [onlyIt, setOnlyIt] = useState(false);
   async function load() {
@@ -60,7 +61,8 @@ export function ValueView({ equityCents, onOpen, notify }: { equityCents: number
           {p.it_odds ? <div className={'value-it ' + (itOk ? 'ok' : 'no')}><span>{p.it_book}</span><b>{p.it_odds.toFixed(2)}</b><em>{itOk ? signed(p.it_edge!) + ' valore' : 'senza valore (' + signed(p.it_edge!) + ')'}</em></div>
             : <div className="value-it none"><span>Lottomatica / Planetwin365</span><em>quota non disponibile per questo mercato</em></div>}
           <dl><div><dt>Modello</dt><dd>{percent(p.p_model)}</dd></div><div><dt>Mercato</dt><dd>{percent(p.p_market)}</dd></div><div><dt>Stima QUORUM</dt><dd>{percent(p.p_blend)}</dd></div><div><dt>{p.it_odds ? 'Puntata su ' + p.it_book : 'Puntata indicativa'}</dt><dd>{stake > 0 ? money(stake) + (atMin ? ' (minimo)' : '') : '—'}<small>{atMin ? 'calcolata ' + money(Math.round(equityCents * k)) + ', sotto la giocata minima' : percent(k) + ' del capitale'}</small></dd></div></dl>
-          <button className="text-button" onClick={() => onOpen(p.fixture_id)}>Apri la partita<ArrowRight size={15} /></button>
+          <div className="value-actions">{onRecord && <button className="secondary played-button" onClick={() => onRecord([{ fixtureId: p.fixture_id, fixture: p.fixture, competition: p.competition, kickoff: p.kickoff, market: p.market, label: p.label, p: p.p_blend, odds: p.it_odds || p.best_odds }], stake || 200, 'value')}><Check size={15} />L’ho giocata ({money(stake || 200)})</button>}
+          <button className="text-button" onClick={() => onOpen(p.fixture_id)}>Apri la partita<ArrowRight size={15} /></button></div>
         </article>;
       })}</div>}
     <p className="footnote">Vedi tutti gli esiti con valore positivo. “Supera i controlli” significa: valore ≥ 3%, quota ≤ 4,50, almeno 5 bookmaker e modello non troppo lontano dal mercato. Stima QUORUM = 35% modello + 65% consenso del mercato senza margine. Valore = stima × quota migliore − 1 (quota migliore entro il 6% della mediana: i prezzi isolati sono esclusi). Puntata indicativa = ¼ di Kelly, massimo 2% del capitale del portafoglio selezionato. Il modello non è ancora validato dal backtest: tratta queste giocate come segnali da verificare. Le quote cambiano: controlla quella del tuo bookmaker prima di giocare.</p>
