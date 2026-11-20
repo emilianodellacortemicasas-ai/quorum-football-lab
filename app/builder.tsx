@@ -46,7 +46,9 @@ function toOptions(r: any): Match | null {
 }
 
 export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false), [share, setShare] = useState(false);
+  useEffect(() => { try { setShare(localStorage.getItem('quorum-share') === '1'); } catch { } }, []);
+  const toggleShare = (v: boolean) => { setShare(v); try { localStorage.setItem('quorum-share', v ? '1' : '0'); } catch { } };
   const [matches, setMatches] = useState<Match[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [slip, setSlip] = useState<Opt[]>([]), [league, setLeague] = useState('Tutte'), [q, setQ] = useState(''), [sort, setSort] = useState<'time' | 'prob'>('time');
   const [open, setOpen] = useState<Record<string, boolean>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
@@ -135,7 +137,8 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
         <label className="slip-stake">Puntata (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value)} placeholder={(suggested / 100).toFixed(2).replace('.', ',')} /></label>
         <p className={'stake-line ' + (ev > 0 ? 'go' : 'min')}>{ev > 0 ? 'Puntata consigliata ' + money(suggested) + ' (gestione del capitale).' : 'La quota non ripaga il rischio: se la giochi, punta il minimo (' + money(200) + ').'} Vincita potenziale: <b>{money(Math.round(stake * odds))}</b></p>
         {slip.some(l => !l.italian) && <p className="small-note">Alcuni esiti non sono quotati da Lottomatica / Planetwin365 (*): la quota reale può essere diversa.</p>}
-        <button className="lime-button slip-record" disabled={saving || !onRecord || stake < 100} onClick={async () => { if (!onRecord) return; setSaving(true); const ok = await onRecord(slip, stake, 'builder'); setSaving(false); if (ok) { setSlip([]); setStakeText(''); setSheet(false); notify('Giocata registrata: la trovi in Risultati, si regola da sola a fine partite.'); } }}><Check size={16} />{saving ? 'Registro…' : 'Registra la giocata'}</button>
+        <label className="share-toggle"><input type="checkbox" checked={share} onChange={e => toggleShare(e.target.checked)} /><span>Condividi con gli altri utenti di QUORUM</span></label>
+        <button className="lime-button slip-record" disabled={saving || !onRecord || stake < 100} onClick={async () => { if (!onRecord) return; setSaving(true); const ok = await onRecord(slip, stake, 'builder'); setSaving(false); if (ok) { setSlip([]); setStakeText(''); setSheet(false); notify(share ? 'Giocata registrata e condivisa: la vedono anche gli altri in Risultati.' : 'Giocata registrata: la trovi in Risultati, si regola da sola a fine partite.'); } }}><Check size={16} />{saving ? 'Registro…' : 'Registra la giocata'}</button>
         <div className="slip-actions"><button className="primary" onClick={copy}><Copy size={15} />Copia schedina</button><button className="secondary" onClick={() => onLab(slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds })))}><FlaskConical size={15} />Sistemi nel Laboratorio</button></div>
       </>}
     </aside>

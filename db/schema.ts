@@ -15,7 +15,8 @@ export const bets = sqliteTable('bets', {
   modelVersion: text('model_version').notNull(), snapshot: text('snapshot').notNull(),
   status: text('status').notNull().default('pending'), pnlCents: integer('pnl_cents').notNull().default(0),
   createdAt: text('created_at').notNull(), settledAt: text('settled_at'),
-}, t => [index('bets_owner_portfolio').on(t.owner, t.portfolioId)]);
+  shared: integer('shared').notNull().default(0), author: text('author'),
+}, t => [index('bets_shared').on(t.shared, t.createdAt), index('bets_owner_portfolio').on(t.owner, t.portfolioId)]);
 export const locks = sqliteTable('portfolio_revisions', {
   portfolioId: text('portfolio_id').primaryKey().references(() => portfolios.id), revision: integer('revision').notNull().default(0),
 });

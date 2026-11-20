@@ -82,15 +82,19 @@ export async function POST(request:Request) {
       } else if(body.action==='ticket'){
         // A play chosen by the user (from Costruisci, Schedine or Valore): 1–30 legs on different matches, not started.
         const leg=z.object({fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(60),label:z.string().min(1).max(80),p:z.number().min(0.001).max(0.999),odds:z.number().min(1.01).max(1000)}).strict();
-        const t=z.object({legs:z.array(leg).min(1).max(30),stakeCents:z.number().int().min(100).max(100000000),source:z.enum(['builder','value','schedina']),kind:z.string().max(40).optional()}).parse(body);
+        const t=z.object({legs:z.array(leg).min(1).max(30),stakeCents:z.number().int().min(100).max(100000000),source:z.enum(['builder','value','schedina']),kind:z.string().max(40).optional(),shared:z.boolean().optional()}).parse(body);
         if(new Set(t.legs.map(l=>l.fixtureId)).size!==t.legs.length)return failure('Un solo esito per partita.');
         if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now())))return failure('Una partita è già iniziata: toglila dalla schedina.');
         const existing=await db.select().from(bets).where(and(eq(bets.owner,owner),eq(bets.portfolioId,portfolioId)));
         const risk=riskCheck(p as Portfolio,existing as Bet[],t.stakeCents);if(!risk.allowed)return failure(risk.reasons.join(' '));
         const odds=Math.round(t.legs.reduce((s,l)=>s*l.odds,1)*1000)/1000,prob=t.legs.reduce((s,l)=>s*l.p,1),one=t.legs.length===1?t.legs[0]:null;
-        const source='mine:'+t.source+(t.kind?':'+t.kind:''),now=new Date().toISOString();
-        statement=raw.prepare('INSERT INTO bets (id,owner,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,model_version,snapshot,status,pnl_cents,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?')
-          .bind(crypto.randomUUID(),owner,portfolioId,one?one.fixtureId:'multi:'+crypto.randomUUID(),one?one.fixture:'Multipla · '+t.legs.length+' eventi',one?one.competition:'Multipla',one?one.market:'multi',one?one.label:t.legs.map(l=>l.label).join(' + ').slice(0,200),prob,odds,t.stakeCents,source,'quorum-v2.1',JSON.stringify({legs:t.legs,kickoff:t.legs.map(l=>l.kickoff).sort()[0]}),'pending',0,now,portfolioId,revision);
+        const source='mine:'+t.source+(t.kind?':'+t.kind:''),now=new Date().toISOString(),authorName=(p as any).name||'Utente';
+        statement=raw.prepare('INSERT INTO bets (id,owner,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,model_version,snapshot,status,pnl_cents,created_at,shared,author) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?')
+          .bind(crypto.randomUUID(),owner,portfolioId,one?one.fixtureId:'multi:'+crypto.randomUUID(),one?one.fixture:'Multipla · '+t.legs.length+' eventi',one?one.competition:'Multipla',one?one.market:'multi',one?one.label:t.legs.map(l=>l.label).join(' + ').slice(0,200),prob,odds,t.stakeCents,source,'quorum-v2.1',JSON.stringify({legs:t.legs,kickoff:t.legs.map(l=>l.kickoff).sort()[0]}),'pending',0,now,t.shared?1:0,authorName,portfolioId,revision);
+      } else if(body.action==='share'){
+        // Show or hide one of the user's own plays to the other users of QUORUM.
+        const b=z.object({id:z.string().max(80),shared:z.boolean()}).parse(body);
+        statement=raw.prepare('UPDATE bets SET shared=?,author=COALESCE(author,?) WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(b.shared?1:0,(p as any).name||'Utente',b.id,owner,portfolioId,portfolioId,revision);
       } else if(body.action==='settle'){
         const b=z.object({id:z.string(),status:z.enum(['won','lost','void'])}).parse(body);
         const bet=(await db.select().from(bets).where(and(eq(bets.id,b.id),eq(bets.owner,owner),eq(bets.portfolioId,portfolioId))))[0];

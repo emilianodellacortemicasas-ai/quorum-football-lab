@@ -118,12 +118,12 @@ export async function weeklyBomb() {
 
 // The user's own recorded plays (all portfolios), with QUORUM's expectation next to the real outcome.
 export async function myPlays(owner: string) {
-  const rows = (await db().prepare("SELECT id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,snapshot,status,pnl_cents,created_at,settled_at FROM bets WHERE owner=? ORDER BY created_at DESC LIMIT 300").bind(owner).all<any>()).results;
+  const rows = (await db().prepare("SELECT id,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,snapshot,status,pnl_cents,created_at,settled_at,shared FROM bets WHERE owner=? ORDER BY created_at DESC LIMIT 300").bind(owner).all<any>()).results;
   const plays = rows.map(r => {
     let legs: any[] = [];
     if (String(r.fixture_id).startsWith('multi:')) { try { legs = JSON.parse(r.snapshot).legs || []; } catch { } }
     else legs = [{ fixture: r.fixture, label: r.market_label, odds: r.odds }];
-    return { id: r.id, kind: legs.length > 1 ? 'multipla' : 'singola', source: r.source, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at, settledAt: r.settled_at };
+    return { id: r.id, portfolioId: r.portfolio_id, shared: !!r.shared, kind: legs.length > 1 ? 'multipla' : 'singola', source: r.source, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at, settledAt: r.settled_at };
   });
   const closed = plays.filter(x => x.status === 'won' || x.status === 'lost'), staked = closed.reduce((s, x) => s + x.stakeCents, 0), pnl = closed.reduce((s, x) => s + x.pnlCents, 0);
   const group = (f: (x: typeof plays[number]) => boolean) => { const c = closed.filter(f), st = c.reduce((s, x) => s + x.stakeCents, 0); return { n: c.length, won: c.filter(x => x.status === 'won').length, expected: c.reduce((s, x) => s + x.p, 0), pnlCents: c.reduce((s, x) => s + x.pnlCents, 0), roi: st ? c.reduce((s, x) => s + x.pnlCents, 0) / st : null }; };
@@ -138,4 +138,20 @@ export async function myPlays(owner: string) {
     ],
     byKind: [{ key: 'singola', label: 'Singole', ...group(x => x.kind === 'singola') }, { key: 'multipla', label: 'Multiple', ...group(x => x.kind === 'multipla') }],
   };
+}
+
+// Plays that users chose to share, from everyone (own included, flagged), with each author's track record.
+export async function sharedPlays(owner: string) {
+  const rows = (await db().prepare("SELECT id,owner,author,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,snapshot,status,pnl_cents,created_at FROM bets WHERE shared=1 ORDER BY created_at DESC LIMIT 120").all<any>()).results;
+  const plays = rows.map(r => {
+    let legs: any[] = [];
+    if (String(r.fixture_id).startsWith('multi:')) { try { legs = JSON.parse(r.snapshot).legs || []; } catch { } }
+    else { let k = ''; try { k = JSON.parse(r.snapshot)?.legs?.[0]?.kickoff ?? ''; } catch { } legs = [{ fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, market: r.market, label: r.market_label, odds: r.odds, p: r.probability, kickoff: k }]; }
+    return { id: r.id, mine: r.owner === owner, author: r.author || 'Utente', legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at };
+  });
+  const authors = [...new Set(plays.map(x => x.author))].map(a => {
+    const c = plays.filter(x => x.author === a && (x.status === 'won' || x.status === 'lost')), st = c.reduce((s, x) => s + x.stakeCents, 0), pnl = c.reduce((s, x) => s + x.pnlCents, 0);
+    return { author: a, mine: plays.some(x => x.author === a && x.mine), n: c.length, won: c.filter(x => x.status === 'won').length, pnlCents: pnl, roi: st ? pnl / st : null, open: plays.filter(x => x.author === a && x.status === 'pending').length };
+  });
+  return { plays, authors };
 }

@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Info, ListPlus, RefreshCw, Trophy } from 'lucide-react';
+import { Copy, Info, ListPlus, RefreshCw, Share2, Trophy, Users } from 'lucide-react';
 import { money, percent } from '../lib/math';
 
 type Agg = { n: number; won: number; hit: number | null; profit: number; roi: number | null; expectedHit?: number | null };
@@ -12,9 +12,9 @@ function Box({ title, a, note }: { title: string; a: Agg; note?: string }) {
   return <div className="res-box"><span>{title}</span>{a.n ? <><b>{percent(a.hit ?? 0, 0)} prese</b><small>{a.won} su {a.n} · profitto {signed(a.profit)} unità · ROI {a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)}</small>{note && <small>{note}</small>}</> : <><b>—</b><small>Nessuna giocata conclusa ancora.</small></>}</div>;
 }
 
-function MyPlays({ onGo, refreshKey }: { onGo?: (v: string) => void; refreshKey?: number }) {
-  const [m, setM] = useState<any>(null);
-  useEffect(() => { fetch('/api/scanner?view=mine', { cache: 'no-store' }).then(r => r.json()).then(setM).catch(() => setM({ plays: [], summary: { total: 0 } })); }, [refreshKey]);
+function MyPlays({ onGo, refreshKey, onShare }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean> }) {
+  const [m, setM] = useState<any>(null), [tick, setTick] = useState(0);
+  useEffect(() => { fetch('/api/scanner?view=mine', { cache: 'no-store' }).then(r => r.json()).then(setM).catch(() => setM({ plays: [], summary: { total: 0 } })); }, [refreshKey, tick]);
   if (!m) return null;
   const s = m.summary, euro = (c: number) => (c >= 0 ? '+' : '−') + money(Math.abs(c));
   const box = (g: any) => <div className="res-box" key={g.key}><span>{g.label}</span>{g.n ? <><b className={g.pnlCents >= 0 ? 'pos' : 'neg'}>{euro(g.pnlCents)}</b><small>{g.won} vinte su {g.n} (QUORUM ne prevedeva {Math.round(g.expected)}) · ROI {g.roi === null ? '—' : (g.roi >= 0 ? '+' : '') + percent(g.roi)}</small></> : <><b>—</b><small>nessuna giocata chiusa</small></>}</div>;
@@ -32,20 +32,50 @@ function MyPlays({ onGo, refreshKey }: { onGo?: (v: string) => void; refreshKey?
         <div className="my-play-head"><span>{x.kind === 'multipla' ? 'Multipla · ' + x.legs.length + ' eventi' : 'Singola'} · {when(x.createdAt)}</span><b>{x.status === 'pending' ? 'In corso' : x.status === 'won' ? 'Vinta ' + euro(x.pnlCents) : x.status === 'lost' ? 'Persa ' + euro(x.pnlCents) : 'Rimborsata'}</b></div>
         <ul>{x.legs.map((l: any, i: number) => <li key={i}><span>{l.fixture}</span><b>{l.label}</b><i>{Number(l.odds).toFixed(2)}</i></li>)}</ul>
         <div className="my-play-foot"><span>Quota {Number(x.odds).toFixed(2)} · puntata {money(x.stakeCents)}</span><span>Probabilità QUORUM {percent(x.p, x.p < 0.1 ? 1 : 0)}</span></div>
+        {onShare && <button className={'share-chip' + (x.shared ? ' on' : '')} onClick={async () => { if (await onShare(x.id, x.portfolioId, !x.shared)) setTick(t => t + 1); }}><Share2 size={13} />{x.shared ? 'Condivisa · tocca per nasconderla' : 'Condividi con gli altri'}</button>}
       </article>)}</div>
     </>}
   </section>;
 }
 
-export function ResultsView({ onGo, refreshKey }: { onGo?: (v: string) => void; refreshKey?: number }) {
-  const [d, setD] = useState<any>(null), [err, setErr] = useState(''), [loading, setLoading] = useState(true);
+const SLIP_KEY = 'quorum-slip-v1';
+function SharedPlays({ onGo, refreshKey }: { onGo?: (v: string) => void; refreshKey?: number }) {
+  const [d, setD] = useState<any>(null), [who, setWho] = useState('Tutti');
+  useEffect(() => { fetch('/api/scanner?view=shared', { cache: 'no-store' }).then(r => r.json()).then(setD).catch(() => setD({ plays: [], authors: [] })); }, [refreshKey]);
+  if (!d) return null;
+  const euro = (c: number) => (c >= 0 ? '+' : '−') + money(Math.abs(c));
+  const open = (x: any) => x.status === 'pending' && x.legs.every((l: any) => l.kickoff && Date.parse(l.kickoff) > Date.now());
+  function copy(x: any) {
+    const legs = x.legs.map((l: any) => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, group: '', p: l.p, odds: l.odds, bookmaker: 'Lottomatica / Planetwin365', italian: true, se: Math.sqrt(l.p * (1 - l.p) / 40), value: l.p * l.odds - 1 }));
+    try { localStorage.setItem(SLIP_KEY, JSON.stringify(legs)); } catch { }
+    onGo?.('builder');
+  }
+  const list = d.plays.filter((x: any) => who === 'Tutti' || x.author === who);
+  return <section className="reliability shared-plays">
+    <div className="rel-head"><strong><Users size={16} /> Giocate condivise</strong><span>Le giocate che gli utenti di QUORUM hanno scelto di condividere, con il loro esito. Le tue le condividi da “Le tue giocate”.</span></div>
+    {!d.plays.length ? <p className="small-note">Ancora nessuna giocata condivisa. Quando registri una schedina spunta “Condividi con gli altri utenti”, oppure tocca “Condividi” su una giocata qui sopra.</p> : <>
+      <div className="author-row">{d.authors.map((a: any) => <button key={a.author} className={'author-card' + (who === a.author ? ' on' : '')} onClick={() => setWho(who === a.author ? 'Tutti' : a.author)}><b>{a.author}{a.mine ? ' (tu)' : ''}</b><span className={a.pnlCents >= 0 ? 'pos' : 'neg'}>{a.n ? euro(a.pnlCents) : '—'}</span><small>{a.n ? a.won + ' vinte su ' + a.n + ' · ROI ' + (a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)) : 'nessuna chiusa'}{a.open ? ' · ' + a.open + ' in corso' : ''}</small></button>)}</div>
+      <div className="my-list">{list.slice(0, 40).map((x: any) => <article key={x.id} className={'my-play st-' + x.status}>
+        <div className="my-play-head"><span><b className="author-tag">{x.author}{x.mine ? ' · tu' : ''}</b> · {x.legs.length > 1 ? 'Multipla · ' + x.legs.length + ' eventi' : 'Singola'} · {when(x.createdAt)}</span><b>{x.status === 'pending' ? 'In corso' : x.status === 'won' ? 'Vinta ' + euro(x.pnlCents) : x.status === 'lost' ? 'Persa ' + euro(x.pnlCents) : 'Rimborsata'}</b></div>
+        <ul>{x.legs.map((l: any, i: number) => <li key={i}><span>{l.fixture}</span><b>{l.label}</b><i>{Number(l.odds).toFixed(2)}</i></li>)}</ul>
+        <div className="my-play-foot"><span>Quota {Number(x.odds).toFixed(2)} · puntata {money(x.stakeCents)}</span><span>Probabilità QUORUM {percent(x.p, x.p < 0.1 ? 1 : 0)}</span></div>
+        {!x.mine && open(x) && <button className="share-chip on" onClick={() => copy(x)}><Copy size={13} />Copia nella mia schedina</button>}
+      </article>)}</div>
+    </>}
+  </section>;
+}
+
+export function ResultsView({ onGo, refreshKey, onShare }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean> }) {
+  const [d, setD] = useState<any>(null), [err, setErr] = useState(''), [loading, setLoading] = useState(true), [t, setT] = useState(0);
+  const share = onShare ? async (id: string, pid: string, v: boolean) => { const ok = await onShare(id, pid, v); if (ok) setT(x => x + 1); return ok; } : undefined;
   useEffect(() => { fetch('/api/scanner?view=performance', { cache: 'no-store' }).then(async r => { const j: any = await r.json(); if (!r.ok) throw new Error(j.error); setD(j); }).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, []);
   return <>
     <div className="page-heading"><div><p className="eyebrow">RISULTATI</p><h1>I numeri non mentono<span>.</span></h1><p>Regolamento automatico ogni 3 ore: QUORUM segna da solo vinte e perse di value bet, schedine e giocate del tuo portafoglio.</p></div></div>
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Calcolo il rendimento…</h3></div>
       : err ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Risultati non disponibili</h3><p>{err}</p></div>
       : <>
-        <MyPlays onGo={onGo} refreshKey={refreshKey} />
+        <MyPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} onShare={share} />
+        <SharedPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} />
         <section className="reliability"><div className="rel-head"><strong>Value bet</strong><span>Puntata fissa di 1 unità alla quota migliore vista prima del calcio d'inizio.</span></div>
           <div className="rel-grid"><Box title="Tutte le value bet" a={d.value} note={d.value.expectedHit !== null && d.value.n ? 'attese ' + percent(d.value.expectedHit, 0) : undefined} />{d.valueByMarket.map((g: any) => <Box key={g.group} title={g.group} a={g} />)}</div></section>
         <section className="reliability"><div className="rel-head"><strong>Quota di chiusura</strong><span>Quota quando QUORUM ha proposto la giocata, confrontata con l’ultima quota prima del calcio d’inizio. Batterla spesso è il segnale più affidabile che il metodo funziona.</span></div>

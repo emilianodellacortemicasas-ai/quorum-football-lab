@@ -507,3 +507,15 @@ body{background:#eef3ee}
 @media (min-width:761px){.more-sheet{display:none}}
 @media (max-width:760px){.my-plays .my-summary{grid-template-columns:1fr 1fr}}
 .mobile-nav{grid-template-columns:repeat(6,minmax(0,1fr))!important}.mobile-nav>button span{font-size:10.5px;white-space:nowrap}
+/* Condivisione */
+.share-toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#24412f;cursor:pointer}
+.share-toggle input{width:18px;height:18px;accent-color:#0f6b46}
+.share-chip{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;font-weight:700;color:#24412f;background:#f1f5ef;border:1px solid #d3ddcf;border-radius:999px;padding:5px 11px;box-shadow:0 2px 0 #d3ddcf}
+.share-chip:active{transform:translateY(2px);box-shadow:none}
+.share-chip.on{background:linear-gradient(180deg,#cdff6a,#b6f23e);border-color:#9fd93a;color:#10301f;box-shadow:0 2px 0 #7fb11c}
+.shared-plays .rel-head strong{display:inline-flex;align-items:center;gap:6px}
+.author-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin:6px 0 4px}
+.author-card{flex:0 0 auto;min-width:180px;display:grid;gap:2px;text-align:left;padding:11px 14px;border-radius:14px;background:linear-gradient(180deg,#fff,#f4f9f0);border:1px solid #d8e3d4;box-shadow:0 3px 0 #d8e3d4}
+.author-card.on{border-color:#0f6b46;box-shadow:0 3px 0 #0b5236}
+.author-card b{font-size:15px}.author-card span{font-size:20px;font-weight:800;font-family:Manrope,var(--font)}.author-card small{font-size:11px;color:#6b7a70}
+.author-tag{color:#0f6b46}

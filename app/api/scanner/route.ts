@@ -4,7 +4,7 @@ import { kindFactor, ticketReliability } from '../../../lib/calibration';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
-import { myPlays, weeklyBomb, performance } from '../../../lib/settle';
+import { myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function GET(request:Request){
@@ -15,6 +15,7 @@ export async function GET(request:Request){
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='performance')return reply(await performance());
+  if(view==='shared'){const who=await getIdentity(request);return reply(await sharedPlays(who!.userId));}
   if(view==='mine'){const who=await getIdentity(request);return reply(await myPlays(who!.userId));}
   if(view==='tickets'){
    const p=await latestPredictions(),[cal,perf,history]=await Promise.all([loadCalibration().catch(()=>null),performance().catch(()=>null),env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null)]);
