@@ -33,7 +33,8 @@ const resultFor = (v: { status: string; final?: Final }, market: string): Outcom
 
 // Runs after every scan. Only matches started more than 2.5 hours ago are checked.
 export async function settleAll(limit = 80) {
-  const cutoff = new Date(Date.now() - 2.5 * 3600000).toISOString(), cache = new Map<string, { status: string; final?: Final }>();
+  // A match can be final ~1h50 after kickoff; the provider's state (FT) is always checked before settling.
+  const cutoff = new Date(Date.now() - 110 * 60000).toISOString(), cache = new Map<string, { status: string; final?: Final }>();
   let settledBets = 0, settledRows = 0, settledTickets = 0;
   // 1. Portfolio bets (fixture kickoff is in the stored snapshot; Sportmonks ids only).
   const bets = (await db().prepare("SELECT id,portfolio_id,fixture_id,market,odds,stake_cents FROM bets WHERE status='pending' AND fixture_id LIKE 'sm-%' LIMIT ?").bind(limit).all<any>()).results;
@@ -78,6 +79,15 @@ export async function settleAll(limit = 80) {
       if (l.kickoff > cutoff) { res.push(null); continue; }
       const v = cache.has(l.fixtureId) || cache.size < limit ? await finalOf(l.fixtureId, cache) : { status: 'pending' };
       res.push(v.status === 'pending' ? null : resultFor(v as any, l.market) ?? 'void');
+    }
+    // Already lost: every combination of every class contains at least one lost match.
+    const anyAlive = classes.some(({ k }) => { let alive = false; const visit = (st: number, combo: number[]) => { if (alive) return; if (combo.length === k) { if (combo.every(i => res[i] !== 'lost')) alive = true; return; } for (let i = st; i < legs.length; i++) visit(i + 1, [...combo, i]); }; visit(0, []); return alive; });
+    if (!anyAlive) {
+      await db().batch([
+        db().prepare("UPDATE bets SET status='lost',pnl_cents=?,settled_at=? WHERE id=? AND status='pending'").bind(-bet.stake_cents, now(), bet.id),
+        db().prepare('INSERT INTO portfolio_revisions (portfolio_id,revision) VALUES (?,1) ON CONFLICT(portfolio_id) DO UPDATE SET revision=revision+1').bind(bet.portfolio_id),
+      ]);
+      settledBets++; continue;
     }
     if (res.some(x => x === null)) continue;
     let payout = 0;
@@ -188,4 +198,12 @@ export async function sharedPlays(owner: string) {
     return { author: a, mine: plays.some(x => x.author === a && x.mine), n: c.length, won: c.filter(x => x.status === 'won').length, pnlCents: pnl, roi: st ? pnl / st : null, open: plays.filter(x => x.author === a && x.status === 'pending').length };
   });
   return { plays, authors };
+}
+
+// Settlement on demand (opening Risultati), at most once every 5 minutes for everyone.
+export async function settleIfDue() {
+  const row = await db().prepare("SELECT built_at FROM model_state WHERE id='settle:last'").first<{ built_at: string }>();
+  if (row && Date.now() - Date.parse(row.built_at) < 5 * 60000) return null;
+  await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('settle:last',?,'{}') ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at").bind(now()).run();
+  return settleAll(60);
 }
