@@ -63,7 +63,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord }: { equityCe
           return <>
             {data.sure && data.sure.length > 0 && <>
               <h3 className="day-title">🛡️ Raddoppi sicuri</h3>
-              <p className="small-note">Il metodo dei tipster: 2 o al massimo 3 esiti molto probabili per arrivare a quota 2. QUORUM sceglie i più affidabili tra le partite delle prossime 72 ore, solo con quote Lottomatica / Planetwin365 e senza squadre con assenze pesanti. Tre schedine su partite diverse.</p>
+              <p className="small-note">Il metodo dei tipster: 2 o al massimo 3 esiti molto probabili per arrivare a quota 2. QUORUM sceglie i più affidabili tra le partite dei prossimi 4 giorni, solo con quote Lottomatica / Planetwin365 e senza squadre con assenze pesanti. Tre schedine su partite diverse.</p>
               <div className="value-list">{data.sure.map(t => card(t))}</div>
             </>}
             <h3 className="day-title">📈 Per far crescere il capitale</h3>
