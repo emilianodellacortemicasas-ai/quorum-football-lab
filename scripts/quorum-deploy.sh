@@ -33,19 +33,35 @@ npm run build
 $WRANGLER deploy --config dist/server/wrangler.json
 
 echo "== 4. Segreti =="
-EXISTING="$($WRANGLER secret list --name "$QUORUM_WORKER_NAME" --format json 2>/dev/null || echo '[]')"
-has() { echo "$EXISTING" | grep -q "\"$1\""; }
-if ! has QUORUM_KEY_PRIVATE_JWK; then
-  # First run only. Never regenerate while encrypted credentials exist in D1.
-  node scripts/quorum-generate-vault.mjs "$TMP/vault.json"
-  $WRANGLER secret bulk "$TMP/vault.json" --name "$QUORUM_WORKER_NAME" >/dev/null
-fi
-node -e '
+# The secret list must be read successfully: a failed read must never be mistaken for "first run",
+# otherwise the vault would be regenerated and every saved key would become unreadable.
+EXISTING=""
+for attempt in 1 2 3 4 5; do
+  if OUT="$($WRANGLER secret list --name "$QUORUM_WORKER_NAME" --format json 2>/dev/null)" && echo "$OUT" | grep -q '\['; then EXISTING="$OUT"; break; fi
+  sleep $((attempt * 3))
+done
+if [ -z "$EXISTING" ]; then
+  echo "Elenco segreti non leggibile: salto l'aggiornamento dei segreti, la cassaforte resta intatta."
+else
+  has() { echo "$EXISTING" | grep -q "\"$1\""; }
+  if ! has QUORUM_KEY_PRIVATE_JWK && ! has QUORUM_KEY_PUBLIC_JWK && ! has QUORUM_KEY_RECIPIENT_ID; then
+    # First run only, and only when no encrypted credential is stored in D1.
+    SAVED="$($WRANGLER d1 execute DB --remote --config "$TMP/migrations.json" --json --command "SELECT COUNT(*) AS n FROM service_credentials" 2>/dev/null | grep -o '"n": *[0-9]*' | grep -o '[0-9]*$' || true)"
+    if [ "$SAVED" = "0" ]; then
+      node scripts/quorum-generate-vault.mjs "$TMP/vault.json"
+      $WRANGLER secret bulk "$TMP/vault.json" --name "$QUORUM_WORKER_NAME" >/dev/null
+    else
+      echo "Cassaforte assente ma chiavi salvate presenti o conteggio non leggibile: nessuna rigenerazione automatica."
+    fi
+  fi
+
+  node -e '
 const o={QUORUM_ADMIN_EMAIL:process.env.QUORUM_ADMIN_EMAIL,OPENAI_MODEL:process.env.OPENAI_MODEL||"gpt-6.1-sol"};
 for(const k of ["QUORUM_ALLOWED_EMAILS","CF_ACCESS_TEAM_DOMAIN","CF_ACCESS_AUD"]) if(process.env[k]) o[k]=process.env[k];
 require("fs").writeFileSync(process.argv[1],JSON.stringify(o),{mode:0o600});' "$TMP/settings.json"
-$WRANGLER secret bulk "$TMP/settings.json" --name "$QUORUM_WORKER_NAME" >/dev/null
-echo "Segreti aggiornati (valori non mostrati)."
+  $WRANGLER secret bulk "$TMP/settings.json" --name "$QUORUM_WORKER_NAME" >/dev/null
+  echo "Segreti aggiornati (valori non mostrati)."
+fi
 
 if [ -z "${CF_ACCESS_TEAM_DOMAIN:-}" ] || [ -z "${CF_ACCESS_AUD:-}" ]; then
   echo "ATTENZIONE: Cloudflare Access non configurato. L'app resta chiusa a tutti finché non lo è (fail-closed)."
