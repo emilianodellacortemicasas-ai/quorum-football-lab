@@ -48,7 +48,8 @@ export function PitchBanner({ title, text, stats }: { title: string; text: strin
   </section>;
 }
 
-// 3D tilt with glare for cards under the pointer (desktop only).
+// Light glare that follows the pointer on cards (desktop only). No rotation: moving a card under the cursor
+// would shift its buttons away from the click.
 export function useTilt() {
   useEffect(() => {
     if (reduced() || !window.matchMedia?.('(pointer: fine)').matches) return;
@@ -59,7 +60,6 @@ export function useTilt() {
       el = card; if (!card) return;
       const r = card.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
       card.classList.add('q-tilt');
-      card.style.setProperty('--rx', ((0.5 - y) * 5).toFixed(2) + 'deg'); card.style.setProperty('--ry', ((x - 0.5) * 7).toFixed(2) + 'deg');
       card.style.setProperty('--gx', (x * 100).toFixed(1) + '%'); card.style.setProperty('--gy', (y * 100).toFixed(1) + '%');
     };
     window.addEventListener('pointermove', move, { passive: true });
