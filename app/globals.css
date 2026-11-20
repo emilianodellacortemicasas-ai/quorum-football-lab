@@ -532,3 +532,27 @@ body{background:#eef3ee}
 .copy-note{margin-top:6px}
 .lab-save{display:grid;gap:10px;margin-top:16px;padding-top:16px;border-top:1px dashed #cfdacb}
 .lab-save .lime-button{width:100%;font-size:15px;padding:13px 16px}
+/* Sistema stile bookmaker */
+.sys-classes{display:grid;gap:10px;border-top:1px solid #e9efdf;margin-top:18px;padding-top:16px}
+.sys-presets{display:flex;flex-wrap:wrap;gap:8px}
+.filters-like{border:1px solid #d3ddcf;background:#fff;color:#24412f;font-weight:700;border-radius:999px;padding:7px 13px;font-size:13px;box-shadow:0 2px 0 #d3ddcf}
+.filters-like.on{background:linear-gradient(180deg,#1b2f24,#0b1f17);color:var(--q-lime);border-color:#0b1f17;box-shadow:0 3px 0 #000}
+.sys-amount{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#0b1f17;border-radius:14px;padding:10px 12px}
+.sys-amount span{color:#9fc2ab;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.sys-amount input{width:90px;padding:8px 10px;border-radius:9px;border:0;font-size:16px;font-weight:700;text-align:center}
+.sys-amount .secondary{padding:8px 12px}
+.sys-class{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;padding:10px 12px;border-radius:14px;border:1px solid #dfe7da;background:#fafcf8;opacity:.65;transition:opacity .2s,background .2s}
+.sys-class.on{opacity:1;background:#fff;box-shadow:0 3px 0 #dfe7da}
+.sys-check{display:flex;align-items:center;gap:8px;cursor:pointer}.sys-check input{width:20px;height:20px;accent-color:#0f6b46}.sys-check b{font-size:15px}.sys-check small{color:#6b7a70;font-weight:700}
+.sys-stake{display:flex;align-items:center;gap:4px}.sys-stake input{width:72px;text-align:center;padding:7px;border:1px solid #cfdacb;border-radius:9px;font-weight:700;font-size:15px}
+.sys-stake button{width:30px;height:32px;border-radius:9px;background:#eef3ec;font-weight:800;box-shadow:0 2px 0 #cfdacb}.sys-stake button:active{transform:translateY(2px);box-shadow:none}
+.sys-class-win{grid-column:1/-1;display:flex;justify-content:space-between;font-size:12px;color:#5d6f63}.sys-class-win b{color:var(--q-ink)}
+.sys-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.sys-summary>div{background:#0b1f17;border-radius:12px;padding:10px 12px;display:grid}.sys-summary span{font-size:11px;color:#9fc2ab;font-weight:700;letter-spacing:.5px;text-transform:uppercase}.sys-summary b{color:#fff;font-size:20px;font-family:Manrope,var(--font)}.sys-summary b.positive{color:var(--q-lime)!important}
+.sys-breakeven{background:linear-gradient(90deg,#d8f7b8,#ecfbd9);border:1px solid #a8dd7c;color:#0f5a3b;border-radius:12px;padding:10px 12px;font-size:14px;font-weight:600;margin-bottom:12px}
+.sys-breakeven.no{background:#fbf0ec;border-color:#efcfc3;color:#9a3d22}
+.sys-table{display:grid;gap:4px;margin:12px 0}
+.sys-tr{display:grid;grid-template-columns:1fr 1.4fr 1.3fr .8fr;gap:6px;font-size:12.5px;padding:7px 10px;border-radius:9px;background:#f6f8f4}
+.sys-tr.head{background:none;font-size:11px;font-weight:800;color:#5d6f63;text-transform:uppercase;letter-spacing:.5px}
+.sys-tr.gain{background:#e6f6dc;color:#0f5a3b;font-weight:700}.sys-tr.loss{background:#fbf0ec;color:#8a3a22}.sys-tr.mixed{background:#fbf7e8;color:#6b5a12}
+@media (max-width:760px){.sys-tr{grid-template-columns:.9fr 1.4fr 1.3fr .7fr;font-size:11.5px}}

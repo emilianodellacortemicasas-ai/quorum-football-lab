@@ -7,4 +7,5 @@ export type Selection = { fixtureId: string; fixture: string; market: string; la
 // A play recorded by the user (Costruisci, Schedine, Valore). Settled automatically, counted in Risultati and in the portfolio.
 export type PlayLeg = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p: number; odds: number };
 export type RecordPlay = (legs: PlayLeg[], stakeCents: number, source: 'builder' | 'value' | 'schedina', kind?: string) => Promise<boolean>;
-export type RecordSystem = (legs: PlayLeg[], k: number, unitCents: number) => Promise<boolean>;
+export type SystemClasses = { k: number; unitCents: number }[];
+export type RecordSystem = (legs: PlayLeg[], classes: SystemClasses) => Promise<boolean>;

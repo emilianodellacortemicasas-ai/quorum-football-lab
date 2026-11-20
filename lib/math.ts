@@ -103,6 +103,34 @@ export function combinations(n: number, k: number): number[][] {
   const result: number[][] = [];
   const visit = (start:number, a:number[]) => { if(a.length === k) {result.push(a);return;} for(let i = start;i < n;i++) visit(i+1,[...a,i]); }; visit(0,[]);return result;
 }
+// Bookmaker-style system: several classes at once (singles, doubles, trebles…), each with its own stake per
+// combination, like Lottomatica / Planetwin365. Returns cost, min/max win and the outcome by number of winners.
+export type SystemClass = { k: number; unitCents: number };
+export function evaluateClasses(selections: Selection[], classes: SystemClass[]) {
+  const n = selections.length;
+  if (n < 1 || n > 8) throw new Error('Scegli da 1 a 8 eventi.');
+  if (new Set(selections.map(s => s.fixtureId)).size !== n) throw new Error('Usa un solo esito per partita: gli esiti della stessa partita sono correlati.');
+  const cls = classes.filter(c => c.k >= 1 && c.k <= n && Number.isSafeInteger(c.unitCents) && c.unitCents > 0);
+  if (!cls.length) throw new Error('Scegli almeno una classe con una puntata.');
+  if (new Set(cls.map(c => c.k)).size !== cls.length) throw new Error('Classe ripetuta.');
+  if (selections.some(s => !Number.isFinite(s.p) || s.p <= 0 || s.p >= 1 || !Number.isFinite(s.odds) || s.odds <= 1)) throw new Error('Probabilità, quote o importo non validi.');
+  const groups = cls.map(c => ({ ...c, combos: combinations(n, c.k) }));
+  const costCents = groups.reduce((s, g) => s + g.combos.length * g.unitCents, 0), tickets = groups.reduce((s, g) => s + g.combos.length, 0);
+  // Each combination is paid and rounded separately, as on the bookmaker's slip.
+  const payout = (mask: number) => groups.reduce((sum, g) => sum + g.combos.reduce((x, t) => x + (t.every(i => mask & (1 << i)) ? Math.round(g.unitCents * t.reduce((o, i) => o * selections[i].odds, 1)) : 0), 0), 0);
+  let pWin = 0, pProfit = 0, expectedCents = 0, minWinCents = Infinity;
+  const byWinners = Array.from({ length: n + 1 }, (_, c) => ({ winners: c, p: 0, minReturnCents: Infinity, maxReturnCents: 0 }));
+  for (let mask = 0; mask < (1 << n); mask++) {
+    const p = selections.reduce((v, s, i) => v * ((mask & (1 << i)) ? s.p : 1 - s.p), 1), r = payout(mask), c = selections.reduce((x, _, i) => x + ((mask >> i) & 1), 0);
+    if (r > 0) { pWin += p; minWinCents = Math.min(minWinCents, r); }
+    if (r - costCents > 0) pProfit += p;
+    expectedCents += p * (r - costCents);
+    const b = byWinners[c]; b.p += p; b.minReturnCents = Math.min(b.minReturnCents, r); b.maxReturnCents = Math.max(b.maxReturnCents, r);
+  }
+  const breakEven = byWinners.find(b => b.minReturnCents > costCents)?.winners ?? null;
+  return { tickets, costCents, pWin, pProfit, expectedCents, minWinCents: Number.isFinite(minWinCents) ? minWinCents : 0, maxReturnCents: payout((1 << n) - 1), worstLossCents: costCents, breakEven, byWinners: byWinners.map(b => ({ ...b, minReturnCents: Number.isFinite(b.minReturnCents) ? b.minReturnCents : 0 })) };
+}
+export const className = (k: number, n: number) => k === 1 ? 'Singole' : k === 2 ? 'Doppie' : k === 3 ? 'Triple' : k === 4 ? 'Quadruple' : k === 5 ? 'Quintuple' : k === 6 ? 'Sestuple' : k === 7 ? 'Settuple' : 'Ottuple';
 export function evaluateSystem(selections: Selection[], k: number, unitCents: number) {
   if (selections.length > 8 || selections.length < 1) throw new Error('Scegli da 1 a 8 eventi.');
   if(selections.some(s=>/^sm-\d+$/.test(s.fixtureId))&&selections.some(s=>/^\d+$/.test(s.fixtureId)))throw new Error('Usa una sola fonte calcistica per sistema: gli identificativi tra fornitori non sono ancora riconciliati.');

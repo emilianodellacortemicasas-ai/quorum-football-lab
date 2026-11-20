@@ -69,8 +69,9 @@ export async function settleAll(limit = 80) {
   const systems = (await db().prepare("SELECT id,portfolio_id,stake_cents,snapshot FROM bets WHERE status='pending' AND fixture_id LIKE 'system:%' LIMIT ?").bind(limit).all<any>()).results;
   for (const bet of systems) {
     let snap: any; try { snap = JSON.parse(bet.snapshot); } catch { continue; }
-    const legs: { fixtureId: string; market: string; kickoff: string; odds: number }[] = snap.legs || [], k = snap.system?.k, unit = snap.system?.unitCents;
-    if (!legs.length || !k || !unit) continue;
+    const legs: { fixtureId: string; market: string; kickoff: string; odds: number }[] = snap.legs || [];
+    const classes: { k: number; unitCents: number }[] = snap.system?.classes ?? (snap.system?.k ? [{ k: snap.system.k, unitCents: snap.system.unitCents }] : []);
+    if (!legs.length || !classes.length) continue;
     const res: Outcome[] = [];
     for (const l of legs) {
       if (l.kickoff > cutoff) { res.push(null); continue; }
@@ -79,11 +80,13 @@ export async function settleAll(limit = 80) {
     }
     if (res.some(x => x === null)) continue;
     let payout = 0;
-    const visit = (start: number, combo: number[]) => {
-      if (combo.length === k) { if (combo.every(i => res[i] !== 'lost')) payout += Math.round(unit * combo.reduce((o, i) => o * (res[i] === 'void' ? 1 : legs[i].odds), 1)); return; }
-      for (let i = start; i < legs.length; i++) visit(i + 1, [...combo, i]);
-    };
-    visit(0, []);
+    for (const { k, unitCents: unit } of classes) {
+      const visit = (start: number, combo: number[]) => {
+        if (combo.length === k) { if (combo.every(i => res[i] !== 'lost')) payout += Math.round(unit * combo.reduce((o, i) => o * (res[i] === 'void' ? 1 : legs[i].odds), 1)); return; }
+        for (let i = start; i < legs.length; i++) visit(i + 1, [...combo, i]);
+      };
+      visit(0, []);
+    }
     const allVoid = res.every(x => x === 'void'), pnl = allVoid ? 0 : payout - bet.stake_cents, status = allVoid ? 'void' : pnl > 0 ? 'won' : 'lost';
     await db().batch([
       db().prepare("UPDATE bets SET status=?,pnl_cents=?,settled_at=? WHERE id=? AND status='pending'").bind(status, pnl, now(), bet.id),
