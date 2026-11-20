@@ -519,3 +519,6 @@ body{background:#eef3ee}
 .author-card.on{border-color:#0f6b46;box-shadow:0 3px 0 #0b5236}
 .author-card b{font-size:15px}.author-card span{font-size:20px;font-weight:800;font-family:Manrope,var(--font)}.author-card small{font-size:11px;color:#6b7a70}
 .author-tag{color:#0f6b46}
+.my-plays .my-play *,.shared-plays .my-play *,.author-card *{text-transform:none!important;letter-spacing:normal!important}
+.my-list{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.my-play li span,.my-play-foot span{font-size:13px}
