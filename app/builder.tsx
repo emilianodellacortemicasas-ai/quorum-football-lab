@@ -24,7 +24,7 @@ const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Eur
 const dayKey = (s: string) => new Date(s).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long' });
 const pc = (p: number) => percent(p, p < 0.1 ? 1 : 0);
 const SLIP_KEY = 'quorum-slip-v1';
-const EXTRA = ['Combo', 'Multigol', 'Risultato esatto', 'Corner e cartellini', 'Marcatori'];
+const EXTRA = ['Under / Over', 'Under / Over squadra', 'Combo', 'Multigol', 'Risultato esatto', 'Corner e cartellini', 'Marcatori'];
 
 function toOptions(r: any): Match | null {
   const mk = r.markets || {}, opts: Opt[] = [];
@@ -51,6 +51,20 @@ function toOptions(r: any): Match | null {
     const u = mk.under25?.pBlend, b = ['home', 'draw', 'away'].map(k => mk[k]?.pBlend);
     const sc = b.every(x => Number.isFinite(x)) ? scoreMatrix(r.lambda_home, r.lambda_away, mk.meta?.rho ?? 0, { home: b[0], draw: b[1], away: b[2], ...(Number.isFinite(u) ? { under25: u } : {}) }) : null;
     if (sc) {
+      // Under/Over: every total line 0,5–5,5 (real price where QUORUM has it, otherwise fair) and per team.
+      const tot = (n: number) => sc.filter(x => x.home + x.away > n).reduce((q, x) => q + x.p, 0);
+      for (const line of [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]) {
+        const k = String(line).replace('.', ''), pO = tot(line);
+        for (const [side, p] of [['over', pO], ['under', 1 - pO]] as const) {
+          if (opts.some(o => o.market === side + k)) continue;
+          opts.push(fairOpt(side + k, (side === 'over' ? 'Over ' : 'Under ') + String(line).replace('.', ','), 'Under / Over', p));
+        }
+      }
+      for (const [team, name] of [['home', r.fixture.split(' – ')[0] || 'Casa'], ['away', r.fixture.split(' – ')[1] || 'Ospite']] as const) for (const line of [0.5, 1.5, 2.5]) {
+        const pO = sc.filter(x => (team === 'home' ? x.home : x.away) > line).reduce((q, x) => q + x.p, 0);
+        opts.push(fairOpt('teamGoals:' + team + ':over:' + line, name + ' Over ' + String(line).replace('.', ','), 'Under / Over squadra', pO));
+        opts.push(fairOpt('teamGoals:' + team + ':under:' + line, name + ' Under ' + String(line).replace('.', ','), 'Under / Over squadra', 1 - pO));
+      }
       for (const [lo, hi] of MULTIGOL) { const p = multigolP(sc, lo, hi); opts.push(fairOpt('multigol:' + lo + '-' + hi, 'Multigol ' + lo + '-' + hi, 'Multigol', p)); }
       const itx = mk.itExact as Record<string, Record<string, number>> | undefined;
       for (const sco of sc.filter(x => x.home <= 5 && x.away <= 5).slice(0, 16)) {
@@ -140,8 +154,8 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
               <div className="builder-best">{m.opts.filter(o => m.best.has(o.market)).sort((a, b) => b.p - a.p).map(o => <span key={o.market}>★ {o.label} {percent(o.p, 0)} · {o.odds.toFixed(2)}</span>)}</div></div>
             {GROUPS.map(([g]) => { const os = m.opts.filter(o => o.group === g); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market} className={m.best.has(o.market) ? 'starred' : ''}>{chip(o)}</span>)}</div></div> : null; })}
             {m.opts.some(o => EXTRA.includes(o.group)) && <>
-              <button className="text-button" onClick={() => setOpen({ ...open, [m.fixtureId]: !open[m.fixtureId] })}>{open[m.fixtureId] ? 'Nascondi' : 'Altri mercati'}: combo, multigol, risultato esatto, corner, cartellini, marcatori</button>
-              {open[m.fixtureId] && EXTRA.map(g => { const os = m.opts.filter(o => o.group === g).sort((a, b) => g === 'Multigol' ? a.market.localeCompare(b.market) : b.p - a.p).slice(0, g === 'Combo' ? 19 : g === 'Risultato esatto' ? 16 : 12); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market}>{chip(o, false)}<small className="chip-name">{o.label}</small></span>)}</div></div> : null; })}
+              <button className="text-button" onClick={() => setOpen({ ...open, [m.fixtureId]: !open[m.fixtureId] })}>{open[m.fixtureId] ? 'Nascondi' : 'Altri mercati'}: under/over, combo, multigol, risultato esatto, corner, cartellini, marcatori</button>
+              {open[m.fixtureId] && EXTRA.map(g => { const os = m.opts.filter(o => o.group === g).sort((a, b) => g === 'Multigol' || g.startsWith('Under / Over') ? 0 : b.p - a.p).slice(0, g === 'Combo' ? 19 : g === 'Risultato esatto' ? 16 : 12); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market}>{chip(o, false)}<small className="chip-name">{o.label}</small></span>)}</div></div> : null; })}
             </>}
           </article>)}
           <p className="footnote">Percentuale = probabilità stimata da QUORUM (modello + mercato, corretta con il backtest). * = quota estera, l’esito non è quotato da Lottomatica / Planetwin365. ≈ = quota equa (Combo, Multigol, alcuni risultati esatti): il bookmaker non la manda, quindi nella schedina scrivi la quota che vedi su Planetwin e QUORUM ricalcola valore e puntata. Le quote italiane si aggiornano ogni 12 ore: controlla sempre quella sul tuo conto.</p>
