@@ -56,6 +56,22 @@ function sidelinedNames(f:any,teamId:number):string[]|null{
  return f.sidelined.filter((s:any)=>(s.participant_id??s.sideline?.team_id)===teamId&&s.sideline?.completed!==true)
   .map((s:any)=>{const p=s.player||s.sideline?.player;const n=p?.display_name||p?.common_name||p?.name;const t=(s.type||s.sideline?.type)?.name;return n?(t?n+' ('+t+')':n):null;}).filter(Boolean).slice(0,12);
 }
+// Current condition of a team: rest days, matches in the last 14 days, cup matches just before/after.
+// Uses every fixture the data plan returns (domestic league, cups and, when covered, European cups).
+export type Condition={rest:number|null;last14:number;nextDays:number|null;cups:string[];factor:number;notes:string[]};
+async function teamCondition(teamId:number,kickoff:number,league:string):Promise<Condition|null>{
+ const d=(t:number)=>new Date(t).toISOString().slice(0,10);
+ let data:any[];try{data=(await feed('fixtures/between/'+d(kickoff-15*86400000)+'/'+d(kickoff+5*86400000)+'/'+teamId+'?include=league',6*3600)).data;}catch{return null;}
+ if(!Array.isArray(data))return null;
+ const ts=(f:any)=>f.starting_at_timestamp*1000,before=data.filter(f=>ts(f)<kickoff-3600000&&ts(f)>=kickoff-14*86400000).sort((a,b)=>ts(b)-ts(a)),after=data.filter(f=>ts(f)>kickoff+3600000).sort((a,b)=>ts(a)-ts(b));
+ const rest=before.length?(kickoff-ts(before[0]))/86400000:null,nextDays=after.length?(ts(after[0])-kickoff)/86400000:null;
+ const cups=[...new Set([...before.slice(0,2),...after.slice(0,1)].map(f=>f.league?.name).filter((n:any)=>n&&n!==league&&!(league==='Serie A'&&/serie a/i.test(n))))] as string[];
+ let factor=1;const notes:string[]=[];
+ if(rest!==null&&rest<3.5){factor*=0.97;notes.push('Ha giocato '+Math.round(rest*24)+' ore fa');}
+ if(before.length>=4){factor*=0.98;notes.push(before.length+' partite negli ultimi 14 giorni');}
+ if(nextDays!==null&&nextDays<3.5&&after[0]?.league?.name&&after[0].league.name!==league){factor*=0.985;notes.push('Tra '+Math.round(nextDays)+' giorni gioca '+after[0].league.name+': possibile turnover');}
+ return {rest:rest===null?null:Math.round(rest*10)/10,last14:before.length,nextDays:nextDays===null?null:Math.round(nextDays*10)/10,cups,factor:Math.max(0.94,factor),notes};
+}
 export async function getSportmonksMatch(id:string):Promise<Match>{
  if(!/^sm-\d{1,12}$/.test(id))throw new Error('Partita Sportmonks non valida.');
  let f:any;
@@ -72,9 +88,10 @@ export async function getSportmonksMatch(id:string):Promise<Match>{
  const absentIds=(teamId:number)=>new Set<number>(Array.isArray(f.sidelined)?f.sidelined.filter((s:any)=>(s.participant_id??s.sideline?.team_id)===teamId&&s.sideline?.completed!==true).map((s:any)=>s.player_id??s.sideline?.player_id).filter((x:any)=>Number.isInteger(x)):[]);
  const starterIds=(teamId:number)=>{if(!Array.isArray(f.lineups))return null;const st=f.lineups.filter((x:any)=>x.team_id===teamId&&x.type_id===11).map((x:any)=>x.player_id);return st.length>=11?new Set<number>(st):null;};
  const sh=starterIds(h.id),sa=starterIds(a.id),adjH=attackAdjustment(exAdj?.scorers[h.id],absentIds(h.id),sh),adjA=attackAdjustment(exAdj?.scorers[a.id],absentIds(a.id),sa);
- const l=l0?{lh:l0.lh*adjH.factor,la:l0.la*adjA.factor}:null;
+ const kickTs=f.starting_at_timestamp*1000,[condH,condA]=await Promise.all([teamCondition(h.id,kickTs,m.competition),teamCondition(a.id,kickTs,m.competition)]);
+ const l=l0?{lh:l0.lh*adjH.factor*(condH?.factor??1),la:l0.la*adjA.factor*(condA?.factor??1)}:null;
  const tbl=state.tables[m.competition==='Coppa Italia'?'Serie A':m.competition]||[],ph=tbl.find(r=>r.teamId===h.id),pa=tbl.find(r=>r.teamId===a.id);
- const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0,lineupConfirmed:Boolean(sh&&sa),adjust:{home:adjH,away:adjA}};
+ const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0,lineupConfirmed:Boolean(sh&&sa),adjust:{home:adjH,away:adjA},condition:{home:condH,away:condA}};
  const ex=state.extras?.[m.competition==='Coppa Italia'?'Serie A':m.competition];
  let counts:Match['counts'];
  if(ex){const c=expectedCount(ex.corners,h.id,a.id),y=expectedCount(ex.yellow,h.id,a.id),r=expectedCount(ex.red,h.id,a.id);if(c&&y&&r)counts={corners:c,yellow:y,red:r};

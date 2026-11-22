@@ -4,20 +4,31 @@ import { Check, Copy, FlaskConical, Info, RefreshCw, Ticket as TicketIcon } from
 import { money, percent } from '../lib/math';
 import type { RecordPlay, Selection } from '../lib/types';
 import type { SystemTicket, Ticket } from '../lib/tickets';
+import type { ExactPick } from '../lib/exact';
 import { Count, Ring } from './motion';
 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 type Cal = { backtestSamples: number; liveSamples: number; backtestAt: string | null } | null;
-type Hist = { weeks: number; matches: number; testDays: number; at: string; byKind: { kind: string; title: string; n: number; won: number; hit: number; expected: number; roi: number; avgOdds: number }[] } | null;
+type Hist = { weeks: number; matches: number; testDays: number; at: string; byKind: { kind: string; title: string; n: number; won: number; hit: number; expected: number; roi: number | null; avgOdds: number }[] } | null;
 type Track = { kind: string; n: number; won: number; hit: number | null; expectedHit: number | null }[];
 const pc = (p: number) => percent(p, p < 0.1 ? 1 : 0);
 // Reliability label: how often a ticket like this is expected to win, in plain words.
 const verdict = (p: number) => p >= 0.6 ? 'alta' : p >= 0.35 ? 'media' : p >= 0.12 ? 'bassa' : 'molto bassa';
 const oneIn = (p: number) => p >= 0.5 ? 'vince circa ' + Math.round(p * 10) + ' volte su 10' : 'vince circa 1 volta su ' + Math.max(2, Math.round(1 / p));
 
+const btKind = (k: string) => /^multipla-\d{4}-\d{2}-\d{2}-\d$/.test(k) ? 'multipla-giorno-' + k.slice(-1) : /^bomba-\d{4}/.test(k) ? 'bomba-giorno' : /^sistema-\d{4}/.test(k) ? 'sistema-giorno' : k;
+// Backtest of a whole group of tickets (240 days, real historical prices).
+function BtBadge({ history, kinds }: { history?: Hist; kinds: (k: string) => boolean }) {
+  const ks = (history?.byKind || []).filter(x => kinds(x.kind));
+  const n = ks.reduce((a, x) => a + x.n, 0); if (n < 5) return null;
+  const won = ks.reduce((a, x) => a + x.won, 0), exp = ks.reduce((a, x) => a + x.expected * x.n, 0) / n, withRoi = ks.filter(x => x.roi !== null && x.roi !== undefined);
+  const roi = withRoi.length ? withRoi.reduce((a, x) => a + (x.roi as number) * x.n, 0) / withRoi.reduce((a, x) => a + x.n, 0) : null;
+  return <div className="bt-badge"><span>Backtest {history?.weeks ? history.weeks + ' settimane' : ''}</span><b>{won} vinte su {n}</b><small>({Math.round(won / n * 100)}% · previsto {Math.round(exp * 100)}%)</small>{roi !== null && <em className={roi >= 0 ? 'pos' : 'neg'}>Rendimento {roi >= 0 ? '+' : ''}{Math.round(roi * 100)}%</em>}</div>;
+}
+
 function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core', onRecord }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void; cal?: Cal; track?: Track; history?: Hist; role?: 'core' | 'min'; onRecord?: RecordPlay }) {
-  const h = history?.byKind.find(x => x.kind === t.kind);
+  const h = history?.byKind.find(x => x.kind === btKind(t.kind));
   const kindBase = t.kind.replace(/-\d+$/, ''), real = track?.filter(x => x.kind === t.kind || x.kind.replace(/-\d+$/, '') === kindBase).reduce((a, x) => ({ n: a.n + x.n, won: a.won + x.won, exp: a.exp + (x.expectedHit ?? 0) * x.n }), { n: 0, won: 0, exp: 0 });
   const raw = Math.floor(equityCents * t.kelly / 100) * 100, stake = role === 'min' ? 200 : t.kelly > 0 ? Math.max(200, raw) : 0, started = (t as any).started;
   return <article className={'value-card ticket ' + t.kind}>
@@ -35,6 +46,26 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core',
     {onRecord && !(t as any).started && <button className="secondary played-button" onClick={() => onRecord(t.legs, stake || 200, 'schedina', t.kind)}><Check size={15} />L’ho giocata ({money(stake || 200)})</button>}
     <button className="text-button" onClick={() => onLab(t.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds, competition: l.competition, kickoff: l.kickoff })))}><FlaskConical size={15} />Analizza nel Laboratorio</button>
   </article>;
+}
+
+function ExactSection({ list, history }: { list: ExactPick[]; history?: Hist }) {
+  const [tab, setTab] = useState<'multigol' | 'esatti'>('multigol');
+  const mg = list.map(e => ({ e, m: e.multigol.filter(x => { const [a, b] = x.range.split('-').map(Number); return b - a <= 2 && x.p >= 0.65; }).sort((x, y) => y.p - x.p)[0] })).filter(x => x.m).sort((a, b) => b.m!.p - a.m!.p).slice(0, 10);
+  const ex = [...list].sort((a, b) => b.top[0].p - a.top[0].p).slice(0, 10);
+  const hMg = history?.byKind.find(k => k.kind === 'multigol-65'), hEx = history?.byKind.find(k => k.kind === 'esatto-top');
+  return <>
+    <h3 className="day-title">🎯 Risultati esatti e Multigol</h3>
+    <p className="small-note">Un risultato esatto da solo non arriva mai al 65–70%: il più probabile di una partita sta di solito tra il 10% e il 20%. Al 65–70% ci arriva il <b>Multigol</b> (es. 1-3 = la partita finisce con 1, 2 o 3 gol totali), che su Lottomatica / Planetwin365 è una giocata unica. Qui trovi i Multigol al 65% o più e, a parte, i risultati esatti più probabili.</p>
+    <div className="archive-tabs"><button className={tab === 'multigol' ? 'on' : ''} onClick={() => setTab('multigol')}>Multigol ≥ 65% <b>{mg.length}</b></button><button className={tab === 'esatti' ? 'on' : ''} onClick={() => setTab('esatti')}>Risultati esatti <b>{ex.length}</b></button></div>
+    {tab === 'multigol' && hMg && hMg.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hMg.won} presi su {hMg.n}</b><small>({Math.round(hMg.hit * 100)}% · previsto {Math.round(hMg.expected * 100)}%)</small></div>}
+    {tab === 'esatti' && hEx && hEx.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hEx.won} presi su {hEx.n}</b><small>({Math.round(hEx.hit * 100)}% · previsto {Math.round(hEx.expected * 100)}%)</small></div>}
+    <div className="xs-grid">{(tab === 'multigol' ? mg.map(({ e, m }) => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
+      <div className="xs-main"><span className="xs-pick">Multigol {m!.range}</span><b className={m!.p >= 0.7 ? 'hi' : ''}>{percent(m!.p, 0)}</b></div>
+      <p>Quota equa {(1 / m!.p).toFixed(2)}: conviene se sul bookmaker la quota è più alta.</p>
+      {e.cover65 && <p className="xs-cover">Risultati che coprono il {percent(e.cover65.p, 0)}: {e.cover65.scores.join(' · ')}</p>}</article>)
+      : ex.map(e => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
+        <div className="xs-scores">{e.top.map((t, i) => <span key={t.score} className={i === 0 ? 'first' : ''}><b>{t.score}</b><em>{percent(t.p, 0)}</em><small>equa {(1 / t.p).toFixed(1)}</small></span>)}</div></article>))}</div>
+  </>;
 }
 
 function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecord?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean>; notify: (m: string) => void }) {
@@ -56,7 +87,7 @@ function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (
 }
 
 export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
-  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=tickets', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -82,24 +113,41 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
             {data.sure && data.sure.length > 0 && <>
               <h3 className="day-title">🛡️ Raddoppi</h3>
               <p className="small-note">Due squadre, quota circa 2: i due esiti più affidabili che insieme raddoppiano la puntata. Quote Lottomatica / Planetwin365, partite diverse tra una schedina e l’altra.</p>
+              <BtBadge history={data.history} kinds={k => k.startsWith('raddoppio-sicuro')} />
               <div className="value-list">{data.sure.map(t => card(t))}</div>
+            </>}
+            {data.multiples && data.multiples.length > 0 && <>
+              <h3 className="day-title">📋 Multiple del giorno</h3>
+              <p className="small-note">Per ogni giornata due multiple pronte: 3 eventi a quota 2,8–5 e 5 eventi a quota 6–12. Tra tutte le combinazioni in quella fascia, la più probabile, con un premio a quelle che pagano più del dovuto.</p>
+              <BtBadge history={data.history} kinds={k => k.startsWith('multipla-giorno')} />
+              <div className="value-list">{data.multiples.map(t => card(t))}</div>
             </>}
             {bands.length > 0 && <>
               <h3 className="day-title">🎯 Schedine da 3 e 5 squadre</h3>
               <p className="small-note">Ogni esito ha la probabilità della fascia indicata; dentro la fascia QUORUM sceglie quelli con più valore sulle quote italiane. Più alta la fascia, più sicura la schedina e più bassa la quota.</p>
+              <BtBadge history={data.history} kinds={k => k.startsWith('fascia-')} />
               {bands.map(x => <div key={x.b} className="band-block"><p className={'band-tag b' + x.b}>Esiti al {x.label}</p><div className="value-list">{x.list.map(t => card(t))}</div></div>)}
+            </>}
+            {data.schemes && data.schemes.length > 0 && <>
+              <h3 className="day-title">🧩 Schemi della settimana</h3>
+              <p className="small-note">Sistemi su tutte le partite della settimana in cui <b>puoi sbagliare una partita</b> (4 su 5, 5 su 6) o <b>due</b> (5 su 7) e restare in profitto. Ogni schema usa partite diverse dagli altri. Esempio: nel 5 su 6 giochi le 6 cinquine possibili; se ne sbagli una, una cinquina è comunque vincente.</p>
+              <BtBadge history={data.history} kinds={k => k.startsWith('schema-')} />
+              <div className="value-list">{data.schemes.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
             {data.systems && data.systems.length > 0 && <>
               <h3 className="day-title">🧮 Sistemi pronti</h3>
               <p className="small-note">Un sistema per ogni giorno di partite, con la struttura che dà la probabilità di profitto più alta. Copialo sul bookmaker, aprilo nel Laboratorio o registralo.</p>
+              <BtBadge history={data.history} kinds={k => k === 'sistema-giorno'} />
               <div className="value-list">{data.systems.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
+            {data.exact && data.exact.length > 0 && <ExactSection list={data.exact} history={data.history} />}
             {data.bombs && data.bombs.length > 0 && <>
               <h3 className="day-title">💣 Bombe</h3>
               <p className="small-note">Una per ogni giornata di partite: quota da 10 a 100 in base a quante partite ci sono. Per sognare, sempre a puntata minima.</p>
+              <BtBadge history={data.history} kinds={k => k === 'bomba-giorno'} />
               <div className="value-list bomb-list">{data.bombs.map(t => card(t, 'min'))}</div>
             </>}
-            {!data.sure?.length && !bands.length && !data.systems?.length && !data.bombs?.length && <p className="small-note">Nessuna schedina rispetta i criteri con le partite dei prossimi giorni.</p>}
+            {!data.sure?.length && !bands.length && !data.systems?.length && !data.bombs?.length && !data.multiples?.length && !data.schemes?.length && <p className="small-note">Nessuna schedina rispetta i criteri con le partite dei prossimi giorni.</p>}
           </>;
         })()}
       </>}

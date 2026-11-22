@@ -23,7 +23,7 @@ export function Crest({ src, name, size = 28 }: { src: string | null; name: stri
 }
 
 function Form({ f }: { f: string }) {
-  return <span className="form-dots">{f.split('').slice(-5).map((c, i) => <i key={i} className={c === 'W' || c === 'V' ? 'w' : c === 'D' || c === 'N' ? 'd' : 'l'} title={c} />)}</span>;
+  return <span className="form-dots">{f.split('').slice(-5).map((c, i) => { const k = c === 'W' || c === 'V' ? 'w' : c === 'D' || c === 'N' ? 'd' : 'l'; return <i key={i} className={k}>{k === 'w' ? 'V' : k === 'd' ? 'N' : 'P'}</i>; })}</span>;
 }
 
 // Emiliano (Roma) and Valerio (Juve): the family derby on top of every table.
@@ -84,7 +84,7 @@ function Pitch({ l }: { l: Lineup }) {
       const xPct = ((k + 1) / (inRow.length + 1)) * 100, depth = rows === 1 ? 0 : (x.r - 1) / (rows - 1), yPct = home ? 93 - depth * 40 : 7 + depth * 40;
       return <div key={(home ? 'h' : 'a') + x.p.name} className={'pl ' + (home ? 'home' : 'away')} style={{ left: (home ? xPct : 100 - xPct) + '%', top: yPct + '%' }}><span>{x.p.number ?? ''}</span><small>{x.p.name.split(' ').slice(-1)[0]}</small></div>; });
   };
-  return <div className="pitch"><i className="pitch-mid" /><i className="pitch-circle" /><i className="pitch-box top" /><i className="pitch-box bottom" />
+  return <div className="lu-pitch"><i className="lp-mid" /><i className="lp-circle" /><i className="lp-box top" /><i className="lp-box bottom" />
     {l.away && place(l.away.starters, false)}{l.home && place(l.home.starters, true)}</div>;
 }
 

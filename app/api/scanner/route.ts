@@ -4,6 +4,7 @@ import { kindFactor, ticketReliability } from '../../../lib/calibration';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
+import { exactPicks } from '../../../lib/exact';
 import { dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
 import { leagueStandings, allStandings, fixtureLineup, lineupFixtures } from '../../../lib/sportmonks';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
@@ -16,6 +17,7 @@ export async function GET(request:Request){
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='crests'){const t=await leagueStandings(384,'Serie A').catch(()=>null);const f=(re:RegExp)=>t?.rows.find(r=>re.test(r.name))?.logo||null;return reply({roma:f(/^(as )?roma$/i),juve:f(/juventus/i)});}
+  if(view==='backtest'){const [t,perf]=await Promise.all([env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null),performance().catch(()=>null)]);return reply({backtest:t?{at:t.at,testDays:t.testDays,weeks:t.weeks,matches:t.matches,byKind:t.byKind,series:t.series||[]}:null,track:perf?.tickets??[]});}
   if(view==='standings')return reply(await allStandings());
   if(view==='lineups-list')return reply({fixtures:await lineupFixtures()});
   if(view==='lineup'){try{return reply(await fixtureLineup(new URL(request.url).searchParams.get('id')||''));}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
@@ -31,7 +33,7 @@ export async function GET(request:Request){
    const stored=await dayBombs(b.bombs.map(x=>x.kind.slice(6))).catch(()=>[] as any[]);
    const bombs=b.bombs.map(x=>{const st=stored.find((r:any)=>'bomba-'+r.day===x.kind);if(!st)return x;const legs=st.legs.map((l:any)=>({se:Math.sqrt(l.p*(1-l.p)/40),...l})),r=ticketReliability(legs);return {...x,legs,odds:st.odds,p:r.p,low:r.low,high:r.high,ev:r.p*st.odds-1,kelly:0,started:legs.some((l:any)=>Date.parse(l.kickoff)<=Date.now())};});
    const adjK=(t:any,k:string)=>adj({...t,kind:k});
-   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),sure:b.sure.map(adj),banded:b.banded.map(adj),systems:b.systems,bombs:bombs.map((x:any)=>({...adjK(x,'bomba-giorno'),kind:x.kind})),bomb:adj(bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
+   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),sure:b.sure.map(adj),banded:b.banded.map(adj),systems:b.systems,multiples:b.multiples.map((x:any)=>({...adjK(x,'multipla-giorno-'+x.legs.length),kind:x.kind})),schemes:b.schemes,exact:exactPicks(p.matches),bombs:bombs.map((x:any)=>({...adjK(x,'bomba-giorno'),kind:x.kind})),bomb:adj(bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
   }
   return reply(view==='predictions'?await latestPredictions():await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scanner non disponibile.'},500);}

@@ -9,7 +9,7 @@ const now = () => new Date().toISOString();
 
 // Saves the tickets proposed by the app so their real performance can be measured.
 // One ticket per kind per day; the Bomba once per week (Monday-based).
-export async function recordTickets(t: { singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; bombs?: Ticket[] }) {
+export async function recordTickets(t: { singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; bombs?: Ticket[]; multiples?: Ticket[] }) {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
   const d = new Date(day + 'T12:00:00Z'), monday = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
   const rows: [string, Ticket][] = [...t.tickets.map(x => [x.kind + ':' + day, x] as [string, Ticket]), ...t.singles.slice(0, 3).map((x, i) => ['raddoppio-singola-' + (i + 1) + ':' + day, x] as [string, Ticket])];
@@ -17,6 +17,7 @@ export async function recordTickets(t: { singles: Ticket[]; tickets: Ticket[]; b
   for (const x of t.probable || []) rows.push([x.kind + ':' + day, x]);
   for (const x of t.sure || []) rows.push([x.kind + ':' + day, x]);
   for (const x of t.banded || []) rows.push([x.kind + ':' + day, x]);
+  for (const x of t.multiples || []) rows.push([x.kind, x]);
   // One bomb per match day, fixed once created (INSERT OR IGNORE).
   for (const x of t.bombs || []) rows.push(['bomba-day:' + x.kind.slice(6), x]);
   const stmt = db().prepare('INSERT OR IGNORE INTO scanner_tickets (id,kind,title,legs,odds,p,created_at) VALUES (?,?,?,?,?,?,?)');

@@ -61,6 +61,9 @@ function Context({ meta, fixture }: { meta: any; fixture?: string }) {
   const eff = (a: { factor: number; missing: string[]; bench: string[] }) => a.factor < 0.995
     ? <span className={'eff-chip ' + (a.factor < 0.86 ? 'hi' : 'mid')} title={[...a.missing, ...a.bench.map(b => b + ' in panchina')].join(', ')}>−{Math.round((1 - a.factor) * 100)}% gol</span>
     : <small className="ok-txt">nessuno</small>;
+  const rest = (c: any) => !c || c.rest === null ? <small>n.d.</small> : <span className={'cond-chip' + (c.rest < 3.5 ? ' hi' : c.rest < 5 ? ' mid' : ' ok')}>{c.rest < 3.5 ? Math.round(c.rest * 24) + ' ore' : Math.round(c.rest) + ' giorni'}</span>;
+  const busy = (c: any) => !c ? <small>n.d.</small> : <span className={'cond-chip' + (c.last14 >= 4 ? ' hi' : c.last14 >= 3 ? ' mid' : ' ok')}>{c.last14}</span>;
+  const cup = (c: any) => !c ? <small>n.d.</small> : c.cups?.length ? <span className="cond-chip mid" title={c.notes?.join(' · ')}>{c.cups.slice(0, 2).join(', ')}</span> : <small className="ok-txt">nessuna</small>;
   const row = (label: string, l: any, r: any, key?: string) => <div className="vs-row" key={key ?? label}><div className="vs-l">{l}</div><span className="vs-label">{label}</span><div className="vs-r">{r}</div></div>;
   return <div className="vs">
     <div className="vs-head"><b>{home}</b><span>casa · ospite</span><b>{away}</b></div>
@@ -68,6 +71,11 @@ function Context({ meta, fixture }: { meta: any; fixture?: string }) {
     {row('Forma', dots(meta.homeForm), dots(meta.awayForm))}
     {row('Indisponibili', out(meta.homeOut), out(meta.awayOut))}
     {meta.adjust && row('Effetto assenze', eff(meta.adjust.home), eff(meta.adjust.away))}
+    {meta.condition && (meta.condition.home || meta.condition.away) && <>
+      {row('Riposo', rest(meta.condition.home), rest(meta.condition.away))}
+      {row('Partite in 14 gg', busy(meta.condition.home), busy(meta.condition.away))}
+      {row('Coppe vicine', cup(meta.condition.home), cup(meta.condition.away))}
+    </>}
     <div className={'vs-lineup' + (meta.lineupConfirmed ? ' ok' : '')}>{meta.lineupConfirmed ? '✓ Formazioni ufficiali: calcolo aggiornato' : '⏳ Formazioni in attesa · ricalcolo ~1 ora prima'}</div>
   </div>;
 }

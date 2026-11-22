@@ -65,6 +65,7 @@ function combo(pool: Leg[], sizes: number[], minOdds: number, maxOdds: number, s
   visit(0, [], 1);
   return best as Leg[] | null;
 }
+const ROME_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' });
 const prob = (legs: Leg[]) => legs.reduce((s, l) => s * l.p, 1);
 const ev = (legs: Leg[]) => prob(legs) * legs.reduce((s, l) => s * l.odds, 1);
 
@@ -151,7 +152,7 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
     }
   }
   // 10. Giornate di partite (ora di Roma): per ognuna un sistema pronto e una bomba.
-  const romeDay = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(iso));
+  const dayMemo = new Map<string, string>(), romeDay = (iso: string) => { let d = dayMemo.get(iso); if (!d) { d = ROME_FMT.format(new Date(iso)); dayMemo.set(iso, d); } return d; };
   const days = [...new Set(c.filter(soon).map(l => romeDay(l.kickoff)))].sort().slice(0, 4);
   const dayLabel = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
   const systems: SystemTicket[] = [], bombs: Ticket[] = [];
@@ -177,5 +178,37 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
     const bt = bestCombo(bp, sizes, minQ, maxQ, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
     if (bt) bombs.push(ticket('bomba-' + d, 'Bomba di ' + dayLabel(d), 'La giocata da sogno della giornata: ' + bt.length + ' esiti, quota ' + Math.round(bt.reduce((q, l) => q * l.odds, 1)) + '. Vince di rado: puntata minima.', bt));
   }
-  return { singles, tickets, bomb, probable, sure, banded, systems, bombs, candidates: c.length };
+  // 11. Multiple pronte per ogni giornata: 3 eventi (quota 2,8–5) e 5 eventi (quota 6–12), la più probabile
+  // nella fascia di quota con un premio al valore.
+  const multiples: Ticket[] = [];
+  for (const d of days) {
+    const pool = perMatchTop(c.filter(l => romeDay(l.kickoff) === d && l.italian && familyOf(l.market) !== null && !heavyAbsence(l.fixtureId)), l => l.p >= 0.5 && l.odds >= 1.3 && l.odds <= 2.6 && l.edge > -0.04, l => l.p * (1 + Math.max(0, l.edge) * 2), 2).slice(0, 20);
+    for (const [k, lo, hi] of [[3, 2.8, 5], [5, 6, 12]] as const) {
+      const t = bestCombo(pool, [k], lo, hi, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
+      if (t) multiples.push(ticket('multipla-' + d + '-' + k, 'Multipla ' + k + ' eventi · ' + dayLabel(d), k + ' esiti della giornata, quota ' + lo.toString().replace('.', ',') + '–' + hi + ', la combinazione più probabile in questa fascia.', t));
+    }
+  }
+  // 12. Schemi settimanali: sistemi in cui puoi sbagliare una (o due) partite e restare in profitto.
+  // 4 su 5 e 5 su 6 = sbagli 1; 5 su 7 = sbagli 2. Struttura scelta per la probabilità di profitto.
+  const week = c.filter(l => l.italian && familyOf(l.market) !== null && !heavyAbsence(l.fixtureId) && Date.parse(l.kickoff) - now <= 7 * 86400000);
+  const schemes: SystemTicket[] = [];
+  const schemeDefs: { kind: string; n: number; k: number; minP: number; lo: number; hi: number }[] = [
+    { kind: 'schema-4su5', n: 5, k: 4, minP: 0.64, lo: 1.45, hi: 2.1 }, { kind: 'schema-5su6', n: 6, k: 5, minP: 0.6, lo: 1.45, hi: 2.2 }, { kind: 'schema-5su7', n: 7, k: 5, minP: 0.56, lo: 1.5, hi: 2.4 }];
+  const usedS = new Set<string>();
+  for (const sd of schemeDefs) {
+    const legs = perMatch(week.filter(l => !usedS.has(l.fixtureId)), l => l.p >= sd.minP && l.odds >= sd.lo && l.odds <= sd.hi && l.edge > -0.04, l => l.p * (1 + Math.max(0, l.edge) * 2));
+    const pick: Leg[] = [];
+    for (const l of legs) { if (pick.length >= sd.n) break; if (isLine(l) && pick.filter(isLine).length >= lineCap(sd.n)) continue; pick.push(l); }
+    if (pick.length < sd.n) continue;
+    const sel = pick.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }));
+    let best: { classes: { k: number; unitCents: number }[]; r: ReturnType<typeof evaluateClasses> } | null = null;
+    for (const sh of [[sd.k], [sd.k, sd.n], ...(sd.k + 1 < sd.n ? [[sd.k, sd.k + 1]] : [])]) {
+      const classes = sh.map(k => ({ k, unitCents: 100 })), r = evaluateClasses(sel, classes), sc = r.pProfit + Math.min(0, r.expectedCents / r.costCents) * 0.5;
+      if (!best || sc > best.r.pProfit + Math.min(0, best.r.expectedCents / best.r.costCents) * 0.5) best = { classes, r };
+    }
+    pick.forEach(l => usedS.add(l.fixtureId));
+    const errors = sd.n - sd.k;
+    schemes.push({ kind: sd.kind, title: 'Schema ' + sd.k + ' su ' + sd.n + ' · puoi sbagliarne ' + errors, day: 'settimana', legs: [...pick].sort((a, b) => a.kickoff.localeCompare(b.kickoff)), classes: best!.classes, name: 'Sistema ' + sd.n + ' eventi · ' + best!.classes.map(x => className(x.k, sd.n)).join(' + '), ...best!.r });
+  }
+  return { singles, tickets, bomb, probable, sure, banded, systems, bombs, multiples, schemes, candidates: c.length };
 }
