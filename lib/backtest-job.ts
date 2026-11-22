@@ -10,7 +10,8 @@ export async function refreshBacktest(force = false) {
   if (!force && row && Date.now() - Date.parse(row.built_at) < WEEK) {
     // New ticket types (schemi, multiple, risultati esatti): rebuild the ticket backtest once if it predates them.
     const tb = await env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{ payload: string }>().catch(() => null);
-    if (!tb || !JSON.parse(tb.payload).series) await refreshTicketBacktest().catch(() => null);
+    const prev = tb ? JSON.parse(tb.payload) : null;
+    if (!prev || !prev.series || !prev.byKind?.some((k: any) => k.kind === 'combo-55')) await refreshTicketBacktest().catch(() => null);
     return false;
   }
   const results = await storedResults(), config = { label: 'v2.1' }, testDays = 150;
