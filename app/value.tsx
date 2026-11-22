@@ -32,7 +32,7 @@ export function ValueView({ equityCents, onOpen, notify, onRecord }: { equityCen
   const leagues = ['Tutte', ...new Set((data?.picks || []).map(p => p.competition))];
   const run = data?.run, last = data?.last;
   return <>
-    <div className="page-heading"><div><p className="eyebrow">VALUE SCANNER</p><h1>Dove la quota paga di più<span>.</span></h1><p>Ogni mattina QUORUM confronta il modello con le quote dei bookmaker europei sulle tue 6 competizioni, per i prossimi 7 giorni.</p></div>
+    <div className="page-heading"><div><p className="eyebrow">VALUE SCANNER</p><h1>Dove la quota paga di più<span>.</span></h1><p>Ogni mattina QUORUM confronta il modello con le quote dei bookmaker europei sulle tue 7 campionati, per i prossimi 7 giorni.</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Scansione in corso…' : 'Aggiorna ora'}</button></div>
     {run && <section className="value-summary">
       <div><span>Ultima scansione</span><strong>{when(run.started_at)}</strong></div>

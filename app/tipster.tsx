@@ -75,7 +75,7 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
           <tbody>{[...d.study].sort((a, b) => b.single[0] - a.single[0]).map(s => <tr key={s.code} className={OURS.includes(s.code) ? 'ours' : ''}>
             <td className="t-team"><span>{s.name}</span>{OURS.includes(s.code) && <em className="ours-tag">in QUORUM</em>}</td>
             <td><b>{Math.round(s.single[0] / 4)}</b></td><td className="hide-sm">{Math.round(s.shop[0] / 4)}</td>
-            <td className={s.clv === null ? '' : s.clv > 0.015 ? 'pos' : s.clv < 0 ? 'neg' : ''}>{s.clv === null ? '—' : (s.clv > 0 ? '+' : '') + (s.clv * 100).toFixed(1) + '%'}</td>
+            <td className={s.clv === null ? '' : s.clv > 0.015 ? 'clv-pos' : s.clv < 0 ? 'clv-neg' : ''}>{s.clv === null ? '—' : (s.clv > 0 ? '+' : '') + (s.clv * 100).toFixed(1) + '%'}</td>
             <td className="hide-sm">{(s.margin * 100).toFixed(1)}%</td></tr>)}</tbody>
         </table>
           <p className="legend-zones"><span>Con un solo bookmaker le occasioni sono poche; confrontando più bookmaker diventano 3–5 volte tante. Il rendimento su poche decine di giocate è rumore: per decidere conta il CLV.</span></p></div>

@@ -756,7 +756,7 @@ body{background:#eef3ee}
 .tip-model{font-size:11.5px;font-weight:700;margin:0;border-radius:8px;padding:5px 8px}.tip-model.ok{background:#e4f4ea;color:#0f6b46}.tip-model.no{background:#fbf1d6;color:#8a6510}
 .tip-leg{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:5px 0;border-bottom:1px dashed #e3eae1}.tip-leg span{display:flex;flex-direction:column}.tip-leg small{font-size:10.5px;color:#6b7a70}.tip-leg b{white-space:nowrap;color:#0b3d2a}
 .standings.study tr.ours{background:#f1f8e9}.ours-tag{font-style:normal;font-size:10px;font-weight:800;margin-left:6px;padding:1px 7px;border-radius:999px;background:#0b1f17;color:var(--lime)}
-.standings.study td.pos{color:#0f6b46;font-weight:800}.standings.study td.neg{color:#b23b25;font-weight:800}
+.standings.study td.clv-pos{color:#0f6b46;font-weight:800}.standings.study td.clv-neg{color:#b23b25;font-weight:800}
 .tip-books{display:flex;flex-wrap:wrap;gap:5px}.tip-books span{display:inline-flex;gap:5px;align-items:center;font-size:11px;font-weight:700;color:#5e7365;background:#f3f7f1;border:1px solid #e1e9de;border-radius:999px;padding:2px 9px}.tip-books span b{color:#24412f}
 .tip-books span.ok{background:#eaf6dc;border-color:#cfe6b6}.tip-books span.best{background:#0b1f17;border-color:#0b1f17;color:#cfe3c4}.tip-books span.best b{color:var(--lime)}
 /* Menu laterale: tutto visibile anche su schermi bassi */
