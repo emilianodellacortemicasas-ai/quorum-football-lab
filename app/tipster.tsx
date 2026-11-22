@@ -4,7 +4,7 @@ import { Check, Crosshair, Info, RefreshCw } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay } from '../lib/types';
 
-type L = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; edge: number; pTrue: number; source: string; modelAgrees: boolean | null; stake: number };
+type L = { all?: Record<string, number>; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; edge: number; pTrue: number; source: string; modelAgrees: boolean | null; stake: number };
 type D = { legs: L[]; odds: number; p: number; edge: number; stake: number };
 type Rec = { n: number; won: number; roi: number | null; clv: number | null; clvN: number; pending: number; recent: any[] };
 type Study = { code: string; name: string; matches: number; margin: number; single: [number, number]; shop: [number, number]; clv: number | null };
@@ -33,7 +33,7 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
   return <div className="page tipster-page">
     <div className="page-head"><div><p className="eyebrow">IL METODO DEI PROFESSIONISTI</p><h1><Crosshair className="h1-icon" />Tipster</h1><p>Si gioca solo quando la quota italiana è più alta della probabilità vera. Poche giocate, singole e doppie, puntata proporzionata al valore.</p></div></div>
     <div className="tip-rules">
-      {[['1', 'Quota più alta del giusto', 'Si gioca solo se Lottomatica / Planetwin365 paga almeno il 3% in più della quota giusta.'],
+      {[['1', 'Quota più alta del giusto', 'Si gioca solo se un bookmaker italiano (Lottomatica / Planetwin365, Snai, Sisal, Eurobet) paga almeno il 3% in più della quota giusta. QUORUM ti dice dove.'],
         ['2', 'Probabilità vera = Pinnacle', 'La quota giusta viene dal bookmaker dei professionisti, senza il suo margine. Se manca, dalla media di tutti i bookmaker.'],
         ['3', 'Solo singole e doppie', 'Ogni partita in più moltiplica il margine del banco: niente multiple lunghe.'],
         ['4', 'Puntata in % del capitale', '¼ di Kelly: più valore = puntata più alta, mai oltre il 2% (1% per le doppie).']].map(([n, t, x]) => <div key={n} className="tip-rule"><span>{n}</span><b>{t}</b><small>{x}</small></div>)}
@@ -51,6 +51,7 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
             <div className="tip-top"><small>{l.competition} · {when(l.kickoff)}</small><span className="tip-edge">+{(l.edge * 100).toFixed(1)}%</span></div>
             <strong>{l.fixture}</strong>
             <div className="tip-pick"><b>{l.label}</b><span className="tip-odds">{l.odds.toFixed(2)}<small>{l.bookmaker}</small></span></div>
+            {l.all && Object.keys(l.all).length > 1 && <div className="tip-books">{Object.entries(l.all).sort((a, b) => b[1] - a[1]).map(([b, o]) => <span key={b} className={o === l.odds ? 'best' : (l.pTrue * o - 1 >= 0.03 ? 'ok' : '')}>{b === 'Lottomatica' ? 'Lottomatica/Planetwin' : b}<b>{o.toFixed(2)}</b></span>)}</div>}
             <div className="tip-facts"><span>Probabilità vera <b>{percent(l.pTrue, 0)}</b><small>{l.source}</small></span><span>Quota giusta <b>{(1 / l.pTrue).toFixed(2)}</b></span><span>Puntata <b>{money(stakeOf(l.stake))}</b><small>{(l.stake * 100).toFixed(1)}% del capitale</small></span></div>
             {l.modelAgrees !== null && <p className={'tip-model ' + (l.modelAgrees ? 'ok' : 'no')}>{l.modelAgrees ? '✓ Anche il modello QUORUM la vede con valore' : '⚠ Il modello QUORUM non è d’accordo: puntata minima o salta'}</p>}
             {onRecord && <button className="secondary played-button" onClick={() => onRecord([leg(l)], stakeOf(l.stake), 'value', 'tipster-singola')}><Check size={15} />L’ho giocata ({money(stakeOf(l.stake))})</button>}

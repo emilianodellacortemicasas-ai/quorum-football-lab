@@ -5,7 +5,7 @@ import type { Leg, Ticket } from './tickets.ts';
 
 const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', homeDraw: '1X', drawAway: 'X2', homeAway: '12', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5', btts: 'Goal', noGoal: 'No Goal' };
 export const TIP_MIN_EDGE = 0.03;
-export type TipLeg = Leg & { pTrue: number; source: 'Pinnacle' | 'Media mercato'; modelAgrees: boolean | null; stake: number };
+export type TipLeg = Leg & { pTrue: number; source: 'Pinnacle' | 'Media mercato'; modelAgrees: boolean | null; stake: number; all: Record<string, number> };
 type Row = { fixture_id: string; fixture: string; competition: string; kickoff: string; markets: Record<string, any> };
 
 function truth(mk: Record<string, any>, key: string): { p: number; source: TipLeg['source'] } | null {
@@ -29,7 +29,7 @@ export function tipsterPicks(rows: Row[], now = Date.now()) {
       const edge = tr.p * odds - 1; if (edge < TIP_MIN_EDGE) continue;
       const pB = r.markets[key]?.pBlend;
       legs.push({ fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, market: key, label: LABELS[key], p: tr.p, odds, bookmaker: Object.entries(it).filter(x => x[1] === odds).map(x => x[0]).join(' / '), edge, se: Math.sqrt(tr.p * (1 - tr.p) / 200), italian: true,
-        pTrue: tr.p, source: tr.source, modelAgrees: Number.isFinite(pB) ? pB * odds - 1 > 0 : null, stake: kelly(tr.p, odds, 0.02) });
+        pTrue: tr.p, source: tr.source, modelAgrees: Number.isFinite(pB) ? pB * odds - 1 > 0 : null, stake: kelly(tr.p, odds, 0.02), all: Object.fromEntries(Object.entries(it).filter(([b]) => b !== 'Planetwin365')) });
     }
   }
   // One pick per match (the one with most value), best first.

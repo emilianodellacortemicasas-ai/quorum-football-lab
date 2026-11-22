@@ -8,7 +8,10 @@ import { sameTeam } from './scanner-contract';
 const db = () => env.DB!;
 const BASE = 'https://api.oddspapi.io/v4/';
 const SOCCER = 10;
-export const IT_BOOKS = [{ key: 'lottomatica', label: 'Lottomatica' }, { key: 'planetwin', label: 'Planetwin365' }] as const;
+// Lottomatica (= Planetwin365, same prices) every 24h; Snai, Sisal and Eurobet every 48h for the comparison.
+// Requests per month (free plan 250): 2 calls per refresh (≤ 5 tournaments each) → 60 + 3 × 30 + catalogue ≈ 160.
+export const IT_BOOKS = [{ key: 'lottomatica', label: 'Lottomatica', re: /lottomatica/i, age: 24 }, { key: 'planetwin', label: 'Planetwin365', re: /planet ?win/i, age: 24 },
+  { key: 'snai', label: 'Snai', re: /snai/i, age: 48 }, { key: 'sisal', label: 'Sisal', re: /sisal/i, age: 48 }, { key: 'eurobet', label: 'Eurobet', re: /eurobet/i, age: 48 }] as const;
 const COMPS: Record<string, { cat: string; names: string[] }> = {
   'Serie A': { cat: 'italy', names: ['serie a'] }, 'Serie B': { cat: 'italy', names: ['serie b'] }, 'Championship': { cat: 'england', names: ['championship'] },
   'Premier League': { cat: 'england', names: ['premier league'] }, 'La Liga': { cat: 'spain', names: ['laliga', 'la liga'] },
@@ -45,7 +48,7 @@ const MARKETS: Record<string, Record<string, string>> = {
 };
 
 async function meta(key: string): Promise<Meta> {
-  return cached<Meta>('oddspapi:meta3', 7 * 86400000, async () => {
+  return cached<Meta>('oddspapi:meta4', 14 * 86400000, async () => {
     const pause = () => new Promise(r => setTimeout(r, 1100));
     const tour = await api('tournaments?sportId=' + SOCCER, key); await pause();
     const books = await api('bookmakers', key); await pause();
@@ -60,7 +63,7 @@ async function meta(key: string): Promise<Meta> {
     }
     const slugs = list(books).map(b => typeof b === 'string' ? b : String(b.slug ?? b.bookmaker ?? b.bookmakerSlug ?? ''));
     const pick = (re: RegExp) => slugs.filter(s => re.test(s)).sort((a, b) => (b.includes('it') ? 1 : 0) - (a.includes('it') ? 1 : 0) || a.length - b.length)[0];
-    return { tournaments, books: { lottomatica: pick(/lottomatica/i) ?? '', planetwin: pick(/planet ?win/i) ?? '' }, teams };
+    return { tournaments, books: Object.fromEntries(IT_BOOKS.map(b => [b.key, pick(b.re) ?? ''])), teams };
   });
 }
 
@@ -70,45 +73,43 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
   const m = await meta(key);
   const ids = Object.entries(m.tournaments); if (!ids.length) return [];
   const compOf = (tid: number) => ids.find(([, v]) => v === tid)?.[0] ?? '';
-  // The API accepts at most 5 tournaments per call: the 5 leagues every 12h, Coppa Italia every 24h.
-  // 2 bookmakers × (2 + 1) calls a day ≈ 180 requests a month, plus ~13 for the weekly catalogue.
-  const groups: [string, number, [string, number][]][] = [
-    ['oddspapi:odds2', 12 * 3600000, ids.filter(([c]) => !MINOR.includes(c))],
-    ['oddspapi:odds:minor', 12 * 3600000, ids.filter(([c]) => MINOR.includes(c))],
-  ];
-  const out: ItalianFixture[] = [];
-  for (const [cacheId, age, group] of groups) {
-    if (!group.length) continue;
-    try { out.push(...await cached<ItalianFixture[]>(cacheId, age, () => fetchGroup(group.map(x => x[1])))); }
-    catch (e) { if (!out.length && cacheId === 'oddspapi:odds2') throw e; }
-  }
-  return out;
-  async function fetchGroup(tids: number[]) {
-    const byFixture = new Map<string, ItalianFixture>();
-    // Planetwin365 belongs to Lottomatica and shows the same prices: one request, both names.
-    for (const b of IT_BOOKS.filter(x => x.key === 'lottomatica' || !m.books.lottomatica)) {
-      const slug = m.books[b.key]; if (!slug) continue;
-      await new Promise(r => setTimeout(r, 1100));
-      const data = list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + tids.join(',') + '&oddsFormat=decimal', key!));
-      for (const f of data) {
-        const fid = String(f.fixtureId), board = f.bookmakerOdds?.[slug]; if (!board) continue;
-        const fx: ItalianFixture = byFixture.get(fid) ?? { home: f.participant1Name ?? m.teams[String(f.participant1Id)], away: f.participant2Name ?? m.teams[String(f.participant2Id)], start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
-        for (const [mid, mk] of Object.entries<any>(board.markets ?? {})) {
-          const omap = MARKETS[mid]; if (!omap) continue;
-          for (const [oid, o] of Object.entries<any>(mk.outcomes ?? {})) {
-            const q = omap[oid], p = o?.players?.['0'] ?? o?.players?.[0];
-            if (!q || !p || p.active === false || !Number.isFinite(p.price) || p.price <= 1) continue;
-            const quote = { odds: p.price, link: typeof p.betslip === 'string' ? p.betslip : typeof board.fixturePath === 'string' ? board.fixturePath : null };
-            (fx.quotes[q] ??= {})[b.label] = quote; if (b.key === 'lottomatica') fx.quotes[q]['Planetwin365'] = quote;
+  // The API accepts at most 5 tournaments per call: main leagues and minor leagues in two calls per bookmaker.
+  const groups: [string, number[]][] = [['main', ids.filter(([c]) => !MINOR.includes(c)).map(x => x[1])], ['minor', ids.filter(([c]) => MINOR.includes(c)).map(x => x[1])]];
+  const byFixture = new Map<string, ItalianFixture>();
+  // Planetwin365 belongs to Lottomatica and shows the same prices: one request, both names.
+  const books = IT_BOOKS.filter(b => b.key !== 'planetwin' || !m.books.lottomatica);
+  let firstError: unknown = null, okMain = false;
+  for (const b of books) {
+    const slug = m.books[b.key]; if (!slug) continue;
+    for (const [g, tids] of groups) {
+      if (!tids.length) continue;
+      try {
+        const rows = await cached<any[]>('oddspapi:' + b.key + ':' + g, b.age * 3600000, async () => {
+          await new Promise(r => setTimeout(r, 1100));
+          return list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + tids.join(',') + '&oddsFormat=decimal', key!)).map(f => ({ fixtureId: f.fixtureId, participant1Name: f.participant1Name, participant2Name: f.participant2Name, participant1Id: f.participant1Id, participant2Id: f.participant2Id, startTime: f.startTime, tournamentId: f.tournamentId, board: f.bookmakerOdds?.[slug] ?? null }));
+        });
+        if (b.key === 'lottomatica' && g === 'main') okMain = true;
+        for (const f of rows) {
+          const fid = String(f.fixtureId), board = f.board; if (!board) continue;
+          const fx: ItalianFixture = byFixture.get(fid) ?? { home: f.participant1Name ?? m.teams[String(f.participant1Id)], away: f.participant2Name ?? m.teams[String(f.participant2Id)], start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
+          for (const [mid, mk] of Object.entries<any>(board.markets ?? {})) {
+            const omap = MARKETS[mid]; if (!omap) continue;
+            for (const [oid, o] of Object.entries<any>(mk.outcomes ?? {})) {
+              const q = omap[oid], p = o?.players?.['0'] ?? o?.players?.[0];
+              if (!q || !p || p.active === false || !Number.isFinite(p.price) || p.price <= 1) continue;
+              const quote = { odds: p.price, link: typeof p.betslip === 'string' ? p.betslip : typeof board.fixturePath === 'string' ? board.fixturePath : null };
+              (fx.quotes[q] ??= {})[b.label] = quote; if (b.key === 'lottomatica') fx.quotes[q]['Planetwin365'] = quote;
+            }
           }
+          byFixture.set(fid, fx);
         }
-        byFixture.set(fid, fx);
-      }
+      } catch (e) { firstError ??= e; }
     }
-    const res = [...byFixture.values()].filter(f => f.home && f.away && Object.keys(f.quotes).length);
-    if (!res.length) throw new Error('nessuna quota riconosciuta');
-    return res;
   }
+  const out = [...byFixture.values()].filter(f => f.home && f.away && Object.keys(f.quotes).length);
+  if (!out.length && firstError) throw firstError;
+  void okMain;
+  return out;
 }
 
 export function matchItalian(fix: { home: string; away: string; kickoff: string; competition: string }, list: ItalianFixture[]) {
@@ -120,7 +121,7 @@ export function matchItalian(fix: { home: string; away: string; kickoff: string;
 export async function italianStatus() {
   const key = await credentialValue('oddspapi'); if (!key) return { connected: false };
   const m = await meta(key);
-  const row = await db().prepare("SELECT built_at FROM model_state WHERE id='oddspapi:odds2'").first<{ built_at: string }>();
+  const row = await db().prepare("SELECT built_at FROM model_state WHERE id='oddspapi:lottomatica:main'").first<{ built_at: string }>();
   return { connected: true, tournaments: m.tournaments, books: m.books, teams: Object.keys(m.teams).length, oddsUpdatedAt: row?.built_at ?? null };
 }
 

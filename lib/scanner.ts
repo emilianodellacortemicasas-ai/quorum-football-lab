@@ -105,7 +105,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     const fetched = await pool(paired, 4, async ({ f }) => { try { return await getSportmonksMatch(f.id); } catch { return null; } });
     const modelled = fetched.map((m, i) => m && m.lambdaHome !== null && m.lambdaAway !== null ? { m, e: paired[i].e } : null);
     let ita: ItalianFixture[] = [];
-    try { ita = (await italianOdds()) ?? []; if (ita.length) notes.push('Quote Lottomatica/Planetwin365 disponibili per ' + ita.length + ' partite.'); }
+    try { ita = (await italianOdds()) ?? []; if (ita.length) notes.push('Quote italiane (Lottomatica/Planetwin365, Snai, Sisal, Eurobet) disponibili per ' + ita.length + ' partite.'); }
     catch (err) { notes.push('Quote italiane non aggiornate: ' + (err instanceof Error ? err.message : 'errore OddsPapi') + '.'); }
     const itFor = (f: { home: string; away: string; kickoff: string; competition: string }) => ita.length ? matchItalian(f, ita) : null;
     // Best Italian price for a market, with edge and quarter Kelly (cap 2%) against QUORUM's probability.
