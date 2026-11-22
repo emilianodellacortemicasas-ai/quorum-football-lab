@@ -82,17 +82,18 @@ export function comboBombs(list: ExactPick[], now = Date.now()): ComboBomb[] {
   const days = [...new Set(soon.map(e => dayOf(e.kickoff)))].sort().slice(0, 4), out: ComboBomb[] = [];
   for (const d of days) {
     const today = soon.filter(e => dayOf(e.kickoff) === d), big = today.length >= 8, [lo, hi] = big ? [40, 100] : [10, 30], sizes = big ? [5, 6, 7, 8] : [3, 4, 5, 6];
-    const pool = today.flatMap(e => e.combos.filter(c => 1 / c.p >= 1.3 && 1 / c.p <= 2.3).sort((a, b) => b.p - a.p).slice(0, 2).map(c => ({ e, c }))).sort((a, b) => b.c.p - a.c.p).slice(0, 18);
-    let best: typeof pool | null = null, bestP = 0;
-    const visit = (start: number, legs: typeof pool, odds: number, p: number) => {
-      if (odds > hi) return;
-      if (sizes.includes(legs.length) && odds >= lo && p > bestP) { bestP = p; best = [...legs]; }
-      if (legs.length >= Math.max(...sizes)) return;
-      for (let i = start; i < pool.length; i++) if (!legs.some(x => x.e.fixtureId === pool[i].e.fixtureId)) visit(i + 1, [...legs, pool[i]], odds / pool[i].c.p, p * pool[i].c.p);
-    };
-    visit(0, [], 1, 1);
+    // For each size n every leg needs about lo^(1/n) as fair price: per match the most probable combo at or above
+    // that price, then the n most probable matches; the size with the highest total probability wins.
+    let best: { e: ExactPick; c: { name: string; p: number } }[] | null = null, bestP = 0;
+    for (const n of sizes) {
+      const need = Math.pow(lo * 1.05, 1 / n);
+      const legs = today.map(e => ({ e, c: e.combos.filter(c => 1 / c.p >= need && 1 / c.p <= Math.max(need * 1.6, 2.3)).sort((a, b) => b.p - a.p)[0] })).filter(x => x.c).sort((a, b) => b.c!.p - a.c!.p).slice(0, n) as { e: ExactPick; c: { name: string; p: number } }[];
+      if (legs.length < n) continue;
+      const odds = legs.reduce((q, x) => q / x.c.p, 1), p = 1 / odds;
+      if (odds >= lo && odds <= hi && p > bestP) { bestP = p; best = legs; }
+    }
     if (!best) continue;
-    const legs = (best as typeof pool).map(x => ({ fixtureId: x.e.fixtureId, fixture: x.e.fixture, kickoff: x.e.kickoff, market: 'combo:' + x.c.name, label: x.c.name, p: x.c.p, odds: 1 / x.c.p })).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+    const legs = best.map(x => ({ fixtureId: x.e.fixtureId, fixture: x.e.fixture, kickoff: x.e.kickoff, market: 'combo:' + x.c.name, label: x.c.name, p: x.c.p, odds: 1 / x.c.p })).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
     const label = new Date(d + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
     out.push({ kind: 'bomba-combo-' + d, day: d, title: 'Bomba combo di ' + label, legs, p: bestP, fair: 1 / bestP });
   }
