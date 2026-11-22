@@ -38,6 +38,16 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
   const comps = [...new Set(results.map(r => r.comp))].filter(c => c !== 'Coppa Italia');
   const stats = new Map<string, { title: string; n: number; won: number; p: number; profit: number; odds: number; legs: number; staked: number; noOdds?: boolean }>();
   const series: { week: string; groups: Record<string, number> }[] = [];
+  // Every market QUORUM predicts: when it said ≥ 60% (and 45–60%), how often it really happened.
+  // 1X2 and Under/Over 2,5 also have the historical average price: return betting 1 unit on each ≥ 60% pick.
+  const mstats = new Map<string, { group: string; label: string; n: number; won: number; p: number; hn: number; hwon: number; hp: number; mn: number; mwon: number; mp: number; profit: number; priced: number }>();
+  const mAdd = (group: string, label: string, p: number, win: boolean, price?: number | null) => {
+    const s0 = mstats.get(label) ?? { group, label, n: 0, won: 0, p: 0, hn: 0, hwon: 0, hp: 0, mn: 0, mwon: 0, mp: 0, profit: 0, priced: 0 };
+    s0.n++; s0.p += p; if (win) s0.won++;
+    if (p >= 0.6) { s0.hn++; s0.hp += p; if (win) s0.hwon++; if (price) { s0.priced++; s0.profit += win ? price - 1 : -1; } }
+    else if (p >= 0.45) { s0.mn++; s0.mp += p; if (win) s0.mwon++; }
+    mstats.set(label, s0);
+  };
   const add = (kind: string, title: string, p: number, odds: number, legs: number, win: boolean, profit: number, staked: number, noOdds = false) => {
     const s = stats.get(kind) ?? { title, n: 0, won: 0, p: 0, profit: 0, odds: 0, legs: 0, staked: 0, noOdds }; s.n++; s.p += p; s.odds += odds; s.legs += legs; s.staked += staked; s.profit += profit; if (win) s.won++; stats.set(kind, s);
     if (!noOdds) { const g = groupOf(kind), wk = series[series.length - 1]; wk.groups[g] = (wk.groups[g] ?? 0) + profit; }
@@ -84,8 +94,23 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
       add('esatto-top', 'Risultato esatto più probabile', sc[0].p, 1 / sc[0].p, 1, sc[0].home === r.hg && sc[0].away === r.ag, 0, 1, true);
       const tot = r.hg + r.ag, best = MULTIGOL.map(([lo, hi]) => ({ lo, hi, p: multigolP(sc, lo, hi) })).filter(x => x.hi - x.lo <= 2 && x.p >= 0.65).sort((x, y) => y.p - x.p)[0];
       if (best) add('multigol-65', 'Multigol al 65% o più', best.p, 1 / best.p, 1, tot >= best.lo && tot <= best.hi, 0, 1, true);
+      // Per market.
+      const o = odds.get(r.id) as FdRow, P = (f: (h: number, a: number) => boolean) => sc.filter(x => f(x.home, x.away)).reduce((q, x) => q + x.p, 0);
+      const res3 = [['1', (h: number, a: number) => h > a, o.h], ['X', (h: number, a: number) => h === a, o.d], ['2', (h: number, a: number) => h < a, o.a]] as const;
+      for (const [lab, f, price] of res3) mAdd('Esito finale', lab, P(f), f(r.hg, r.ag), price);
+      for (const [lab, f] of [['1X', (h: number, a: number) => h >= a], ['X2', (h: number, a: number) => h <= a], ['12', (h: number, a: number) => h !== a]] as const) mAdd('Doppia chance', lab, P(f), f(r.hg, r.ag));
+      for (const line of [0.5, 1.5, 2.5, 3.5, 4.5]) {
+        const pO = P((h, a) => h + a > line), L = String(line).replace('.', ',');
+        mAdd('Under / Over', 'Over ' + L, pO, tot > line, line === 2.5 ? o.o25 ?? undefined : undefined);
+        mAdd('Under / Over', 'Under ' + L, 1 - pO, tot < line, line === 2.5 ? o.u25 ?? undefined : undefined);
+      }
+      const pG = P((h, a) => h > 0 && a > 0); mAdd('Goal / No Goal', 'Goal', pG, r.hg > 0 && r.ag > 0); mAdd('Goal / No Goal', 'No Goal', 1 - pG, r.hg === 0 || r.ag === 0);
+      for (const c of comboProbs(sc)) mAdd('Combo', c.name, c.p, comboWins(c.name, r.hg, r.ag));
+      for (const [lo, hi] of MULTIGOL) mAdd('Multigol', 'Multigol ' + lo + '-' + hi, multigolP(sc, lo, hi), tot >= lo && tot <= hi);
+      mAdd('Risultato esatto', 'Risultato più probabile', sc[0].p, sc[0].home === r.hg && sc[0].away === r.ag);
     }
   }
   const byKind: KindStat[] = [...stats.entries()].map(([kind, s]) => ({ kind, title: s.title, group: groupOf(kind), n: s.n, won: s.won, hit: s.won / s.n, expected: s.p / s.n, roi: s.noOdds ? null : s.profit / s.staked, avgOdds: s.odds / s.n, avgLegs: s.legs / s.n }));
-  return { at: new Date(now).toISOString(), testDays, weeks, matches, byKind, series: series.filter(x => Object.keys(x.groups).length) };
+  const markets = [...mstats.values()].map(m => ({ group: m.group, label: m.label, n: m.n, hit: m.won / m.n, expected: m.p / m.n, high: m.hn ? { n: m.hn, hit: m.hwon / m.hn, expected: m.hp / m.hn, roi: m.priced >= 20 ? m.profit / m.priced : null } : null, mid: m.mn ? { n: m.mn, hit: m.mwon / m.mn, expected: m.mp / m.mn } : null }));
+  return { at: new Date(now).toISOString(), testDays, weeks, matches, byKind, markets, series: series.filter(x => Object.keys(x.groups).length) };
 }

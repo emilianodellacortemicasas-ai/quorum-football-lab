@@ -3,7 +3,22 @@ import { useEffect, useState } from 'react';
 import { BarChart3, Info } from 'lucide-react';
 
 type K = { kind: string; title: string; group?: string; n: number; won: number; hit: number; expected: number; roi: number | null };
-type B = { at: string; testDays: number; weeks: number; matches: number; byKind: K[]; series: { week: string; groups: Record<string, number> }[] } | null;
+type M = { group: string; label: string; n: number; hit: number; expected: number; high: { n: number; hit: number; expected: number; roi: number | null } | null; mid: { n: number; hit: number; expected: number } | null };
+type B = { at: string; testDays: number; weeks: number; matches: number; byKind: K[]; series: { week: string; groups: Record<string, number> }[]; markets?: M[] } | null;
+const MGROUPS = ['Esito finale', 'Doppia chance', 'Under / Over', 'Goal / No Goal', 'Combo', 'Multigol', 'Risultato esatto'];
+const pc = (x: number) => Math.round(x * 100) + '%';
+function MarketBacktest({ markets }: { markets: M[] }) {
+  const [g, setG] = useState('Esito finale');
+  const rows = markets.filter(m => m.group === g);
+  const cell = (x: { n: number; hit: number; expected: number } | null) => !x || x.n < 20 ? <td className="mb-na">poche</td> : <td><b className={x.hit >= x.expected - 0.02 ? 'ok' : 'ko'}>{pc(x.hit)}</b><small> su {x.n} · prev. {pc(x.expected)}</small></td>;
+  return <div className="mb">
+    <h3><span>📊</span>Backtest per mercato</h3>
+    <p className="small-note">Per ogni giocata: quando QUORUM la dava al 60% o più (e tra 45% e 60%), quante volte è uscita davvero. Verde = uscita come previsto o più, rosso = meno. Il rendimento c’è solo dove abbiamo le quote storiche (1X2 e Under/Over 2,5).</p>
+    <div className="archive-tabs">{MGROUPS.filter(x => markets.some(m => m.group === x)).map(x => <button key={x} className={g === x ? 'on' : ''} onClick={() => setG(x)}>{x}</button>)}</div>
+    <div className="mb-wrap"><table className="mb-table"><thead><tr><th>Giocata</th><th>Data al 60% o più</th><th>Data al 45–60%</th><th>Rendimento</th></tr></thead>
+      <tbody>{rows.map(m => <tr key={m.label}><td className="mb-l">{m.label}</td>{cell(m.high)}{cell(m.mid)}<td>{m.high?.roi === null || m.high?.roi === undefined ? '—' : <b className={m.high.roi >= 0 ? 'ok' : 'ko'}>{(m.high.roi >= 0 ? '+' : '') + Math.round(m.high.roi * 100)}%</b>}</td></tr>)}</tbody></table></div>
+  </div>;
+}
 const GROUPS: [string, string][] = [['Raddoppi', '🛡️'], ['Multiple del giorno', '📋'], ['Schedine 3–5 squadre', '🎯'], ['Schemi settimanali', '🧩'], ['Sistemi del giorno', '🧮'], ['Bombe', '💣'], ['Risultati esatti e combo', '⚽']];
 
 function Spark({ values }: { values: number[] }) {
@@ -37,6 +52,7 @@ export function WeeklyBacktest() {
         {roi !== null && <Spark values={b.series.map(s => s.groups[g] ?? 0)} />}
       </article>;
     })}</div>
+    {b.markets && b.markets.length > 0 && <MarketBacktest markets={b.markets} />}
     <p className="bt-foot"><Info size={13} />Rendimento = guadagno medio per euro giocato, con le quote medie dei bookmaker (le quote Lottomatica / Planetwin365 possono essere un po’ diverse). Se “vinte” è vicino a “previsto” le probabilità sono affidabili. Su meno di 50 giocate un rendimento positivo può essere fortuna.</p>
   </section>;
 }
