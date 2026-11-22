@@ -623,3 +623,75 @@ body{background:#eef3ee}
 .band-tag.b80{background:linear-gradient(90deg,#0f6b46,#14895a)}.band-tag.b70{background:linear-gradient(90deg,#4f8a2a,#7fb11c)}.band-tag.b60{background:linear-gradient(90deg,#b58410,#d49a12)}
 .system-card .sys-name{font-weight:800;color:#0b3d2a;margin:0}
 .sys-unit{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#4c6b57}.sys-unit input{width:80px;padding:7px 9px;border:1px solid #cfdacb;border-radius:9px;font-size:15px;font-weight:700;text-align:center}
+/* ---- Famiglia: Roma & Juve ---- */
+.family-crests{display:inline-flex;gap:3px;margin-left:auto;align-self:center}
+.family-crests img{width:22px;height:22px;object-fit:contain;filter:drop-shadow(0 2px 2px rgba(0,0,0,.35));animation:crestBob 3.2s ease-in-out infinite}
+.family-crests img:nth-child(2){animation-delay:-1.6s}
+@keyframes crestBob{0%,100%{transform:translateY(0) rotateY(0)}50%{transform:translateY(-2px) rotateY(18deg)}}
+.crest{object-fit:contain;flex:none;display:inline-block}
+.crest-fallback{display:inline-grid;place-items:center;border-radius:50%;background:#e6eee4;color:#24412f;font-weight:800}
+.family-derby{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch;margin:4px 0 18px;perspective:900px}
+.derby-tile{position:relative;overflow:hidden;border-radius:20px;padding:18px 14px 16px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;color:#fff;box-shadow:0 10px 0 rgba(0,0,0,.18),0 18px 30px rgba(0,0,0,.18);transform:rotateX(6deg);transition:transform .35s}
+.derby-tile:hover{transform:rotateX(0) translateY(-3px)}
+.derby-tile.roma{background:radial-gradient(circle at 30% 10%,#c8323f,#7d1424 60%,#4f0c17)}
+.derby-tile.roma::after{content:'';position:absolute;inset:auto -20% -40% -20%;height:60%;background:linear-gradient(90deg,transparent,rgba(240,188,66,.45),transparent);transform:skewY(-8deg)}
+.derby-tile.juve{background:repeating-linear-gradient(90deg,#111 0 22px,#262626 22px 44px);border:2px solid #fff}
+.derby-tile small{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;opacity:.8;font-weight:800}
+.derby-tile b{font-size:18px;z-index:1}
+.derby-crest{z-index:1;width:96px;height:96px;display:grid;place-items:center;border-radius:50%;background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);animation:crestSpin 6s ease-in-out infinite;transform-style:preserve-3d}
+.derby-tile.juve .derby-crest{animation-delay:-3s}
+@keyframes crestSpin{0%,100%{transform:rotateY(-14deg) translateY(0)}50%{transform:rotateY(14deg) translateY(-5px)}}
+.derby-stats{display:flex;gap:16px;z-index:1;margin-top:4px}.derby-stats span{display:flex;flex-direction:column;font-size:11px;opacity:.85}.derby-stats em{font-style:normal;font-size:24px;font-weight:900;opacity:1}
+.derby-tile .form-dots{z-index:1;margin-top:4px}
+.derby-mid{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-width:110px}
+.derby-vs{font-size:30px;font-weight:900;background:linear-gradient(180deg,#f0bc42,#b8321f 50%,#222 51%,#666);-webkit-background-clip:text;background-clip:text;color:transparent;animation:vsPulse 2.4s ease-in-out infinite}
+@keyframes vsPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.derby-mid p{margin:2px 0;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5d6f63}.derby-mid strong{font-size:20px;color:#0b3d2a}.derby-mid small{font-size:11px;color:#6b7a70}
+@media(max-width:640px){.family-derby{grid-template-columns:1fr 1fr;gap:10px}.derby-mid{grid-column:1/-1;grid-row:1;flex-direction:row;gap:8px;min-width:0}.derby-crest{width:72px;height:72px}.derby-crest .crest{width:60px;height:60px}.derby-tile b{font-size:15px}}
+.form-dots{display:inline-flex;gap:3px}.form-dots i{width:9px;height:9px;border-radius:50%;background:#c2cbc0}.form-dots i.w{background:#14895a}.form-dots i.d{background:#d49a12}.form-dots i.l{background:#c0392b}
+.league-tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px}
+.league-tabs button{flex:none;display:flex;gap:6px;align-items:center;font-weight:800;font-size:13px;padding:9px 14px;border-radius:12px;background:#fff;border:1px solid #d3ddcf;box-shadow:0 3px 0 #cfd9cb;color:#24412f;transition:transform .15s}
+.league-tabs button:active{transform:translateY(2px);box-shadow:0 1px 0 #cfd9cb}
+.league-tabs button.on{background:linear-gradient(180deg,#1b2f24,#0b1f17);color:var(--q-lime);border-color:#0b1f17;box-shadow:0 4px 0 #000}
+.standings-card{background:#fff;border:1px solid #dfe7dc;border-radius:18px;overflow:hidden;box-shadow:0 6px 18px rgba(11,31,23,.06)}
+.standings{width:100%;border-collapse:collapse;font-size:13.5px}
+.standings th{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:#6b7a70;padding:10px 6px;text-align:center;background:#f5f8f3}
+.standings td{padding:8px 6px;text-align:center;border-top:1px solid #eef2ec}
+.standings .t-team{text-align:left}.standings td.t-team{display:flex;align-items:center;gap:9px;font-weight:700}
+.standings tr{position:relative;transition:background .2s}.standings tbody tr:hover{background:#f3f8f1}
+.standings .pos{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;font-weight:800;font-size:12px;background:#eef2ec}
+.standings tr.z-cl .pos{background:#0f6b46;color:#fff}.standings tr.z-el .pos{background:#2f7fb5;color:#fff}.standings tr.z-down .pos{background:#c0392b;color:#fff}
+.standings tr.fav-roma{background:linear-gradient(90deg,rgba(142,31,47,.14),rgba(240,188,66,.12) 60%,transparent)}
+.standings tr.fav-roma td.t-team span{color:#8e1f2f}
+.standings tr.fav-juve{background:linear-gradient(90deg,rgba(0,0,0,.12),rgba(0,0,0,.03) 60%,transparent)}
+.standings tr.fav-juve td.t-team span{color:#111}
+.standings tr.fav-roma td:first-child,.standings tr.fav-juve td:first-child{box-shadow:inset 4px 0 0 #8e1f2f}.standings tr.fav-juve td:first-child{box-shadow:inset 4px 0 0 #111}
+.legend-zones{display:flex;flex-wrap:wrap;gap:12px;font-size:11.5px;color:#5d6f63;padding:10px 14px;margin:0}
+.legend-zones span.z-cl::before,.legend-zones span.z-el::before,.legend-zones span.z-down::before{content:'';display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.legend-zones .z-cl::before{background:#0f6b46}.legend-zones .z-el::before{background:#2f7fb5}.legend-zones .z-down::before{background:#c0392b}
+@media(max-width:700px){.standings .hide-sm{display:none}}@media(max-width:420px){.standings .hide-xs{display:none}.standings{font-size:12.5px}}
+/* ---- Formazioni ---- */
+.lu-grid{display:grid;gap:10px;margin-bottom:14px}
+.lu-card{background:#fff;border:1px solid #dfe7dc;border-radius:16px;box-shadow:0 4px 0 #dfe7dc;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.lu-card:hover{transform:translateY(-2px);box-shadow:0 7px 0 #d3ddcf}
+.lu-card.fav-roma{border-color:#c8323f;box-shadow:0 4px 0 #8e1f2f}.lu-card.fav-juve{border-color:#111;box-shadow:0 4px 0 #111}
+.lu-row{width:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:12px 14px;background:none;border:0;cursor:pointer;color:inherit}
+.lu-side{display:flex;align-items:center;gap:8px;min-width:0}.lu-side b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lu-side.right{justify-content:flex-end;text-align:right}
+.lu-mid{display:flex;flex-direction:column;align-items:center}.lu-mid small{font-size:10.5px;color:#6b7a70;font-weight:700}.lu-mid em{font-style:normal;font-weight:900;font-size:15px;background:#0b1f17;color:var(--q-lime);padding:3px 10px;border-radius:8px;margin-top:2px}
+.lineup-detail{padding:0 14px 16px;animation:luIn .35s ease}@keyframes luIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.lu-status{font-size:12.5px;font-weight:700;color:#7a6a2a;background:#fbf4dc;border-radius:10px;padding:8px 12px;margin-bottom:12px}.lu-status.ok{color:#0f6b46;background:#e4f4ea}
+.pitch{position:relative;aspect-ratio:68/100;max-width:420px;margin:0 auto 14px;border-radius:16px;background:repeating-linear-gradient(0deg,#1f8a4c 0 10%,#23974f 10% 20%);box-shadow:inset 0 0 0 3px rgba(255,255,255,.7),0 10px 24px rgba(0,0,0,.2);overflow:hidden;transform:perspective(900px) rotateX(8deg);transform-origin:center bottom}
+.pitch i{position:absolute;border:2px solid rgba(255,255,255,.7)}
+.pitch-mid{left:0;right:0;top:50%;height:0;border-width:2px 0 0!important}
+.pitch-circle{left:50%;top:50%;width:26%;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%)}
+.pitch-box{left:25%;right:25%;height:13%}.pitch-box.top{top:-2px;border-top:0!important}.pitch-box.bottom{bottom:-2px;border-bottom:0!important}
+.pl{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;animation:plIn .5s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes plIn{from{opacity:0;transform:translate(-50%,-50%) scale(.3)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.pl span{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:12px;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.pl.home span{background:#fff;color:#0b3d2a}.pl.away span{background:#0b1f17;color:var(--q-lime)}
+.pl small{font-size:10px;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.7);white-space:nowrap;max-width:70px;overflow:hidden;text-overflow:ellipsis}
+.lu-teams{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:640px){.lu-teams{grid-template-columns:1fr}}
+.lu-head{display:flex;gap:10px;align-items:center;margin-bottom:8px}.lu-head b{display:block}.lu-head small{font-size:11.5px;color:#6b7a70}
+.lu-list{list-style:none;margin:0;padding:0;display:grid;gap:3px}.lu-list li,.lu-bench li{display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed #e6ece4}
+.lu-list li span,.lu-bench li span{width:22px;text-align:center;font-weight:800;color:#0f6b46}.lu-list em{margin-left:auto;font-style:normal;font-size:10.5px;font-weight:800;color:#6b7a70}
+.lu-bench summary{cursor:pointer;font-size:12.5px;font-weight:800;color:#24412f;margin-top:8px}.lu-bench ul{list-style:none;margin:6px 0 0;padding:0}

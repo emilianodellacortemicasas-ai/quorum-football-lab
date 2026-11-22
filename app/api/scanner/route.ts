@@ -5,6 +5,7 @@ import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
 import { dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
+import { leagueStandings, allStandings, fixtureLineup, lineupFixtures } from '../../../lib/sportmonks';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function GET(request:Request){
@@ -14,6 +15,10 @@ export async function GET(request:Request){
   if(view==='italian-markets'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianMarkets(new URL(request.url).searchParams.get('q')||'double'));}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
+  if(view==='crests'){const t=await leagueStandings(384,'Serie A').catch(()=>null);const f=(re:RegExp)=>t?.rows.find(r=>re.test(r.name))?.logo||null;return reply({roma:f(/^(as )?roma$/i),juve:f(/juventus/i)});}
+  if(view==='standings')return reply(await allStandings());
+  if(view==='lineups-list')return reply({fixtures:await lineupFixtures()});
+  if(view==='lineup'){try{return reply(await fixtureLineup(new URL(request.url).searchParams.get('id')||''));}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='performance')return reply(await performance());
   if(view==='shared-check'&&await isOwner(request,await getIdentity(request))){const r=await env.DB!.prepare("SELECT COALESCE(author,'?') AS author,shared,status,source,COUNT(*) AS n,MAX(created_at) AS last FROM bets GROUP BY owner,author,shared,status,source ORDER BY last DESC").all();return reply(r.results);}
   if(view==='shared'){const who=await getIdentity(request);return reply(await sharedPlays(who!.userId));}

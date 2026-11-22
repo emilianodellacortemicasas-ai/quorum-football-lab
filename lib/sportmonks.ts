@@ -109,3 +109,51 @@ export async function fixtureFinal(id:string):Promise<{status:'final'|'void'|'pe
  if(['CANCL','ABAN','AWARDED','WO','DELETED'].includes(st)||(late&&['POSTP','SUSP','INT','TBA','NS'].includes(st)))return {status:'void'};
  return {status:'pending'};
 }
+
+// ---- Classifiche ufficiali e formazioni ----
+export const STANDING_LEAGUES:[number,string,string][]=[[384,'Serie A','🇮🇹'],[8,'Premier League','🏴'],[564,'La Liga','🇪🇸'],[82,'Bundesliga','🇩🇪'],[301,'Ligue 1','🇫🇷']];
+export type StandingRow={position:number;teamId:number;name:string;logo:string|null;played:number|null;won:number|null;draw:number|null;lost:number|null;gf:number|null;ga:number|null;points:number;form:string};
+const DETAIL:Record<string,keyof StandingRow>={OVERALL_MATCHES:'played',OVERALL_WINS:'won',OVERALL_DRAWS:'draw',OVERALL_LOST:'lost',OVERALL_SCORED:'gf',OVERALL_CONCEDED:'ga'};
+const DETAIL_ID:Record<number,keyof StandingRow>={129:'played',130:'won',131:'draw',132:'lost',133:'gf',134:'ga'};
+export async function leagueStandings(id:number,name:string):Promise<{league:string;rows:StandingRow[];source:'ufficiale'|'calcolata'}>{
+ let state:ModelState|null=null;try{state=await getModel();}catch{}
+ const forms=state?.forms||{},calc=state?.tables[name]||[];
+ let d:any=null;
+ for(const inc of ['participant;details.type','participant;details','participant']){try{d=await feed('standings/live/leagues/'+id+'?include='+inc,1800);break;}catch{}}
+ const list=Array.isArray(d?.data)?d.data:[];
+ if(list.length){
+  const rows=list.map((s:any):StandingRow=>{const c=calc.find(r=>r.teamId===s.participant_id),row:StandingRow={position:s.position,teamId:s.participant_id,name:s.participant?.name||c?.name||'?',logo:s.participant?.image_path||null,played:c?.played??null,won:null,draw:null,lost:null,gf:c?.gf??null,ga:c?.ga??null,points:s.points,form:forms[s.participant_id]||''};
+   for(const x of Array.isArray(s.details)?s.details:[]){const k=DETAIL[x.type?.developer_name]||DETAIL_ID[x.type_id];if(k)(row as any)[k]=x.value;}
+   return row;}).sort((a:StandingRow,b:StandingRow)=>a.position-b.position);
+  return {league:name,rows,source:'ufficiale'};
+ }
+ return {league:name,rows:calc.map(r=>({position:r.position,teamId:r.teamId,name:r.name,logo:null,played:r.played,won:null,draw:null,lost:null,gf:r.gf,ga:r.ga,points:r.points,form:forms[r.teamId]||''})),source:'calcolata'};
+}
+export async function allStandings(){
+ const out=[];for(const [id,name,flag] of STANDING_LEAGUES){try{out.push({...(await leagueStandings(id,name)),flag});}catch(e){out.push({league:name,flag,rows:[],source:'calcolata' as const,error:e instanceof Error?e.message:'Errore'});}}
+ return {leagues:out,at:new Date().toISOString()};
+}
+// Matches of today and the next two days with crests.
+export async function lineupFixtures(){
+ const out:any[]=[];
+ for(let i=0;i<3;i++){const day=new Date(Date.now()+i*86400000).toLocaleDateString('en-CA',{timeZone:'Europe/Rome'});
+  let data:any[]=[];try{data=await pages('fixtures/date/'+day+'?include=participants;league.country;state&timezone=Europe%2FRome',3);}catch{continue;}
+  for(const f of data){const c=sportmonksCompetition(f.league);if(!c)continue;const h=f.participants?.find((x:any)=>x.meta?.location==='home'),a=f.participants?.find((x:any)=>x.meta?.location==='away');if(!h||!a)continue;
+   out.push({id:'sm-'+f.id,competition:c.name,kickoff:new Date(f.starting_at_timestamp*1000).toISOString(),state:f.state?.state||'NS',home:h.name,away:a.name,homeLogo:h.image_path||null,awayLogo:a.image_path||null});}}
+ return out.sort((a,b)=>a.kickoff.localeCompare(b.kickoff));
+}
+export async function fixtureLineup(id:string){
+ if(!/^sm-\d{1,12}$/.test(id))throw new Error('Partita non valida.');
+ let f:any=null;
+ for(const inc of ['participants;league.country;state;lineups.player;lineups.position;formations;coaches','participants;league.country;state;lineups;formations','participants;league.country;state;lineups']){try{f=(await feed('fixtures/'+id.slice(3)+'?include='+inc,180)).data;break;}catch{}}
+ if(!f)throw new Error('Formazioni non disponibili per questa partita.');
+ const side=(loc:'home'|'away')=>{const p=f.participants?.find((x:any)=>x.meta?.location===loc);if(!p)return null;
+  const ls=(Array.isArray(f.lineups)?f.lineups:[]).filter((x:any)=>x.team_id===p.id);
+  const pl=(x:any)=>({name:x.player?.display_name||x.player_name||x.player?.name||'?',number:x.jersey_number??null,field:x.formation_field||null,pos:x.position?.code||x.position?.name||null,photo:x.player?.image_path||null});
+  const starters=ls.filter((x:any)=>x.type_id===11).sort((a:any,b:any)=>(a.formation_position??99)-(b.formation_position??99)).map(pl),bench=ls.filter((x:any)=>x.type_id===12).map(pl);
+  const formation=(Array.isArray(f.formations)?f.formations:[]).find((x:any)=>x.participant_id===p.id||x.location===loc)?.formation||null;
+  const coach=(Array.isArray(f.coaches)?f.coaches:[]).find((x:any)=>x.meta?.participant_id===p.id);
+  return {name:p.name,logo:p.image_path||null,formation,starters,bench,coach:coach?.display_name||coach?.name||null};};
+ const home=side('home'),away=side('away'),c=sportmonksCompetition(f.league);
+ return {id,competition:c?.name||f.league?.name||'',kickoff:new Date(f.starting_at_timestamp*1000).toISOString(),state:f.state?.state||'NS',home,away,confirmed:Boolean(home&&home.starters.length>=11&&away&&away.starters.length>=11)};
+}
