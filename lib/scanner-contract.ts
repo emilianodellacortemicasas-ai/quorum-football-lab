@@ -18,7 +18,7 @@ export const KELLY_CAP = 0.02;
 // The Odds API keys for the active perimeter (competition ids as in lib/demo.ts).
 export const ODDS_SPORT: Record<string, string> = {
   'Serie A': 'soccer_italy_serie_a', 'Premier League': 'soccer_epl', 'La Liga': 'soccer_spain_la_liga',
-  'Bundesliga': 'soccer_germany_bundesliga', 'Ligue 1': 'soccer_france_ligue_one', 'Coppa Italia': 'soccer_italy_coppa_italia',
+  'Bundesliga': 'soccer_germany_bundesliga', 'Ligue 1': 'soccer_france_ligue_one', 'Serie B': 'soccer_italy_serie_b', 'Championship': 'soccer_efl_champ',
 };
 
 const STOP = new Set(['fc','cf','ac','as','ss','sc','afc','us','ssc','club','calcio','de','del','la','le','the','and','sv','vfb','vfl','tsg','fsv','bc','rc','ca','cd','ud','sd','rcd','ogc','losc','stade','1','04','05','1899','1907','1909','1913','hellas']);
@@ -85,12 +85,14 @@ export function marketConsensus(event: OddsEvent) {
       }
     }
   }
-  const out: Record<string, { pMarket: number; bestOdds: number; bookmaker: string; books: number }> = {};
+  const out: Record<string, { pMarket: number; bestOdds: number; bookmaker: string; books: number; pSharp?: number }> = {};
   for (const key of new Set(quotes.map(q => q.key))) {
     const rows = quotes.filter(q => q.key === key), prices = rows.map(r => r.price).sort((a, b) => a - b);
     const median = prices.length % 2 ? prices[(prices.length - 1) / 2] : (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2;
     const best = rows.filter(r => r.price <= median * OUTLIER_RATIO).reduce((a, c) => c.price > a.price ? c : a);
-    out[key] = { pMarket: rows.reduce((s, r) => s + r.pFair, 0) / rows.length, bestOdds: best.price, bookmaker: best.bookmaker, books: rows.length };
+    // Pinnacle (the sharp book used by professional bettors as the reference for the real probability).
+    const sharp = rows.find(r => /pinnacle/i.test(r.bookmaker));
+    out[key] = { pMarket: rows.reduce((s, r) => s + r.pFair, 0) / rows.length, bestOdds: best.price, bookmaker: best.bookmaker, books: rows.length, ...(sharp ? { pSharp: sharp.pFair } : {}) };
   }
   return out;
 }

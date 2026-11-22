@@ -5,7 +5,9 @@ import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
 import { exactPicks } from '../../../lib/exact';
-import { dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
+import { tipsterPicks } from '../../../lib/tipster';
+import { LEAGUE_STUDY } from '../../../lib/league-study-data';
+import { tipsterRecord, dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
 import { leagueStandings, allStandings, fixtureLineup, lineupFixtures } from '../../../lib/sportmonks';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -17,6 +19,7 @@ export async function GET(request:Request){
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
   if(view==='crests'){const t=await leagueStandings(384,'Serie A').catch(()=>null);const f=(re:RegExp)=>t?.rows.find(r=>re.test(r.name))?.logo||null;return reply({roma:f(/^(as )?roma$/i),juve:f(/juventus/i)});}
+  if(view==='tipster'){const p=await latestPredictions(),[rec]=await Promise.all([tipsterRecord().catch(()=>({}))]);return reply({run:p.run?{finished_at:p.run.finished_at}:null,...tipsterPicks(p.matches),record:rec,study:LEAGUE_STUDY});}
   if(view==='backtest'){const [t,perf]=await Promise.all([env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null),performance().catch(()=>null)]);return reply({backtest:t?{at:t.at,testDays:t.testDays,weeks:t.weeks,matches:t.matches,byKind:t.byKind,series:t.series||[]}:null,track:perf?.tickets??[]});}
   if(view==='standings')return reply(await allStandings());
   if(view==='lineups-list')return reply({fixtures:await lineupFixtures()});

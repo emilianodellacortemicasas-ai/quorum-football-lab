@@ -10,10 +10,11 @@ const BASE = 'https://api.oddspapi.io/v4/';
 const SOCCER = 10;
 export const IT_BOOKS = [{ key: 'lottomatica', label: 'Lottomatica' }, { key: 'planetwin', label: 'Planetwin365' }] as const;
 const COMPS: Record<string, { cat: string; names: string[] }> = {
-  'Serie A': { cat: 'italy', names: ['serie a'] }, 'Coppa Italia': { cat: 'italy', names: ['coppa italia'] },
+  'Serie A': { cat: 'italy', names: ['serie a'] }, 'Serie B': { cat: 'italy', names: ['serie b'] }, 'Championship': { cat: 'england', names: ['championship'] },
   'Premier League': { cat: 'england', names: ['premier league'] }, 'La Liga': { cat: 'spain', names: ['laliga', 'la liga'] },
   'Bundesliga': { cat: 'germany', names: ['bundesliga'] }, 'Ligue 1': { cat: 'france', names: ['ligue 1'] },
 };
+const MINOR = ['Serie B', 'Championship'];
 const norm = (s: unknown) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 async function api(path: string, key: string) {
@@ -44,7 +45,7 @@ const MARKETS: Record<string, Record<string, string>> = {
 };
 
 async function meta(key: string): Promise<Meta> {
-  return cached<Meta>('oddspapi:meta2', 7 * 86400000, async () => {
+  return cached<Meta>('oddspapi:meta3', 7 * 86400000, async () => {
     const pause = () => new Promise(r => setTimeout(r, 1100));
     const tour = await api('tournaments?sportId=' + SOCCER, key); await pause();
     const books = await api('bookmakers', key); await pause();
@@ -72,8 +73,8 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
   // The API accepts at most 5 tournaments per call: the 5 leagues every 12h, Coppa Italia every 24h.
   // 2 bookmakers × (2 + 1) calls a day ≈ 180 requests a month, plus ~13 for the weekly catalogue.
   const groups: [string, number, [string, number][]][] = [
-    ['oddspapi:odds2', 12 * 3600000, ids.filter(([c]) => c !== 'Coppa Italia')],
-    ['oddspapi:odds:cup', 24 * 3600000, ids.filter(([c]) => c === 'Coppa Italia')],
+    ['oddspapi:odds2', 12 * 3600000, ids.filter(([c]) => !MINOR.includes(c))],
+    ['oddspapi:odds:minor', 12 * 3600000, ids.filter(([c]) => MINOR.includes(c))],
   ];
   const out: ItalianFixture[] = [];
   for (const [cacheId, age, group] of groups) {
@@ -84,7 +85,8 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
   return out;
   async function fetchGroup(tids: number[]) {
     const byFixture = new Map<string, ItalianFixture>();
-    for (const b of IT_BOOKS) {
+    // Planetwin365 belongs to Lottomatica and shows the same prices: one request, both names.
+    for (const b of IT_BOOKS.filter(x => x.key === 'lottomatica' || !m.books.lottomatica)) {
       const slug = m.books[b.key]; if (!slug) continue;
       await new Promise(r => setTimeout(r, 1100));
       const data = list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + tids.join(',') + '&oddsFormat=decimal', key!));
@@ -96,7 +98,8 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
           for (const [oid, o] of Object.entries<any>(mk.outcomes ?? {})) {
             const q = omap[oid], p = o?.players?.['0'] ?? o?.players?.[0];
             if (!q || !p || p.active === false || !Number.isFinite(p.price) || p.price <= 1) continue;
-            (fx.quotes[q] ??= {})[b.label] = { odds: p.price, link: typeof p.betslip === 'string' ? p.betslip : typeof board.fixturePath === 'string' ? board.fixturePath : null };
+            const quote = { odds: p.price, link: typeof p.betslip === 'string' ? p.betslip : typeof board.fixturePath === 'string' ? board.fixturePath : null };
+            (fx.quotes[q] ??= {})[b.label] = quote; if (b.key === 'lottomatica') fx.quotes[q]['Planetwin365'] = quote;
           }
         }
         byFixture.set(fid, fx);

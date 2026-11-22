@@ -41,8 +41,9 @@ test('value requires edge, books and agreement with market',()=>{
   assert.equal(evaluateOutcome(0.28,{pMarket:0.18,bestOdds:5.65,books:25}).isPick,false);
   assert.ok(evaluateOutcome(0.55,{pMarket:0.50,bestOdds:2.15,books:6}).kelly<=0.02);
 });
-test('perimeter: Bundesliga and Coppa Italia in, Serie B out',()=>{
+test('perimeter: Serie B and Championship in, Coppa Italia out',()=>{
   assert.equal(sportmonksCompetition({name:'Bundesliga',country:{name:'Germany'}})?.id,78);
-  assert.equal(sportmonksCompetition({name:'Coppa Italia',country:{name:'Italy'}})?.id,137);
-  assert.equal(sportmonksCompetition({name:'Serie B',country:{name:'Italy'}}),null);
+  assert.equal(sportmonksCompetition({name:'Serie B',country:{name:'Italy'}})?.id,136);
+  assert.equal(sportmonksCompetition({name:'Championship',country:{name:'England'}})?.id,40);
+  assert.equal(sportmonksCompetition({name:'Coppa Italia',country:{name:'Italy'}}),null);
 });

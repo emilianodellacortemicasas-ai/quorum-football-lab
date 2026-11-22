@@ -218,3 +218,34 @@ export async function dayBombs(days: string[]) {
   const rows = (await db().prepare('SELECT id,kind,title,legs,odds,p,created_at,result FROM scanner_tickets WHERE id IN (' + days.map(() => '?').join(',') + ')').bind(...days.map(d => 'bomba-day:' + d)).all<any>()).results;
   return rows.map(r => ({ ...r, legs: JSON.parse(r.legs), day: String(r.id).slice(10) }));
 }
+
+export async function recordRows(rows: [string, Ticket][]) {
+  if (!rows.length) return;
+  const stmt = db().prepare('INSERT OR IGNORE INTO scanner_tickets (id,kind,title,legs,odds,p,created_at) VALUES (?,?,?,?,?,?,?)');
+  await db().batch(rows.map(([id, x]) => stmt.bind(id, x.kind, x.title, JSON.stringify(x.legs), x.odds, x.p, now())));
+}
+
+// Real record of the tipster method: win rate, return per euro (1 unit per pick) and CLV, i.e. how much the
+// price taken beats the real probability at kickoff (last scan before the match). Positive CLV = long-term edge.
+export async function tipsterRecord() {
+  const rows = (await db().prepare("SELECT id,kind,legs,odds,p,result,created_at FROM scanner_tickets WHERE kind IN ('tipster-singola','tipster-doppia') ORDER BY created_at DESC LIMIT 400").all<any>()).results;
+  const closing = new Map<string, any>();
+  const closeP = async (fid: string, market: string) => {
+    if (!closing.has(fid)) closing.set(fid, await db().prepare('SELECT markets FROM scanner_matches WHERE fixture_id=? ORDER BY created_at DESC LIMIT 1').bind(fid).first<{ markets: string }>().then(r => r ? JSON.parse(r.markets) : null).catch(() => null));
+    const mk = closing.get(fid); if (!mk) return null;
+    const one = (k: string) => { const m = mk[k]; return m ? (Number.isFinite(m.pSharp) ? m.pSharp : m.pMarket) : null; };
+    const pair: Record<string, [string, string]> = { homeDraw: ['home', 'draw'], drawAway: ['draw', 'away'], homeAway: ['home', 'away'] };
+    if (pair[market]) { const a = one(pair[market][0]), b = one(pair[market][1]); return a !== null && b !== null ? a + b : null; }
+    return one(market);
+  };
+  const out: Record<string, { n: number; won: number; profit: number; clv: number; clvN: number; pending: number; recent: any[] }> = {};
+  for (const r of rows) {
+    const s = out[r.kind] ??= { n: 0, won: 0, profit: 0, clv: 0, clvN: 0, pending: 0, recent: [] }, legs = JSON.parse(r.legs);
+    if (s.recent.length < 15) s.recent.push({ id: r.id, legs: legs.map((l: any) => ({ fixture: l.fixture, label: l.label, odds: l.odds, kickoff: l.kickoff, bookmaker: l.bookmaker })), odds: r.odds, result: r.result, created_at: r.created_at });
+    if (r.result === null || r.result === undefined) { s.pending++; continue; }
+    if (r.result === 'void') continue;
+    s.n++; if (r.result === 'won') { s.won++; s.profit += r.odds - 1; } else s.profit -= 1;
+    if (legs.length === 1 && Date.parse(legs[0].kickoff) < Date.now()) { const pc = await closeP(legs[0].fixtureId, legs[0].market); if (pc) { s.clv += pc * legs[0].odds - 1; s.clvN++; } }
+  }
+  return Object.fromEntries(Object.entries(out).map(([k, s]) => [k, { n: s.n, won: s.won, roi: s.n ? s.profit / s.n : null, clv: s.clvN ? s.clv / s.clvN : null, clvN: s.clvN, pending: s.pending, recent: s.recent }]));
+}

@@ -1,3 +1,4 @@
+import { tipsterPicks, tipsterTickets } from './tipster.ts';
 import { env } from 'cloudflare:workers';
 import { getModel, getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
 import { oddsFeed } from './odds-provider';
@@ -8,7 +9,7 @@ import { italianOdds, matchItalian, type ItalianFixture } from './italian-odds';
 import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
 import type { Match } from './types';
 import { buildTickets } from './tickets';
-import { recordTickets, settleAll } from './settle';
+import { recordRows, recordTickets, settleAll } from './settle';
 
 const db = () => { if (!env.DB) throw new Error('Database non disponibile.'); return env.DB; };
 const romeDate = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
@@ -90,7 +91,8 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
       if (!books) {
         try {
           let r: any;
-          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime&oddsFormat=decimal', 600); }
+          // Minor leagues: only Goal/No Goal (corner, cards and scorers would double the credits).
+          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=' + (['Serie B', 'Championship'].includes(f.competition) ? 'btts' : 'btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime') + '&oddsFormat=decimal', 600); }
           catch { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts&oddsFormat=decimal', 600); }
           books = Array.isArray(r.payload?.bookmakers) ? r.payload.bookmakers : []; bttsDownloaded++;
           if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
@@ -128,7 +130,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         const raw = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;
         const pModel = raw === null ? null : calModel(key, raw);
         const pBlend = pModel === null ? c.pMarket : evaluateOutcome(pModel, c, calLive(key)).pBlend, it = itBest(fit, key, pBlend), ms = measured(key, pBlend);
-        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}), ...(ms ? { se: ms.se, calN: ms.n } : {}) };
+        markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, ...(c.pSharp ? { pSharp: c.pSharp } : {}), pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}), ...(ms ? { se: ms.se, calN: ms.n } : {}) };
       }
       // Double chance: probability = sum of the two 1X2 outcomes; price only from Lottomatica / Planetwin365.
       for (const [k, a, b] of [['homeDraw', 'home', 'draw'], ['drawAway', 'draw', 'away'], ['homeAway', 'home', 'away']] as const) {
@@ -161,7 +163,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     await db().prepare('UPDATE scanner_runs SET status=?,finished_at=?,fixtures=?,matched=?,modelled=?,picks=?,odds_remaining=?,message=? WHERE id=?')
       .bind('ok', new Date().toISOString(), upcoming.length, paired.length, modelledCount, picks, remaining ?? remainingBefore, notes.join(' ') || null, id).run();
     // Save today's tickets and settle finished matches. Failures here never invalidate the scan.
-    try { await recordTickets(buildTickets((await latestPredictions()).matches)); } catch { /* recorded on next scan */ }
+    try { const lp = (await latestPredictions()).matches; await recordTickets(buildTickets(lp)); await recordRows(tipsterTickets(tipsterPicks(lp))); } catch { /* recorded on next scan */ }
     try { await settleAll(); } catch { /* retried on next scan */ }
     return { id, fixtures: upcoming.length, matched: paired.length, modelled: modelledCount, picks };
   } catch (e) {

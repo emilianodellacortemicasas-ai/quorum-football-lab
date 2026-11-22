@@ -1,7 +1,7 @@
 // Historical odds from football-data.co.uk (free CSV, market-average prices before kickoff).
 // Pure parsing and matching to QUORUM's stored results. No imports.
 export type FdRow = { comp: string; day: number; home: string; away: string; hg: number; ag: number; h: number; d: number; a: number; o25: number | null; u25: number | null };
-export const FD_CODES: Record<string, string> = { 'Serie A': 'I1', 'Premier League': 'E0', 'La Liga': 'SP1', 'Bundesliga': 'D1', 'Ligue 1': 'F1' };
+export const FD_CODES: Record<string, string> = { 'Serie A': 'I1', 'Premier League': 'E0', 'La Liga': 'SP1', 'Bundesliga': 'D1', 'Ligue 1': 'F1', 'Serie B': 'I2', 'Championship': 'E1' };
 const DAY = 86400000;
 
 function splitCsv(line: string) {

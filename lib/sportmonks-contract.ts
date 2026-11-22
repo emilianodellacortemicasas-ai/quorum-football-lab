@@ -3,8 +3,8 @@ const norm=(s:string)=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]
 export function sportmonksCompetition(league:any):{id:number;name:string;group:string}|null{
  const n=norm(league?.name||''),country=norm(league?.country?.name||'');
  const domestic:Record<string,Record<string,[number,string,string]>>={
-  england:{premierleague:[39,'Premier League','Inghilterra']},
-  italy:{seriea:[135,'Serie A','Italia'],coppaitalia:[137,'Coppa Italia','Italia']},
+  england:{premierleague:[39,'Premier League','Inghilterra'],championship:[40,'Championship','Inghilterra']},
+  italy:{seriea:[135,'Serie A','Italia'],serieb:[136,'Serie B','Italia']}, // Coppa Italia tolta (scelta di Emiliano, 22/11/2026)
   germany:{bundesliga:[78,'Bundesliga','Germania']},
   spain:{laliga:[140,'La Liga','Spagna'],laligaeasports:[140,'La Liga','Spagna']},
   france:{ligue1:[61,'Ligue 1','Francia'],ligue1mcdonalds:[61,'Ligue 1','Francia']}

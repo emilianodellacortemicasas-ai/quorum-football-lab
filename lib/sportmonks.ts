@@ -128,7 +128,7 @@ export async function fixtureFinal(id:string):Promise<{status:'final'|'void'|'pe
 }
 
 // ---- Classifiche ufficiali e formazioni ----
-export const STANDING_LEAGUES:[number,string,string][]=[[384,'Serie A','🇮🇹'],[8,'Premier League','🏴'],[564,'La Liga','🇪🇸'],[82,'Bundesliga','🇩🇪'],[301,'Ligue 1','🇫🇷']];
+export const STANDING_LEAGUES:[number,string,string][]=[[384,'Serie A','🇮🇹'],[8,'Premier League','🏴'],[564,'La Liga','🇪🇸'],[82,'Bundesliga','🇩🇪'],[301,'Ligue 1','🇫🇷'],[387,'Serie B','🇮🇹'],[9,'Championship','🏴']];
 export type StandingRow={position:number;teamId:number;name:string;logo:string|null;played:number|null;won:number|null;draw:number|null;lost:number|null;gf:number|null;ga:number|null;points:number;form:string};
 const DETAIL:Record<string,keyof StandingRow>={OVERALL_MATCHES:'played',OVERALL_WINS:'won',OVERALL_DRAWS:'draw',OVERALL_LOST:'lost',OVERALL_SCORED:'gf',OVERALL_CONCEDED:'ga'};
 const DETAIL_ID:Record<number,keyof StandingRow>={129:'played',130:'won',131:'draw',132:'lost',133:'gf',134:'ga'};
