@@ -1,9 +1,11 @@
 // Automatic tickets (singles that double the stake and accumulators) built from the latest predictions.
 // Pure logic: input = per-match markets with blended probability and best price.
 import { familyOf, ticketReliability } from './calibration.ts';
+import { className, evaluateClasses } from './math.ts';
 const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5', btts: 'Goal', noGoal: 'No Goal', homeDraw: '1X · Doppia chance', drawAway: 'X2 · Doppia chance', homeAway: '12 · Doppia chance' };
 
 export type Leg = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; p: number; odds: number; bookmaker: string; edge: number; se: number; italian: boolean };
+export type SystemTicket = { kind: string; title: string; day: string; legs: Leg[]; classes: { k: number; unitCents: number }[]; name: string; tickets: number; costCents: number; pWin: number; pProfit: number; expectedCents: number; minWinCents: number; maxReturnCents: number; breakEven: number | null; byWinners: { winners: number; p: number; minReturnCents: number; maxReturnCents: number }[]; worstLossCents: number };
 export type Ticket = { kind: string; title: string; description: string; legs: Leg[]; odds: number; p: number; ev: number; kelly: number; low: number; high: number; italian: boolean };
 type MatchRow = { fixture_id: string; fixture: string; competition: string; kickoff: string; markets: Record<string, any> };
 
@@ -123,12 +125,57 @@ export function buildTickets(matches: MatchRow[], now = Date.now()) {
   const surePool = perMatchTop(c, l => l.italian && l.p >= 0.64 && l.odds >= 1.2 && l.odds <= 1.75 && familyOf(l.market) !== null
     && Date.parse(l.kickoff) - now <= 96 * 3600000 && !heavyAbsence(l.fixtureId), l => l.p, 3).slice(0, 48);
   const sure: Ticket[] = [], used = new Set<string>();
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     const pool = surePool.filter(l => !used.has(l.fixtureId));
-    const t = bestCombo(pool, [2, 3], 1.85, 2.3, legs => Math.log(prob(legs)) - (legs.length - 2) * 0.03);
+    const t = bestCombo(pool, [2], 1.85, 2.3, legs => Math.log(prob(legs)));
     if (!t) break;
     t.forEach(l => used.add(l.fixtureId));
-    sure.push(ticket('raddoppio-sicuro-' + (i + 1), 'Raddoppio sicuro #' + (i + 1), 'Metodo dei tipster: 2–3 esiti molto probabili, quota totale circa 2, quote Lottomatica / Planetwin365, partite entro 4 giorni, nessuna assenza pesante.', t));
+    sure.push(ticket('raddoppio-sicuro-' + (i + 1), 'Raddoppio #' + (i + 1), 'Due squadre, quota circa 2: i due esiti più affidabili che insieme raddoppiano la puntata. Quote Lottomatica / Planetwin365, partite entro 4 giorni, nessuna assenza pesante.', t));
   }
-  return { singles, tickets, bomb, probable, sure, candidates: c.length };
+  // 9. Schedine da 3 e 5 squadre per fascia di probabilità del singolo esito (80–90%, 70–80%, 60–70%):
+  // dentro la fascia QUORUM sceglie gli esiti con più valore, su partite e mercati diversi.
+  const soon = (l: Leg) => Date.parse(l.kickoff) - now <= 96 * 3600000;
+  const bands: [number, number, string][] = [[0.8, 0.9, '80–90%'], [0.7, 0.8, '70–80%'], [0.6, 0.7, '60–70%']];
+  const banded: Ticket[] = [];
+  for (const [lo, hi, name] of bands) {
+    const pool = c.filter(l => l.italian && l.p >= lo && l.p < hi && l.odds >= 1.1 && l.edge > -0.05 && familyOf(l.market) !== null && soon(l) && !heavyAbsence(l.fixtureId))
+      .sort((a, b) => (b.edge + 0.3 * b.p) - (a.edge + 0.3 * a.p));
+    for (const size of [3, 5]) {
+      const legs: Leg[] = [];
+      for (const l of pool) {
+        if (legs.length >= size) break;
+        if (legs.some(x => x.fixtureId === l.fixtureId) || (isLine(l) && legs.filter(isLine).length >= lineCap(size))) continue;
+        legs.push(l);
+      }
+      if (legs.length === size) banded.push(ticket('fascia-' + size + '-' + Math.round(lo * 100), size + ' squadre · esiti al ' + name, size + ' esiti ognuno con probabilità ' + name + ', scelti tra quelli con più valore sulle quote italiane.', legs));
+    }
+  }
+  // 10. Giornate di partite (ora di Roma): per ognuna un sistema pronto e una bomba.
+  const romeDay = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(iso));
+  const days = [...new Set(c.filter(soon).map(l => romeDay(l.kickoff)))].sort().slice(0, 4);
+  const dayLabel = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  const systems: SystemTicket[] = [], bombs: Ticket[] = [];
+  for (const d of days) {
+    const today = c.filter(l => romeDay(l.kickoff) === d && l.italian && familyOf(l.market) !== null && !heavyAbsence(l.fixtureId));
+    const matchesToday = new Set(today.map(l => l.fixtureId)).size;
+    // Sistema del giorno: 4–5 esiti a quota 1,55–2,40 con buona probabilità; struttura scelta per la probabilità di profitto.
+    const sysLegs = perMatch(today, l => l.p >= 0.55 && l.odds >= 1.55 && l.odds <= 2.4 && l.edge > -0.05, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, matchesToday >= 6 ? 5 : 4);
+    if (sysLegs.length >= 4) {
+      const n = sysLegs.length, sel = sysLegs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }));
+      const shapes: number[][] = n === 5 ? [[3], [4], [3, 4], [3, 4, 5], [2, 3]] : [[3], [3, 4], [2, 3], [2, 3, 4]];
+      let best: { classes: { k: number; unitCents: number }[]; r: ReturnType<typeof evaluateClasses> } | null = null;
+      for (const sh of shapes) {
+        const classes = sh.map(k => ({ k, unitCents: 100 })), r = evaluateClasses(sel, classes);
+        const score = r.pProfit + Math.min(0, r.expectedCents / r.costCents) * 0.5;
+        if (!best || score > best.r.pProfit + Math.min(0, best.r.expectedCents / best.r.costCents) * 0.5) best = { classes, r };
+      }
+      if (best) systems.push({ kind: 'sistema-' + d, title: 'Sistema di ' + dayLabel(d), day: d, legs: [...sysLegs].sort((a, b) => a.kickoff.localeCompare(b.kickoff)), classes: best.classes, name: 'Sistema ' + n + ' eventi · ' + best.classes.map(x => className(x.k, n)).join(' + '), ...best.r });
+    }
+    // Bomba del giorno: quota adatta al numero di partite (giornata piena 40–100, altrimenti 10–30).
+    const big = matchesToday >= 8, [minQ, maxQ] = big ? [40, 100] : [10, 30], sizes = big ? [5, 6, 7, 8] : [3, 4, 5, 6];
+    const bp = perMatchTop(today, l => l.p >= 0.42 && l.odds >= 1.55 && l.odds <= 3.8 && l.edge > -0.04, l => l.p * (1 + Math.max(0, l.edge) * 2)).slice(0, 20);
+    const bt = bestCombo(bp, sizes, minQ, maxQ, legs => Math.log(prob(legs)) + 0.5 * Math.log(ev(legs)));
+    if (bt) bombs.push(ticket('bomba-' + d, 'Bomba di ' + dayLabel(d), 'La giocata da sogno della giornata: ' + bt.length + ' esiti, quota ' + Math.round(bt.reduce((q, l) => q * l.odds, 1)) + '. Vince di rado: puntata minima.', bt));
+  }
+  return { singles, tickets, bomb, probable, sure, banded, systems, bombs, candidates: c.length };
 }

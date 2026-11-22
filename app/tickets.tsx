@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Check, FlaskConical, Info, RefreshCw, Ticket as TicketIcon } from 'lucide-react';
+import { Check, Copy, FlaskConical, Info, RefreshCw, Ticket as TicketIcon } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay, Selection } from '../lib/types';
-import type { Ticket } from '../lib/tickets';
+import type { SystemTicket, Ticket } from '../lib/tickets';
 import { Count, Ring } from './motion';
 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -37,8 +37,26 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core',
   </article>;
 }
 
-export function TicketsView({ equityCents, onLab, notify, onRecord }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
-  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecord?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean>; notify: (m: string) => void }) {
+  const [unit, setUnit] = useState('1'), u = Math.max(0.05, Number(unit.replace(',', '.')) || 1), f = u;
+  const n = x.legs.length, started = x.legs.some(l => Date.parse(l.kickoff) <= Date.now());
+  const classes = x.classes.map(c => ({ k: c.k, unitCents: Math.round(u * 100) }));
+  const copy = () => { const t = x.name + '\n' + x.legs.map(l => '• ' + l.fixture + ' — ' + l.label + ' @ ' + l.odds.toFixed(2)).join('\n') + '\nClassi: ' + x.classes.map(c => (c.k === n ? 'Multipla' : ['', 'Singole', 'Doppie', 'Triple', 'Quadruple', 'Quintuple'][c.k]) + ' ' + money(Math.round(u * 100)) + ' a combinazione').join(', ') + '\nImporto sistema ' + money(Math.round(x.costCents * f)); navigator.clipboard?.writeText(t).then(() => notify('Sistema copiato: incollalo dove vuoi.'), () => notify('Copia non riuscita.')); };
+  return <article className="value-card ticket system-card">
+    <div className="value-head"><span>{x.title}</span><b className="edge">{percent(x.pProfit, 0)} profitto</b></div>
+    <p className="sys-name">{x.name}</p>
+    <ul className="legs">{x.legs.map(l => <li key={l.fixtureId}><div><strong>{l.fixture}</strong><small>{l.competition} · {when(l.kickoff)}</small></div><div className="leg-pick"><b>{l.label}</b><span>{l.odds.toFixed(2)}</span><small>{percent(l.p, 0)}</small></div></li>)}</ul>
+    <div className="sys-summary"><div><span>Combinazioni</span><b>{x.tickets}</b></div><div><span>Importo sistema</span><b>{money(Math.round(x.costCents * f))}</b></div><div><span>Vincita min</span><b className="positive">{money(Math.round(x.minWinCents * f))}</b></div><div><span>Vincita max</span><b className="positive">{money(Math.round(x.maxReturnCents * f))}</b></div></div>
+    <div className={'sys-breakeven' + (x.breakEven === null ? ' no' : '')}>{x.breakEven === null ? 'Non va mai in profitto.' : x.breakEven === n ? 'In profitto solo se vincono tutte e ' + n + '.' : <>In profitto se ne vincono <b>almeno {x.breakEven} su {n}</b>: puoi sbagliarne {n - x.breakEven}.</>}</div>
+    <label className="sys-unit">Puntata per combinazione (€)<input inputMode="decimal" value={unit} onChange={e => setUnit(e.target.value)} /></label>
+    <div className="play-actions"><button className="share-chip on" onClick={copy}><Copy size={13} />Copia</button>
+      {onLab && <button className="share-chip" onClick={() => onLab(x.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds, competition: l.competition, kickoff: l.kickoff })), classes)}><FlaskConical size={13} />Apri nel Laboratorio</button>}
+      {onRecord && !started && <button className="share-chip" onClick={() => onRecord(x.legs, classes)}><Check size={13} />L’ho giocato ({money(Math.round(x.costCents * f))})</button>}</div>
+  </article>;
+}
+
+export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
+  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=tickets', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -58,24 +76,30 @@ export function TicketsView({ equityCents, onLab, notify, onRecord }: { equityCe
       : !data?.run ? <div className="empty"><span className="empty-icon"><TicketIcon /></span><h3>Nessun dato ancora.</h3><p>Premi “Aggiorna ora”.</p></div>
       : <>
         {(() => {
-          const p3 = data.probable?.find(t => t.kind === 'probabile-3'), rm = data.tickets.find(t => t.kind === 'raddoppio-multipla'), q3 = data.tickets.find(t => t.kind === 'quota10-3');
           const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} onRecord={onRecord} />;
+          const bands = ['80', '70', '60'].map(b => ({ b, label: b === '80' ? '80–90%' : b === '70' ? '70–80%' : '60–70%', list: (data.banded || []).filter(t => t.kind.endsWith('-' + b)) })).filter(x => x.list.length);
           return <>
             {data.sure && data.sure.length > 0 && <>
-              <h3 className="day-title">🛡️ Raddoppi sicuri</h3>
-              <p className="small-note">Il metodo dei tipster: 2 o al massimo 3 esiti molto probabili per arrivare a quota 2. QUORUM sceglie i più affidabili tra le partite dei prossimi 4 giorni, solo con quote Lottomatica / Planetwin365 e senza squadre con assenze pesanti. Tre schedine su partite diverse.</p>
+              <h3 className="day-title">🛡️ Raddoppi</h3>
+              <p className="small-note">Due squadre, quota circa 2: i due esiti più affidabili che insieme raddoppiano la puntata. Quote Lottomatica / Planetwin365, partite diverse tra una schedina e l’altra.</p>
               <div className="value-list">{data.sure.map(t => card(t))}</div>
             </>}
-            <h3 className="day-title">📈 Per far crescere il capitale</h3>
-            <p className="small-note">Le schedine con lo storico migliore. Giocale con la puntata consigliata, calcolata sul tuo capitale: quando una non ripaga il rischio, QUORUM ti dice di saltarla.</p>
-            <div className="value-list">{p3 && card(p3)}{rm && card(rm)}</div>
-            {!p3 && !rm && <p className="small-note">Oggi nessuna combinazione rispetta i criteri.</p>}
-            <h3 className="day-title">🎯 Raddoppi singoli di valore</h3>
-            <p className="small-note">Una sola partita a quota circa 2, scelta tra le più probabili dove la quota di Lottomatica / Planetwin365 paga più del dovuto.</p>
-            {data.singles.length ? <div className="value-list">{data.singles.map(t => card(t))}</div> : <p className="small-note">Oggi nessuna partita a quota 2 con valore e probabilità sufficienti.</p>}
-            <h3 className="day-title">🎲 A puntata minima</h3>
-            <p className="small-note">Per sognare, non per costruire il capitale: sempre la giocata minima.</p>
-            <div className="value-list bomb-list">{data.bomb && card(data.bomb, 'min')}{q3 && card(q3, 'min')}</div>
+            {bands.length > 0 && <>
+              <h3 className="day-title">🎯 Schedine da 3 e 5 squadre</h3>
+              <p className="small-note">Ogni esito ha la probabilità della fascia indicata; dentro la fascia QUORUM sceglie quelli con più valore sulle quote italiane. Più alta la fascia, più sicura la schedina e più bassa la quota.</p>
+              {bands.map(x => <div key={x.b} className="band-block"><p className={'band-tag b' + x.b}>Esiti al {x.label}</p><div className="value-list">{x.list.map(t => card(t))}</div></div>)}
+            </>}
+            {data.systems && data.systems.length > 0 && <>
+              <h3 className="day-title">🧮 Sistemi pronti</h3>
+              <p className="small-note">Un sistema per ogni giorno di partite, con la struttura che dà la probabilità di profitto più alta. Copialo sul bookmaker, aprilo nel Laboratorio o registralo.</p>
+              <div className="value-list">{data.systems.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
+            </>}
+            {data.bombs && data.bombs.length > 0 && <>
+              <h3 className="day-title">💣 Bombe</h3>
+              <p className="small-note">Una per ogni giornata di partite: quota da 10 a 100 in base a quante partite ci sono. Per sognare, sempre a puntata minima.</p>
+              <div className="value-list bomb-list">{data.bombs.map(t => card(t, 'min'))}</div>
+            </>}
+            {!data.sure?.length && !bands.length && !data.systems?.length && !data.bombs?.length && <p className="small-note">Nessuna schedina rispetta i criteri con le partite dei prossimi giorni.</p>}
           </>;
         })()}
       </>}

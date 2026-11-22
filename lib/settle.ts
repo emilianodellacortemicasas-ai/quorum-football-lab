@@ -9,13 +9,16 @@ const now = () => new Date().toISOString();
 
 // Saves the tickets proposed by the app so their real performance can be measured.
 // One ticket per kind per day; the Bomba once per week (Monday-based).
-export async function recordTickets(t: { singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[] }) {
+export async function recordTickets(t: { singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; bombs?: Ticket[] }) {
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
   const d = new Date(day + 'T12:00:00Z'), monday = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
   const rows: [string, Ticket][] = [...t.tickets.map(x => [x.kind + ':' + day, x] as [string, Ticket]), ...t.singles.slice(0, 3).map((x, i) => ['raddoppio-singola-' + (i + 1) + ':' + day, x] as [string, Ticket])];
   if (t.bomb) rows.push(['bomba2:' + monday, t.bomb]);
   for (const x of t.probable || []) rows.push([x.kind + ':' + day, x]);
   for (const x of t.sure || []) rows.push([x.kind + ':' + day, x]);
+  for (const x of t.banded || []) rows.push([x.kind + ':' + day, x]);
+  // One bomb per match day, fixed once created (INSERT OR IGNORE).
+  for (const x of t.bombs || []) rows.push(['bomba-day:' + x.kind.slice(6), x]);
   const stmt = db().prepare('INSERT OR IGNORE INTO scanner_tickets (id,kind,title,legs,odds,p,created_at) VALUES (?,?,?,?,?,?,?)');
   if (rows.length) await db().batch(rows.map(([id, x]) => stmt.bind(id, x.kind, x.title, JSON.stringify(x.legs), x.odds, x.p, now())));
 }
@@ -206,4 +209,11 @@ export async function settleIfDue() {
   if (row && Date.now() - Date.parse(row.built_at) < 5 * 60000) return null;
   await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('settle:last',?,'{}') ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at").bind(now()).run();
   return settleAll(60);
+}
+
+// Bombs of the coming match days as first proposed (stable during the day).
+export async function dayBombs(days: string[]) {
+  if (!days.length) return [];
+  const rows = (await db().prepare('SELECT id,kind,title,legs,odds,p,created_at,result FROM scanner_tickets WHERE id IN (' + days.map(() => '?').join(',') + ')').bind(...days.map(d => 'bomba-day:' + d)).all<any>()).results;
+  return rows.map(r => ({ ...r, legs: JSON.parse(r.legs), day: String(r.id).slice(10) }));
 }

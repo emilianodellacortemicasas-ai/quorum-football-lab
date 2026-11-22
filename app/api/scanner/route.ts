@@ -4,7 +4,7 @@ import { kindFactor, ticketReliability } from '../../../lib/calibration';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
-import { settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
+import { dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
 export async function GET(request:Request){
@@ -23,7 +23,10 @@ export async function GET(request:Request){
    const b=buildTickets(p.matches),wk=await weeklyBomb().catch(()=>null);
    const bomb=wk?(()=>{const legs=wk.legs.map((l:any)=>({se:Math.sqrt(l.p*(1-l.p)/40),italian:false,...l})),r=ticketReliability(legs);return {kind:'bomba',title:'Bomba della settimana',description:'Una sola Bomba a settimana, fissa da lunedì: 5–8 esiti per una quota da sogno. Vince di rado: puntata minima.',legs,odds:wk.odds,p:r.p,low:r.low,high:r.high,ev:r.p*wk.odds-1,kelly:0,italian:legs.every((l:any)=>l.italian),started:legs.some((l:any)=>Date.parse(l.kickoff)<=Date.now()),result:wk.result,week:wk.week};})():b.bomb;
    const adj=(t:any)=>{if(!t)return t;const f=kindFactor(history?.byKind?.find((k:any)=>k.kind===t.kind));return {...t,pRaw:t.p,p:Math.min(0.99,t.p*f),low:Math.min(0.99,t.low*f),high:Math.min(0.99,t.high*f),ev:Math.min(0.99,t.p*f)*t.odds-1,kelly:(()=>{const e=Math.min(0.99,t.p*f)*t.odds-1;return e>0?Math.min(0.02,e/(t.odds-1)*0.25):0;})(),factor:f};};
-   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),sure:b.sure.map(adj),bomb:adj(bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
+   const stored=await dayBombs(b.bombs.map(x=>x.kind.slice(6))).catch(()=>[] as any[]);
+   const bombs=b.bombs.map(x=>{const st=stored.find((r:any)=>'bomba-'+r.day===x.kind);if(!st)return x;const legs=st.legs.map((l:any)=>({se:Math.sqrt(l.p*(1-l.p)/40),...l})),r=ticketReliability(legs);return {...x,legs,odds:st.odds,p:r.p,low:r.low,high:r.high,ev:r.p*st.odds-1,kelly:0,started:legs.some((l:any)=>Date.parse(l.kickoff)<=Date.now())};});
+   const adjK=(t:any,k:string)=>adj({...t,kind:k});
+   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),sure:b.sure.map(adj),banded:b.banded.map(adj),systems:b.systems,bombs:bombs.map((x:any)=>({...adjK(x,'bomba-giorno'),kind:x.kind})),bomb:adj(bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
   }
   return reply(view==='predictions'?await latestPredictions():await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scanner non disponibile.'},500);}

@@ -44,7 +44,7 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
     if (!rows.length) continue;
     weeks++; matches += rows.length;
     const b = buildTickets(rows, t - 3600000);
-    const all = [...b.singles, ...b.tickets, ...b.probable, ...b.sure, ...(b.bomb ? [b.bomb] : [])];
+    const all = [...b.singles, ...b.tickets, ...b.probable, ...b.sure, ...b.banded, ...b.bombs.map(x => ({ ...x, kind: 'bomba-giorno' })), ...(b.bomb ? [b.bomb] : [])];
     for (const tk of all) {
       const s = stats.get(tk.kind) ?? { title: tk.title, n: 0, won: 0, p: 0, profit: 0, odds: 0, legs: 0 }, w = won(tk, res);
       s.n++; s.p += tk.p; s.odds += tk.odds; s.legs += tk.legs.length; if (w) { s.won++; s.profit += tk.odds - 1; } else s.profit -= 1;

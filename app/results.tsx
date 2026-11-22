@@ -13,8 +13,15 @@ function Box({ title, a, note }: { title: string; a: Agg; note?: string }) {
   return <div className="res-box"><span>{title}</span>{a.n ? <><b>{percent(a.hit ?? 0, 0)} prese</b><small>{a.won} su {a.n} · profitto {signed(a.profit)} unità · ROI {a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)}</small>{note && <small>{note}</small>}</> : <><b>—</b><small>Nessuna giocata conclusa ancora.</small></>}</div>;
 }
 
+function ArchiveTabs({ items, tab, setTab }: { items: any[]; tab: string; setTab: (t: string) => void }) {
+  const won = items.filter(x => x.status === 'won').length, lost = items.filter(x => x.status === 'lost').length, voided = items.filter(x => x.status === 'void').length;
+  return <div className="archive-tabs"><span>Archivio</span>
+    {[['pending', 'In corso', items.filter(x => x.status === 'pending').length], ['won', 'Vinte', won], ['lost', 'Perse', lost], ['void', 'Rimborsate', voided]].filter(([k, , n]) => k === 'pending' || (n as number) > 0).map(([k, l, n]) => <button key={k as string} className={tab === k ? 'on' : ''} onClick={() => setTab(k as string)}>{l as string} <b>{n as number}</b></button>)}
+  </div>;
+}
+
 function MyPlays({ onGo, refreshKey, onShare, onRemove }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean> }) {
-  const [m, setM] = useState<any>(null), [tick, setTick] = useState(0), [ask, setAsk] = useState('');
+  const [m, setM] = useState<any>(null), [tick, setTick] = useState(0), [ask, setAsk] = useState(''), [tab, setTab] = useState('pending');
   useEffect(() => { fetch('/api/scanner?view=mine', { cache: 'no-store' }).then(r => r.json()).then(setM).catch(() => setM({ plays: [], summary: { total: 0 } })); }, [refreshKey, tick]);
   if (!m) return null;
   const s = m.summary, euro = (c: number) => (c >= 0 ? '+' : '−') + money(Math.abs(c));
@@ -29,7 +36,9 @@ function MyPlays({ onGo, refreshKey, onShare, onRemove }: { onGo?: (v: string) =
         <div><span>In corso</span><b>{s.open}</b><small>si regolano da sole</small></div>
       </div>
       <div className="rel-grid">{m.bySource.filter((g: any) => g.n).map(box)}{m.byKind.filter((g: any) => g.n).map(box)}</div>
-      <div className="my-list">{m.plays.slice(0, 30).map((x: any) => <article key={x.id} className={'my-play st-' + x.status}>
+      <ArchiveTabs items={m.plays} tab={tab} setTab={setTab} />
+      {tab === 'pending' && !m.plays.some((x: any) => x.status === 'pending') && <p className="small-note">Nessuna giocata in corso. Le giocate chiuse sono nell’archivio qui sopra.</p>}
+      <div className="my-list">{m.plays.filter((x: any) => x.status === tab).slice(0, 40).map((x: any) => <article key={x.id} className={'my-play st-' + x.status}>
         <div className="my-play-head"><span>{playTitle(x)} · {when(x.createdAt)}</span><b>{x.status === 'pending' ? 'In corso' : x.status === 'won' ? 'Vinta ' + euro(x.pnlCents) : x.status === 'lost' ? 'Persa ' + euro(x.pnlCents) : 'Rimborsata'}</b></div>
         <ul>{x.legs.map((l: any, i: number) => <li key={i}><span>{l.fixture}</span><b>{l.label}</b><i>{Number(l.odds).toFixed(2)}</i></li>)}</ul>
         <div className="my-play-foot"><span>Quota {Number(x.odds).toFixed(2)} · puntata {money(x.stakeCents)}</span><span>Probabilità QUORUM {percent(x.p, x.p < 0.1 ? 1 : 0)}</span></div>
@@ -47,7 +56,7 @@ const SLIP_KEY = 'quorum-slip-v1';
 const sysClasses = (x: any) => x.system?.classes ?? (x.system?.k ? [{ k: x.system.k, unitCents: x.system.unitCents }] : []);
 const playTitle = (x: any) => x.system ? x.name + ' · ' + x.system.combos + ' combinazioni' + (x.system.breakEven ? ' · profitto con almeno ' + x.system.breakEven + ' su ' + x.legs.length : '') : x.legs.length > 1 ? 'Multipla · ' + x.legs.length + ' eventi' : 'Singola';
 function SharedPlays({ onGo, refreshKey, onRecord, onRecordSystem, onLab }: { onGo?: (v: string) => void; refreshKey?: number; onRecord?: RecordPlay; onRecordSystem?: RecordSystem; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void }) {
-  const [d, setD] = useState<any>(null), [who, setWho] = useState('Tutti'), [playing, setPlaying] = useState(''), [stakeText, setStakeText] = useState('2,00'), [busy, setBusy] = useState(false);
+  const [d, setD] = useState<any>(null), [who, setWho] = useState('Tutti'), [stab, setStab] = useState('pending'), [playing, setPlaying] = useState(''), [stakeText, setStakeText] = useState('2,00'), [busy, setBusy] = useState(false);
   useEffect(() => { fetch('/api/scanner?view=shared', { cache: 'no-store' }).then(r => r.json()).then(setD).catch(() => setD({ plays: [], authors: [] })); }, [refreshKey]);
   if (!d) return null;
   const euro = (c: number) => (c >= 0 ? '+' : '−') + money(Math.abs(c));
@@ -75,7 +84,8 @@ function SharedPlays({ onGo, refreshKey, onRecord, onRecordSystem, onLab }: { on
     <div className="rel-head"><strong><Users size={16} /> Giocate condivise</strong><span>Le giocate che gli utenti di QUORUM hanno scelto di condividere, con il loro esito. Puoi copiarle nella tua schedina o giocarle anche tu con un tocco. Le tue le condividi da “Le tue giocate”.</span></div>
     {!d.plays.length ? <p className="small-note">Ancora nessuna giocata condivisa. Quando registri una schedina spunta “Condividi con gli altri utenti”, oppure tocca “Condividi” su una giocata qui sopra.</p> : <>
       <div className="author-row">{d.authors.map((a: any) => <button key={a.author} className={'author-card' + (who === a.author ? ' on' : '')} onClick={() => setWho(who === a.author ? 'Tutti' : a.author)}><b>{a.author}{a.mine ? ' (tu)' : ''}</b><span className={a.pnlCents >= 0 ? 'pos' : 'neg'}>{a.n ? euro(a.pnlCents) : '—'}</span><small>{a.n ? a.won + ' vinte su ' + a.n + ' · ROI ' + (a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)) : 'nessuna chiusa'}{a.open ? ' · ' + a.open + ' in corso' : ''}</small></button>)}</div>
-      <div className="my-list">{list.slice(0, 40).map((x: any) => <article key={x.id} className={'my-play st-' + x.status}>
+      <ArchiveTabs items={list} tab={stab} setTab={setStab} />
+      <div className="my-list">{list.filter((x: any) => x.status === stab).slice(0, 40).map((x: any) => <article key={x.id} className={'my-play st-' + x.status}>
         <div className="my-play-head"><span><b className="author-tag">{x.author}{x.mine ? ' · tu' : ''}</b> · {playTitle(x)} · {when(x.createdAt)}</span><b>{x.status === 'pending' ? 'In corso' : x.status === 'won' ? 'Vinta ' + euro(x.pnlCents) : x.status === 'lost' ? 'Persa ' + euro(x.pnlCents) : 'Rimborsata'}</b></div>
         <ul>{x.legs.map((l: any, i: number) => <li key={i}><span>{l.fixture}</span><b>{l.label}</b><i>{Number(l.odds).toFixed(2)}</i></li>)}</ul>
         <div className="my-play-foot"><span>Quota {Number(x.odds).toFixed(2)} · puntata {money(x.stakeCents)}</span><span>Probabilità QUORUM {percent(x.p, x.p < 0.1 ? 1 : 0)}</span></div>
