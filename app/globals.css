@@ -759,3 +759,18 @@ body{background:#eef3ee}
 .standings.study td.pos{color:#0f6b46;font-weight:800}.standings.study td.neg{color:#b23b25;font-weight:800}
 .tip-books{display:flex;flex-wrap:wrap;gap:5px}.tip-books span{display:inline-flex;gap:5px;align-items:center;font-size:11px;font-weight:700;color:#5e7365;background:#f3f7f1;border:1px solid #e1e9de;border-radius:999px;padding:2px 9px}.tip-books span b{color:#24412f}
 .tip-books span.ok{background:#eaf6dc;border-color:#cfe6b6}.tip-books span.best{background:#0b1f17;border-color:#0b1f17;color:#cfe3c4}.tip-books span.best b{color:var(--lime)}
+/* Menu laterale: tutto visibile anche su schermi bassi */
+.sidebar{padding-top:22px!important}
+.sidebar .brand{position:relative;padding-right:46px!important;font-size:20px!important}
+.sidebar .brand small{letter-spacing:2.2px!important;font-size:10.5px!important;white-space:nowrap}
+.family-crests{position:absolute;right:0;top:50%;transform:translateY(-50%);flex-direction:column;gap:4px}
+.family-crests img{width:20px;height:20px}
+.sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2c4a39 transparent;padding-right:2px}
+.sidebar nav::-webkit-scrollbar{display:block;width:5px}.sidebar nav::-webkit-scrollbar-thumb{background:#2c4a39;border-radius:9px}
+.sidebar nav .nav-group button{padding:5px 10px!important;gap:10px!important;font-size:13.5px!important}
+.sidebar nav .nav-group button svg{width:28px!important;height:28px!important;padding:6px!important;border-radius:8px!important}
+.nav-group{padding:4px 0 6px}.nav-group-title{padding:3px 12px 1px}
+.sidebar-line{margin:8px 10px 8px!important}.nav-caption{margin-bottom:4px!important}
+.settings-nav{padding:7px 12px!important;font-size:13.5px!important}
+.sidebar-user{padding:10px 7px!important}
+.workspace-label{margin:16px 9px 6px!important}
