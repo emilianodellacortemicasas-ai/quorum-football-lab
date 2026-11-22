@@ -132,6 +132,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         const pBlend = pModel === null ? c.pMarket : evaluateOutcome(pModel, c, calLive(key)).pBlend, it = itBest(fit, key, pBlend), ms = measured(key, pBlend);
         markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, ...(c.pSharp ? { pSharp: c.pSharp } : {}), pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}), ...(ms ? { se: ms.se, calN: ms.n } : {}) };
       }
+      if (fit?.at) markets.itAt = fit.at;
       // Double chance: probability = sum of the two 1X2 outcomes; price only from Lottomatica / Planetwin365.
       for (const [k, a, b] of [['homeDraw', 'home', 'draw'], ['drawAway', 'draw', 'away'], ['homeAway', 'home', 'away']] as const) {
         const x = markets[a], y = markets[b], q = fit?.quotes[k]; if (!x || !y || !q) continue;

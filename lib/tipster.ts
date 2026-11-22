@@ -5,7 +5,7 @@ import type { Leg, Ticket } from './tickets.ts';
 
 const LABELS: Record<string, string> = { home: '1 · Casa', draw: 'X · Pareggio', away: '2 · Ospite', homeDraw: '1X', drawAway: 'X2', homeAway: '12', over15: 'Over 1,5', under15: 'Under 1,5', over25: 'Over 2,5', under25: 'Under 2,5', over35: 'Over 3,5', under35: 'Under 3,5', btts: 'Goal', noGoal: 'No Goal' };
 export const TIP_MIN_EDGE = 0.03;
-export type TipLeg = Leg & { pTrue: number; source: 'Pinnacle' | 'Media mercato'; modelAgrees: boolean | null; stake: number; all: Record<string, number> };
+export type TipLeg = Leg & { pTrue: number; source: 'Pinnacle' | 'Media mercato'; modelAgrees: boolean | null; stake: number; all: Record<string, number>; ageH: number | null };
 type Row = { fixture_id: string; fixture: string; competition: string; kickoff: string; markets: Record<string, any> };
 
 function truth(mk: Record<string, any>, key: string): { p: number; source: TipLeg['source'] } | null {
@@ -27,9 +27,17 @@ export function tipsterPicks(rows: Row[], now = Date.now()) {
       const best = Object.entries(it).sort((a, b) => b[1] - a[1])[0], odds = best[1];
       if (odds < 1.4 || odds > 4) continue;
       const edge = tr.p * odds - 1; if (edge < TIP_MIN_EDGE) continue;
+      // Stale prices: the Italian price is refreshed less often than the market. A pick is valid only if
+      // the price is recent (≤ 14h for Lottomatica, ≤ 74h for the others) and not far above the best European price
+      // (an Italian book paying 4% more than every European book is almost always an old quote).
+      const at = (r.markets.itAt as Record<string, string> | undefined)?.[best[0]], ageH = at ? (now - Date.parse(at)) / 3600000 : null;
+      if (ageH !== null && ageH > (best[0] === 'Lottomatica' || best[0] === 'Planetwin365' ? 14 : 74)) continue;
+      const eu = r.markets[key]?.bestOdds; if (Number.isFinite(eu) && odds > eu * 1.04) continue;
       const pB = r.markets[key]?.pBlend;
+      // Without Pinnacle the average of the market is weaker: the model must agree too.
+      if (tr.source === 'Media mercato' && !(Number.isFinite(pB) && pB * odds - 1 > 0)) continue;
       legs.push({ fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, market: key, label: LABELS[key], p: tr.p, odds, bookmaker: Object.entries(it).filter(x => x[1] === odds).map(x => x[0]).join(' / '), edge, se: Math.sqrt(tr.p * (1 - tr.p) / 200), italian: true,
-        pTrue: tr.p, source: tr.source, modelAgrees: Number.isFinite(pB) ? pB * odds - 1 > 0 : null, stake: kelly(tr.p, odds, 0.02), all: Object.fromEntries(Object.entries(it).filter(([b]) => b !== 'Planetwin365')) });
+        pTrue: tr.p, source: tr.source, modelAgrees: Number.isFinite(pB) ? pB * odds - 1 > 0 : null, stake: kelly(tr.p, odds, 0.02), all: Object.fromEntries(Object.entries(it).filter(([b]) => b !== 'Planetwin365')), ageH });
     }
   }
   // One pick per match (the one with most value), best first.

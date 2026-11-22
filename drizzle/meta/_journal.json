@@ -64,6 +64,13 @@
       "when": 1795300000000,
       "tag": "0008_quorum_shared_plays",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795350000000,
+      "tag": "0009_quorum_tipster_cleanup",
+      "breakpoints": true
     }
   ]
 }

@@ -19,7 +19,9 @@ export function candidates(matches: MatchRow[], now = Date.now()): Leg[] {
       const x = m.markets?.[k];
       if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds) || x.bestOdds <= 1 || (x.books ?? 0) < 3) continue;
       // The price you can actually play: Lottomatica / Planetwin365 when they quote the market.
-      const it = x.it && Object.keys(x.it).length ? Object.entries<number>(x.it).sort((a, b) => b[1] - a[1]) : null;
+      // An Italian price far above every European price is almost always an old quote: ignored.
+      const it0 = x.it && Object.keys(x.it).length ? Object.entries<number>(x.it).sort((a, b) => b[1] - a[1]) : null;
+      const it = it0 && !(Number.isFinite(x.bestOdds) && it0[0][1] > x.bestOdds * 1.04) ? it0 : null;
       const odds = it ? it[0][1] : x.bestOdds, bookmaker = it ? it.filter(e => e[1] === it[0][1]).map(e => e[0]).join(' / ') : x.bookmaker;
       const se = Number.isFinite(x.se) ? x.se : Math.sqrt(x.pBlend * (1 - x.pBlend) / 40);
       out.push({ fixtureId: m.fixture_id, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: k, label: LABELS[k] ?? x.label ?? extraLabel(k), p: x.pBlend, odds, bookmaker, edge: x.pBlend * odds - 1, se, italian: !!it });

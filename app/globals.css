@@ -774,3 +774,4 @@ body{background:#eef3ee}
 .settings-nav{padding:7px 12px!important;font-size:13.5px!important}
 .sidebar-user{padding:10px 7px!important}
 .workspace-label{margin:16px 9px 6px!important}
+.tip-age{font-size:11.5px;margin:0;color:#3c5646;background:#eef5e6;border-radius:8px;padding:5px 8px}.tip-age.old{background:#fbf1d6;color:#8a6510}

@@ -4,7 +4,7 @@ import { Check, Crosshair, Info, RefreshCw } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay } from '../lib/types';
 
-type L = { all?: Record<string, number>; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; edge: number; pTrue: number; source: string; modelAgrees: boolean | null; stake: number };
+type L = { all?: Record<string, number>; ageH?: number | null; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; edge: number; pTrue: number; source: string; modelAgrees: boolean | null; stake: number };
 type D = { legs: L[]; odds: number; p: number; edge: number; stake: number };
 type Rec = { n: number; won: number; roi: number | null; clv: number | null; clvN: number; pending: number; recent: any[] };
 type Study = { code: string; name: string; matches: number; margin: number; single: [number, number]; shop: [number, number]; clv: number | null };
@@ -50,6 +50,7 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
           : <div className="tip-list">{d.singles.map(l => <article key={l.fixtureId + l.market} className="tip-card">
             <div className="tip-top"><small>{l.competition} · {when(l.kickoff)}</small><span className="tip-edge">+{(l.edge * 100).toFixed(1)}%</span></div>
             <strong>{l.fixture}</strong>
+            {l.ageH !== null && l.ageH !== undefined && <p className={'tip-age' + (l.ageH > 14 ? ' old' : '')}>Quota letta {l.ageH < 1 ? 'meno di un’ora fa' : Math.round(l.ageH) + ' ore fa'}: prima di giocare controlla che sul sito sia ancora {l.odds.toFixed(2)} o più.</p>}
             <div className="tip-pick"><b>{l.label}</b><span className="tip-odds">{l.odds.toFixed(2)}<small>{l.bookmaker}</small></span></div>
             {l.all && Object.keys(l.all).length > 1 && <div className="tip-books">{Object.entries(l.all).sort((a, b) => b[1] - a[1]).map(([b, o]) => <span key={b} className={o === l.odds ? 'best' : (l.pTrue * o - 1 >= 0.03 ? 'ok' : '')}>{b === 'Lottomatica' ? 'Lottomatica/Planetwin' : b}<b>{o.toFixed(2)}</b></span>)}</div>}
             <div className="tip-facts"><span>Probabilità vera <b>{percent(l.pTrue, 0)}</b><small>{l.source}</small></span><span>Quota giusta <b>{(1 / l.pTrue).toFixed(2)}</b></span><span>Puntata <b>{money(stakeOf(l.stake))}</b><small>{(l.stake * 100).toFixed(1)}% del capitale</small></span></div>
