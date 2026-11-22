@@ -4,7 +4,7 @@
 import { analyze } from './math.ts';
 import { fitLeague, lambdas, type Result } from './model-v2.ts';
 import { buildTickets, type SystemTicket, type Ticket } from './tickets.ts';
-import { MULTIGOL, multigolP, scoreMatrix } from './exact.ts';
+import { MULTIGOL, comboProbs, comboWins, multigolP, scoreMatrix } from './exact.ts';
 import type { FdRow } from './football-data-contract.ts';
 
 const WEEK = 7 * 86400000;
@@ -32,7 +32,7 @@ function systemProfit(s: SystemTicket, res: Map<string, Result>) {
 }
 // Groups shown in the weekly backtest of the overview.
 export const groupOf = (kind: string) => kind.startsWith('raddoppio-sicuro') ? 'Raddoppi' : kind.startsWith('fascia-') ? 'Schedine 3–5 squadre' : kind.startsWith('multipla-giorno') ? 'Multiple del giorno'
-  : kind.startsWith('sistema') ? 'Sistemi del giorno' : kind.startsWith('schema-') ? 'Schemi settimanali' : kind.startsWith('bomba') ? 'Bombe' : kind.startsWith('esatto') || kind.startsWith('multigol') ? 'Risultati esatti' : 'Altre';
+  : kind.startsWith('sistema') ? 'Sistemi del giorno' : kind.startsWith('schema-') ? 'Schemi settimanali' : kind.startsWith('bomba') ? 'Bombe' : kind.startsWith('esatto') || kind.startsWith('multigol') || kind.startsWith('combo') ? 'Risultati esatti e combo' : 'Altre';
 
 export function ticketBacktest(results: Result[], odds: Map<string | number, FdRow>, testDays = 240, now = Date.now(), W = 0.35) {
   const comps = [...new Set(results.map(r => r.comp))].filter(c => c !== 'Coppa Italia');
@@ -75,7 +75,9 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
     // Exact score and Multigol: calibration only (no historical prices for these markets).
     for (const row of rows) {
       const r = res.get(row.fixture_id)!, l = row._l as { lh: number; la: number; rho: number }, mk = row.markets;
-      const sc = scoreMatrix(l.lh, l.la, l.rho, { home: mk.home.pBlend, draw: mk.draw.pBlend, away: mk.away.pBlend });
+      const sc = scoreMatrix(l.lh, l.la, l.rho, { home: mk.home.pBlend, draw: mk.draw.pBlend, away: mk.away.pBlend, ...(mk.under25 ? { under25: mk.under25.pBlend } : {}) });
+      const cb = comboProbs(sc).filter(c => c.p >= 0.55 && 1 / c.p >= 1.4).sort((x, y) => y.p - x.p)[0];
+      if (cb) add('combo-55', 'Combo più probabile', cb.p, 1 / cb.p, 1, comboWins(cb.name, r.hg, r.ag), 0, 1, true);
       add('esatto-top', 'Risultato esatto più probabile', sc[0].p, 1 / sc[0].p, 1, sc[0].home === r.hg && sc[0].away === r.ag, 0, 1, true);
       const tot = r.hg + r.ag, best = MULTIGOL.map(([lo, hi]) => ({ lo, hi, p: multigolP(sc, lo, hi) })).filter(x => x.hi - x.lo <= 2 && x.p >= 0.65).sort((x, y) => y.p - x.p)[0];
       if (best) add('multigol-65', 'Multigol al 65% o più', best.p, 1 / best.p, 1, tot >= best.lo && tot <= best.hi, 0, 1, true);

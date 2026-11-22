@@ -5,6 +5,7 @@ import { money, percent } from '../lib/math';
 import type { RecordPlay, Selection } from '../lib/types';
 import type { SystemTicket, Ticket } from '../lib/tickets';
 import type { ExactPick } from '../lib/exact';
+type ComboData = { top: { fixtureId: string; fixture: string; competition: string; kickoff: string; combo: string; p: number; others: { name: string; p: number }[] }[]; tickets: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; combo: string; p: number }[]; p: number; fair: number }[] };
 import { Count, Ring } from './motion';
 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -48,23 +49,34 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core',
   </article>;
 }
 
-function ExactSection({ list, history }: { list: ExactPick[]; history?: Hist }) {
-  const [tab, setTab] = useState<'multigol' | 'esatti'>('multigol');
+function ExactSection({ list, combo, history }: { list: ExactPick[]; combo?: ComboData; history?: Hist }) {
+  const [tab, setTab] = useState<'multigol' | 'esatti' | 'combo'>('combo');
+  const hCb = history?.byKind.find(k => k.kind === 'combo-55');
   const mg = list.map(e => ({ e, m: e.multigol.filter(x => { const [a, b] = x.range.split('-').map(Number); return b - a <= 2 && x.p >= 0.65; }).sort((x, y) => y.p - x.p)[0] })).filter(x => x.m).sort((a, b) => b.m!.p - a.m!.p).slice(0, 10);
   const ex = [...list].sort((a, b) => b.top[0].p - a.top[0].p).slice(0, 10);
   const hMg = history?.byKind.find(k => k.kind === 'multigol-65'), hEx = history?.byKind.find(k => k.kind === 'esatto-top');
   return <>
-    <h3 className="day-title">🎯 Risultati esatti e Multigol</h3>
-    <p className="small-note">Un risultato esatto da solo non arriva mai al 65–70%: il più probabile di una partita sta di solito tra il 10% e il 20%. Al 65–70% ci arriva il <b>Multigol</b> (es. 1-3 = la partita finisce con 1, 2 o 3 gol totali), che su Lottomatica / Planetwin365 è una giocata unica. Qui trovi i Multigol al 65% o più e, a parte, i risultati esatti più probabili.</p>
-    <div className="archive-tabs"><button className={tab === 'multigol' ? 'on' : ''} onClick={() => setTab('multigol')}>Multigol ≥ 65% <b>{mg.length}</b></button><button className={tab === 'esatti' ? 'on' : ''} onClick={() => setTab('esatti')}>Risultati esatti <b>{ex.length}</b></button></div>
+    <h3 className="day-title">🎯 Combo, Multigol e risultati esatti</h3>
+    <p className="small-note">Un risultato esatto da solo non arriva mai al 65–70%: il più probabile di una partita sta di solito tra il 10% e il 20%. Al 65–70% ci arriva il <b>Multigol</b> (es. 1-3 = la partita finisce con 1, 2 o 3 gol totali), che su Lottomatica / Planetwin365 è una giocata unica. Qui trovi le <b>Combo</b> (esito + gol, es. “1X + Under 3,5”), i Multigol al 65% o più e i risultati esatti più probabili. Le quote italiane di questi mercati QUORUM non le riceve: trovi la <b>quota equa</b>, gioca solo se sul bookmaker paga di più.</p>
+    <div className="archive-tabs"><button className={tab === 'combo' ? 'on' : ''} onClick={() => setTab('combo')}>Combo <b>{combo?.top.length ?? 0}</b></button><button className={tab === 'multigol' ? 'on' : ''} onClick={() => setTab('multigol')}>Multigol ≥ 65% <b>{mg.length}</b></button><button className={tab === 'esatti' ? 'on' : ''} onClick={() => setTab('esatti')}>Risultati esatti <b>{ex.length}</b></button></div>
+    {tab === 'combo' && hCb && hCb.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hCb.won} prese su {hCb.n}</b><small>({Math.round(hCb.hit * 100)}% · previsto {Math.round(hCb.expected * 100)}%)</small></div>}
+    {tab === 'combo' && combo && <>
+      {combo.tickets.length > 0 && <div className="xs-grid">{combo.tickets.map(t => <article key={t.kind + t.legs.map(l => l.fixtureId).join()} className="xs-card combo-ticket"><small>Schedina pronta</small><strong>{t.title}</strong>
+        {t.legs.map(l => <div key={l.fixtureId} className="tip-leg"><span>{l.fixture}<small>{when(l.kickoff)}</small></span><b>{l.combo}</b></div>)}
+        <div className="xs-main"><span className="xs-pick">Quota equa {t.fair.toFixed(2)}</span><b className={t.p >= 0.4 ? 'hi' : ''}>{percent(t.p, 0)}</b></div>
+        <p>Conviene solo se sul bookmaker la quota totale è più alta di {t.fair.toFixed(2)}.</p></article>)}</div>}
+      <div className="xs-grid">{combo.top.map(c => <article key={c.fixtureId} className="xs-card"><small>{c.competition} · {when(c.kickoff)}</small><strong>{c.fixture}</strong>
+        <div className="xs-main"><span className="xs-pick">{c.combo}</span><b className={c.p >= 0.65 ? 'hi' : ''}>{percent(c.p, 0)}</b></div>
+        <p>Quota equa {(1 / c.p).toFixed(2)}.{c.others.length ? ' Alternative: ' + c.others.map(o => o.name + ' ' + percent(o.p, 0)).join(' · ') : ''}</p></article>)}</div>
+    </>}
     {tab === 'multigol' && hMg && hMg.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hMg.won} presi su {hMg.n}</b><small>({Math.round(hMg.hit * 100)}% · previsto {Math.round(hMg.expected * 100)}%)</small></div>}
     {tab === 'esatti' && hEx && hEx.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hEx.won} presi su {hEx.n}</b><small>({Math.round(hEx.hit * 100)}% · previsto {Math.round(hEx.expected * 100)}%)</small></div>}
-    <div className="xs-grid">{(tab === 'multigol' ? mg.map(({ e, m }) => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
+    {tab !== 'combo' && <div className="xs-grid">{(tab === 'multigol' ? mg.map(({ e, m }) => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
       <div className="xs-main"><span className="xs-pick">Multigol {m!.range}</span><b className={m!.p >= 0.7 ? 'hi' : ''}>{percent(m!.p, 0)}</b></div>
       <p>Quota equa {(1 / m!.p).toFixed(2)}: conviene se sul bookmaker la quota è più alta.</p>
       {e.cover65 && <p className="xs-cover">Risultati che coprono il {percent(e.cover65.p, 0)}: {e.cover65.scores.join(' · ')}</p>}</article>)
       : ex.map(e => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
-        <div className="xs-scores">{e.top.map((t, i) => <span key={t.score} className={i === 0 ? 'first' : ''}><b>{t.score}</b><em>{percent(t.p, 0)}</em><small>equa {(1 / t.p).toFixed(1)}</small></span>)}</div></article>))}</div>
+        <div className="xs-scores">{e.top.map((t, i) => <span key={t.score} className={i === 0 ? 'first' : ''}><b>{t.score}</b><em>{percent(t.p, 0)}</em><small>equa {(1 / t.p).toFixed(1)}</small></span>)}</div></article>))}</div>}
   </>;
 }
 
@@ -87,7 +99,7 @@ function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (
 }
 
 export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
-  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; combo?: ComboData; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=tickets', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -140,7 +152,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
               <BtBadge history={data.history} kinds={k => k === 'sistema-giorno'} />
               <div className="value-list">{data.systems.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
-            {data.exact && data.exact.length > 0 && <ExactSection list={data.exact} history={data.history} />}
+            {data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} history={data.history} />}
             {data.bombs && data.bombs.length > 0 && <>
               <h3 className="day-title">💣 Bombe</h3>
               <p className="small-note">Una per ogni giornata di partite: quota da 10 a 100 in base a quante partite ci sono. Per sognare, sempre a puntata minima.</p>

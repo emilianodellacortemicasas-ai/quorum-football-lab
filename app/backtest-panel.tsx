@@ -4,7 +4,7 @@ import { BarChart3, Info } from 'lucide-react';
 
 type K = { kind: string; title: string; group?: string; n: number; won: number; hit: number; expected: number; roi: number | null };
 type B = { at: string; testDays: number; weeks: number; matches: number; byKind: K[]; series: { week: string; groups: Record<string, number> }[] } | null;
-const GROUPS: [string, string][] = [['Raddoppi', '🛡️'], ['Multiple del giorno', '📋'], ['Schedine 3–5 squadre', '🎯'], ['Schemi settimanali', '🧩'], ['Sistemi del giorno', '🧮'], ['Bombe', '💣'], ['Risultati esatti', '⚽']];
+const GROUPS: [string, string][] = [['Raddoppi', '🛡️'], ['Multiple del giorno', '📋'], ['Schedine 3–5 squadre', '🎯'], ['Schemi settimanali', '🧩'], ['Sistemi del giorno', '🧮'], ['Bombe', '💣'], ['Risultati esatti e combo', '⚽']];
 
 function Spark({ values }: { values: number[] }) {
   if (values.length < 2) return null;
