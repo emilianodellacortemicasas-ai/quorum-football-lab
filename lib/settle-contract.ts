@@ -1,3 +1,4 @@
+import { comboWins } from './exact.ts';
 // Settlement rules: final facts of a match → result of a market. Pure.
 export type Final = { hg: number; ag: number; corners: [number, number] | null; yellow: [number, number] | null; red: [number, number] | null; penAwarded: [number, number] | null; penMissed: [number, number] | null; scorers: number[] | null };
 export type Outcome = 'won' | 'lost' | 'void' | null;
@@ -23,6 +24,10 @@ export function outcome(market: string, f: Final): Outcome {
   }
   if (market === 'pen:awarded:yes' || market === 'pen:awarded:no') return f.penAwarded ? b((f.penAwarded[0] + f.penAwarded[1] > 0) === market.endsWith('yes')) : null;
   if (market === 'pen:missed:yes' || market === 'pen:missed:no') return f.penMissed ? b((f.penMissed[0] + f.penMissed[1] > 0) === market.endsWith('yes')) : null;
+  // Combo (result + goals), multigol and exact score markets, e.g. 'combo:1X + Under 3,5', 'multigol:1-3'.
+  if (market.startsWith('combo:')) return b(comboWins(market.slice(6), hg, ag));
+  m = /^multigol:(\d+)-(\d+)$/.exec(market);
+  if (m) return b(t >= Number(m[1]) && t <= Number(m[2]));
   m = /^scorer:(\d+)$/.exec(market);
   if (m) return f.scorers ? b(f.scorers.includes(Number(m[1]))) : null;
   return null;

@@ -17,7 +17,7 @@ async function feed(path:string,seconds=300):Promise<any>{
 async function pages(path:string,maxPages=5){const out:any[]=[];for(let page=1;page<=maxPages;page++){const d=await feed(path+(path.includes('?')?'&':'?')+'per_page=50&page='+page);if(!Array.isArray(d.data))throw new Error('Formato dei dati Sportmonks non riconosciuto.');out.push(...d.data);if(!d.pagination?.has_more)return out;}throw new Error('Troppi risultati Sportmonks per questa selezione. Restringi la data.');}
 export async function getSportmonksFixtures(date:string,league?:string):Promise<Match[]>{
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('Data non valida.');
- const data=await pages('fixtures/date/'+date+'?include=participants;league.country;state&timezone=Europe%2FRome');
+ const data=await pages('fixtures/date/'+date+'?include=participants;league.country;state;scores&timezone=Europe%2FRome');
  return data.filter(f=>!league||String(sportmonksCompetition(f.league)?.id)===league).map(sportmonksFixture).filter((m):m is Match=>m!==null);
 }
 type ModelState={builtAt:string;version:string;extras?:Record<string,ExtrasModel>;leagues:Record<string,LeagueModel>;tables:Record<string,TableRow[]>;forms:Record<string,string>;results:number};

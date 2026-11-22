@@ -13,10 +13,16 @@ export function sportmonksCompetition(league:any):{id:number;name:string;group:s
  const v=domestic[country]?.[n]||((country==='europe'||country==='world')?international[n]:undefined);
  return v?{id:v[0],name:v[1],group:v[2]}:null;
 }
+// Final score after 90 minutes (2ND_HALF is cumulative), only for finished matches.
+function finalScore(f:any):{final?:{home:number;away:number}}{
+ if(!['FT','AET','FT_PEN'].includes(f.state?.state)||!Array.isArray(f.scores))return {};
+ const g=(side:string)=>f.scores.find((x:any)=>x.description==='2ND_HALF'&&x.score?.participant===side)?.score?.goals;
+ const h=g('home'),a=g('away');return Number.isInteger(h)&&Number.isInteger(a)?{final:{home:h,away:a}}:{};
+}
 export function sportmonksFixture(f:any):Match|null{
  const c=sportmonksCompetition(f.league),h=f.participants?.find((x:any)=>x.meta?.location==='home'),a=f.participants?.find((x:any)=>x.meta?.location==='away');
  if(!c||!h?.name||!a?.name||!Number.isSafeInteger(f.id)||!Number.isFinite(f.starting_at_timestamp))return null;
- return {id:'sm-'+f.id,home:h.name,away:a.name,homeCode:(h.short_code||h.name.slice(0,3)).toUpperCase(),awayCode:(a.short_code||a.name.slice(0,3)).toUpperCase(),homeColor:'#285c58',awayColor:'#686981',competition:c.name,group:c.group,kickoff:new Date(f.starting_at_timestamp*1000).toISOString(),lambdaHome:null,lambdaAway:null,sampleHome:0,sampleAway:0,source:'live',odds:{},notes:['Fonte Sportmonks. Apri la partita per verificare il campione storico disponibile.']};
+ return {id:'sm-'+f.id,home:h.name,away:a.name,homeCode:(h.short_code||h.name.slice(0,3)).toUpperCase(),awayCode:(a.short_code||a.name.slice(0,3)).toUpperCase(),homeColor:'#285c58',awayColor:'#686981',competition:c.name,group:c.group,kickoff:new Date(f.starting_at_timestamp*1000).toISOString(),lambdaHome:null,lambdaAway:null,sampleHome:0,sampleAway:0,source:'live',odds:{},notes:['Fonte Sportmonks. Apri la partita per verificare il campione storico disponibile.'],state:f.state?.state,...finalScore(f)};
 }
 export function historicalGoalMeans(fixtures:any[],teamId:number,side:'home'|'away',cutoff:number){
  const seen=new Set<number>();const valid:{for:number;against:number}[]=[];

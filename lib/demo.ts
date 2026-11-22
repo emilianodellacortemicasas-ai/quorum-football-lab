@@ -1,7 +1,7 @@
 import type { Match, Portfolio } from './types';
 // Perimetro attivo: 6 competizioni (Sportmonks Starter + 1 lega extra). Coppe europee e nazionali escluse.
 export const competitions = [
- {id:135,name:'Serie A',group:'Italia',flag:'IT'},{id:137,name:'Coppa Italia',group:'Italia',flag:'IT'},
+ {id:135,name:'Serie A',group:'Italia',flag:'IT'},{id:136,name:'Serie B',group:'Italia',flag:'IT'},{id:40,name:'Championship',group:'Inghilterra',flag:'EN'},
  {id:39,name:'Premier League',group:'Inghilterra',flag:'EN'},{id:140,name:'La Liga',group:'Spagna',flag:'ES'},
  {id:61,name:'Ligue 1',group:'Francia',flag:'FR'},{id:78,name:'Bundesliga',group:'Germania',flag:'DE'},
 ];

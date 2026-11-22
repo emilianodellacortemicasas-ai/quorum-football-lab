@@ -4,7 +4,7 @@ import { kindFactor, ticketReliability } from '../../../lib/calibration';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
 import { buildTickets } from '../../../lib/tickets';
-import { comboTickets, exactPicks } from '../../../lib/exact';
+import { comboBombs, comboTickets, exactPicks } from '../../../lib/exact';
 import { tipsterPicks } from '../../../lib/tipster';
 import { LEAGUE_STUDY } from '../../../lib/league-study-data';
 import { tipsterRecord, dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
@@ -36,7 +36,7 @@ export async function GET(request:Request){
    const stored=await dayBombs(b.bombs.map(x=>x.kind.slice(6))).catch(()=>[] as any[]);
    const bombs=b.bombs.map(x=>{const st=stored.find((r:any)=>'bomba-'+r.day===x.kind);if(!st)return x;const legs=st.legs.map((l:any)=>({se:Math.sqrt(l.p*(1-l.p)/40),...l})),r=ticketReliability(legs);return {...x,legs,odds:st.odds,p:r.p,low:r.low,high:r.high,ev:r.p*st.odds-1,kelly:0,started:legs.some((l:any)=>Date.parse(l.kickoff)<=Date.now())};});
    const adjK=(t:any,k:string)=>adj({...t,kind:k});
-   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),sure:b.sure.map(adj),banded:b.banded.map(adj),systems:b.systems,multiples:b.multiples.map((x:any)=>({...adjK(x,'multipla-giorno-'+x.legs.length),kind:x.kind})),schemes:b.schemes,exact:(()=>{const e=exactPicks(p.matches);return e;})(),combo:comboTickets(exactPicks(p.matches)),bombs:bombs.map((x:any)=>({...adjK(x,'bomba-giorno'),kind:x.kind})),bomb:adj(bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
+   return reply({run:p.run,singles:b.singles.map(adj),tickets:b.tickets.map(adj),probable:b.probable.map(adj),sure:b.sure.map(adj),banded:b.banded.map(adj),systems:b.systems,multiples:b.multiples.map((x:any)=>({...adjK(x,'multipla-giorno-'+x.legs.length),kind:x.kind})),schemes:b.schemes,exact:(()=>{const e=exactPicks(p.matches);return e;})(),combo:comboTickets(exactPicks(p.matches)),comboBombs:comboBombs(exactPicks(p.matches)),bombs:bombs.map((x:any)=>({...adjK(x,'bomba-giorno'),kind:x.kind})),bomb:adj(bomb),candidates:b.candidates,calibration:cal?{backtestSamples:cal.backtestSamples,liveSamples:cal.liveSamples,backtestAt:cal.backtestAt}:null,track:perf?.tickets??[],history});
   }
   return reply(view==='predictions'?await latestPredictions():await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scanner non disponibile.'},500);}

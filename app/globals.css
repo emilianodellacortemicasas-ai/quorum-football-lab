@@ -776,3 +776,20 @@ body{background:#eef3ee}
 .workspace-label{margin:16px 9px 6px!important}
 .tip-age{font-size:11.5px;margin:0;color:#3c5646;background:#eef5e6;border-radius:8px;padding:5px 8px}.tip-age.old{background:#fbf1d6;color:#8a6510}
 .combo-ticket{border-color:#b9d79a;box-shadow:0 4px 0 #b9d79a}
+/* ---- Partite finite ---- */
+.match-card.finished{cursor:default}.match-card.finished:hover{transform:none}
+.match-card.finished.hit{border-color:#9ccf9f;box-shadow:0 4px 0 #cfe6cf}.match-card.finished.miss{border-color:#e7c3b9}
+.ft-tag{font-size:10px!important;font-weight:800;letter-spacing:1px;background:#0b1f17;color:var(--lime);padding:2px 8px;border-radius:999px}
+.final-score{font-family:Manrope,var(--font);font-size:26px;font-weight:900;color:#0b2a1d;white-space:nowrap;padding:4px 10px;background:#f1f6ee;border-radius:10px;box-shadow:inset 0 -2px 0 #dfe7dc}
+.match-card.finished .probabilities>div.won{background:#dff3e5!important;border-color:#9ccf9f!important}.match-card.finished .probabilities>div.won strong{color:#0f6b46}
+.match-card.finished .probabilities>div.pick{box-shadow:inset 0 0 0 2px #0b1f17}
+.past-foot span{font-size:11.5px;line-height:1.5}
+.xs-card.clickable{cursor:pointer}.xs-card.clickable:hover{border-color:#b9d79a}.xs-card.open{grid-column:1/-1;border-color:#8cc152}
+.cd-more{font-size:11px;font-weight:800;color:#4f8a2a;margin-top:2px}
+.combo-detail{margin-top:8px;border-top:1px dashed #d6e6c8;padding-top:10px;cursor:default;animation:luIn .3s ease}
+.cd-title{font-size:12.5px!important;font-weight:800;color:#0b2a1d!important;margin-bottom:6px!important}
+.cd-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}.cd-table th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:#6b7a70;text-align:left;padding:4px 6px}.cd-table td{padding:5px 6px;border-top:1px solid #eef2ec}.cd-table tr:first-child td{background:#eaf6dc}
+.cd-note{font-size:12px!important;color:#3c5646!important;margin-bottom:8px!important}
+.tip-leg.clickable{cursor:pointer;border-radius:6px}.tip-leg.clickable:hover{background:#f3f8ef}
+.xs-it{display:block;margin-top:3px;font-weight:800!important;opacity:1!important;color:#24412f}.xs-scores span.first .xs-it{color:#cfe3c4}.xs-it.val{color:#0f6b46!important}.xs-scores span.first .xs-it.val{color:var(--lime)!important}
+.bomb-combo{border-color:#e3b9b0;box-shadow:0 4px 0 #e3b9b0}

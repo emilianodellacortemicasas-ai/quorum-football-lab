@@ -133,6 +133,8 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         markets[key] = { ...(c.label ? { label: c.label } : {}), pModel, pMarket: c.pMarket, ...(c.pSharp ? { pSharp: c.pSharp } : {}), pBlend, bestOdds: c.bestOdds, bookmaker: c.bookmaker, books: c.books, ...(it ? { it: it.all } : {}), ...(ms ? { se: ms.se, calN: ms.n } : {}) };
       }
       if (fit?.at) markets.itAt = fit.at;
+      // Italian correct-score prices (exact:1-0 → {Lottomatica: 6.5, …}), shown next to QUORUM's exact scores.
+      if (fit) { const ex: Record<string, Record<string, number>> = {}; for (const [k, q] of Object.entries(fit.quotes)) if (k.startsWith('exact:')) ex[k.slice(6)] = Object.fromEntries(Object.entries(q).filter(([b]) => b !== 'Planetwin365').map(([b, x]) => [b, x.odds])); if (Object.keys(ex).length) markets.itExact = ex; }
       // Double chance: probability = sum of the two 1X2 outcomes; price only from Lottomatica / Planetwin365.
       for (const [k, a, b] of [['homeDraw', 'home', 'draw'], ['drawAway', 'draw', 'away'], ['homeAway', 'home', 'away']] as const) {
         const x = markets[a], y = markets[b], q = fit?.quotes[k]; if (!x || !y || !q) continue;

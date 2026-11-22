@@ -3,7 +3,7 @@
 import { analyze } from './math.ts';
 
 export const MULTIGOL: [number, number][] = [[1, 2], [2, 3], [1, 3], [2, 4], [0, 2], [3, 5], [1, 4], [2, 5]];
-export type ScoreProb = { score: string; p: number };
+export type ScoreProb = { score: string; p: number; it?: { book: string; odds: number } | null };
 export type ExactPick = { fixtureId: string; fixture: string; competition: string; kickoff: string; top: ScoreProb[]; multigol: { range: string; p: number }[]; cover65: { scores: string[]; p: number } | null; combos: { name: string; p: number }[] };
 
 // The model's score matrix adjusted (iterative proportional fitting) so that 1-X-2 and, when known,
@@ -46,7 +46,9 @@ export function exactPicks(rows: { fixture_id: string; fixture: string; competit
     const mk = r.markets || {}, b = ['home', 'draw', 'away'].map(k => mk[k]?.pBlend);
     const u = mk.under25?.pBlend, blend = b.every(x => Number.isFinite(x) && x > 0) ? { home: b[0], draw: b[1], away: b[2], ...(Number.isFinite(u) ? { under25: u } : {}) } : undefined;
     const sc = scoreMatrix(r.lambda_home!, r.lambda_away!, mk.meta?.rho ?? 0, blend);
-    const top = sc.slice(0, 3).map(s => ({ score: s.home + '-' + s.away, p: s.p }));
+    const itx = mk.itExact as Record<string, Record<string, number>> | undefined;
+    const itOf = (k: string) => { const q = itx?.[k]; if (!q) return null; const b = Object.entries(q).sort((x, y) => y[1] - x[1])[0]; return b ? { book: b[0], odds: b[1] } : null; };
+    const top = sc.slice(0, 3).map(s => ({ score: s.home + '-' + s.away, p: s.p, it: itOf(s.home + '-' + s.away) }));
     const multigol = MULTIGOL.map(([lo, hi]) => ({ range: lo + '-' + hi, p: multigolP(sc, lo, hi) })).sort((x, y) => y.p - x.p);
     // Smallest group of exact scores that together reach 65%.
     let acc = 0; const pick: string[] = [];
@@ -68,4 +70,31 @@ export function comboTickets(list: ExactPick[], now = Date.now()) {
     tickets.push({ kind: 'combo-' + n, title, legs: legs.map(x => ({ fixtureId: x.e.fixtureId, fixture: x.e.fixture, kickoff: x.e.kickoff, combo: x.c!.name, p: x.c!.p })), p, fair: 1 / p });
   }
   return { top: best.slice(0, 12).map(x => ({ fixtureId: x.e.fixtureId, fixture: x.e.fixture, competition: x.e.competition, kickoff: x.e.kickoff, combo: x.c!.name, p: x.c!.p, others: x.e.combos.filter(c => c.name !== x.c!.name && c.p >= 0.5).slice(0, 3) })), tickets };
+}
+
+// Combo bombs: one per match day, built only with combos (result + goals). For each match the 2 most probable
+// combos at fair price 1,30–2,30; the search picks the most probable set in the day's odds window
+// (full day ≥ 8 matches: 40–100, otherwise 10–30). Prices are fair prices: the bookmaker's must be higher.
+export type ComboBomb = { kind: string; day: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; market: string; label: string; p: number; odds: number }[]; p: number; fair: number };
+export function comboBombs(list: ExactPick[], now = Date.now()): ComboBomb[] {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }), dayOf = (iso: string) => fmt.format(new Date(iso));
+  const soon = list.filter(e => { const t = Date.parse(e.kickoff); return t > now + 10 * 60000 && t - now <= 96 * 3600000; });
+  const days = [...new Set(soon.map(e => dayOf(e.kickoff)))].sort().slice(0, 4), out: ComboBomb[] = [];
+  for (const d of days) {
+    const today = soon.filter(e => dayOf(e.kickoff) === d), big = today.length >= 8, [lo, hi] = big ? [40, 100] : [10, 30], sizes = big ? [5, 6, 7, 8] : [3, 4, 5, 6];
+    const pool = today.flatMap(e => e.combos.filter(c => 1 / c.p >= 1.3 && 1 / c.p <= 2.3).sort((a, b) => b.p - a.p).slice(0, 2).map(c => ({ e, c }))).sort((a, b) => b.c.p - a.c.p).slice(0, 18);
+    let best: typeof pool | null = null, bestP = 0;
+    const visit = (start: number, legs: typeof pool, odds: number, p: number) => {
+      if (odds > hi) return;
+      if (sizes.includes(legs.length) && odds >= lo && p > bestP) { bestP = p; best = [...legs]; }
+      if (legs.length >= Math.max(...sizes)) return;
+      for (let i = start; i < pool.length; i++) if (!legs.some(x => x.e.fixtureId === pool[i].e.fixtureId)) visit(i + 1, [...legs, pool[i]], odds / pool[i].c.p, p * pool[i].c.p);
+    };
+    visit(0, [], 1, 1);
+    if (!best) continue;
+    const legs = (best as typeof pool).map(x => ({ fixtureId: x.e.fixtureId, fixture: x.e.fixture, kickoff: x.e.kickoff, market: 'combo:' + x.c.name, label: x.c.name, p: x.c.p, odds: 1 / x.c.p })).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+    const label = new Date(d + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+    out.push({ kind: 'bomba-combo-' + d, day: d, title: 'Bomba combo di ' + label, legs, p: bestP, fair: 1 / bestP });
+  }
+  return out;
 }

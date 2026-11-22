@@ -47,6 +47,8 @@ const MARKETS: Record<string, Record<string, string>> = {
   '108': { '108': 'over15', '109': 'under15' },
   '1010': { '1010': 'over25', '1011': 'under25' },
   '1012': { '1012': 'over35', '1013': 'under35' },
+  // Correct score (risultato esatto), up to 5 goals per team.
+  '10336': {'10354': 'exact:2-2', '10377': 'exact:1-5', '10380': 'exact:4-5', '10339': 'exact:3-0', '10347': 'exact:3-1', '10341': 'exact:5-0', '10373': 'exact:5-4', '10346': 'exact:2-1', '10379': 'exact:3-5', '10370': 'exact:2-4', '10345': 'exact:1-1', '10365': 'exact:5-3', '10381': 'exact:5-5', '10371': 'exact:3-4', '10337': 'exact:1-0', '10349': 'exact:5-1', '10369': 'exact:1-4', '10353': 'exact:1-2', '10352': 'exact:0-2', '10362': 'exact:2-3', '10344': 'exact:0-1', '10372': 'exact:4-4', '10355': 'exact:3-2', '10361': 'exact:1-3', '10348': 'exact:4-1', '10368': 'exact:0-4', '10360': 'exact:0-3', '10378': 'exact:2-5', '10338': 'exact:2-0', '10364': 'exact:4-3', '10356': 'exact:4-2', '10336': 'exact:0-0', '10340': 'exact:4-0', '10357': 'exact:5-2', '10376': 'exact:0-5', '10363': 'exact:3-3'},
 };
 
 async function meta(key: string): Promise<Meta> {

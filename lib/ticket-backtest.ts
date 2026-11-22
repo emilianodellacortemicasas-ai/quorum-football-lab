@@ -4,7 +4,7 @@
 import { analyze } from './math.ts';
 import { fitLeague, lambdas, type Result } from './model-v2.ts';
 import { buildTickets, type SystemTicket, type Ticket } from './tickets.ts';
-import { MULTIGOL, comboProbs, comboWins, multigolP, scoreMatrix } from './exact.ts';
+import { MULTIGOL, comboBombs, comboProbs, comboWins, exactPicks, multigolP, scoreMatrix } from './exact.ts';
 import type { FdRow } from './football-data-contract.ts';
 
 const WEEK = 7 * 86400000;
@@ -72,6 +72,9 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
     for (const sy of [...b.systems.map(x => ({ ...x, kind: 'sistema-giorno', title: 'Sistema del giorno' })), ...b.schemes]) {
       const r = systemProfit(sy, res); add(sy.kind, sy.kind === 'sistema-giorno' ? sy.title : sy.title, sy.pProfit, r.ret / r.cost, sy.legs.length, r.profitable, r.ret - r.cost, r.cost);
     }
+    // Combo bombs of each match day (fair prices only: calibration of the probability).
+    const ex = exactPicks(rows.map(r0 => ({ ...r0, lambda_home: r0._l.lh, lambda_away: r0._l.la, markets: { ...r0.markets, meta: { rho: r0._l.rho } } })));
+    for (const cb of comboBombs(ex, t - 3600000)) add('bomba-combo', 'Bomba combo', cb.p, cb.fair, cb.legs.length, cb.legs.every(l => { const r1 = res.get(l.fixtureId)!; return comboWins(l.label, r1.hg, r1.ag); }), 0, 1, true);
     // Exact score and Multigol: calibration only (no historical prices for these markets).
     for (const row of rows) {
       const r = res.get(row.fixture_id)!, l = row._l as { lh: number; la: number; rho: number }, mk = row.markets;
