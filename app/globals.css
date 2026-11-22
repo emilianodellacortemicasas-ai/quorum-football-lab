@@ -658,8 +658,8 @@ body{background:#eef3ee}
 .standings td{padding:8px 6px;text-align:center;border-top:1px solid #eef2ec}
 .standings .t-team{text-align:left}.standings td.t-team{display:flex;align-items:center;gap:9px;font-weight:700}
 .standings tr{position:relative;transition:background .2s}.standings tbody tr:hover{background:#f3f8f1}
-.standings .pos{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;font-weight:800;font-size:12px;background:#eef2ec}
-.standings tr.z-cl .pos{background:#0f6b46;color:#fff}.standings tr.z-el .pos{background:#2f7fb5;color:#fff}.standings tr.z-down .pos{background:#c0392b;color:#fff}
+.standings .st-pos{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;font-weight:800;font-size:12px;background:#eef2ec}
+.standings tr.z-cl .st-pos{background:#0f6b46;color:#fff}.standings tr.z-el .st-pos{background:#2f7fb5;color:#fff}.standings tr.z-down .st-pos{background:#c0392b;color:#fff}
 .standings tr.fav-roma{background:linear-gradient(90deg,rgba(142,31,47,.14),rgba(240,188,66,.12) 60%,transparent)}
 .standings tr.fav-roma td.t-team span{color:#8e1f2f}
 .standings tr.fav-juve{background:linear-gradient(90deg,rgba(0,0,0,.12),rgba(0,0,0,.03) 60%,transparent)}

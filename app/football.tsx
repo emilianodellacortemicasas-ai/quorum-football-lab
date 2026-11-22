@@ -62,7 +62,7 @@ export function StandingsView() {
           <table className="standings">
             <thead><tr><th>#</th><th className="t-team">Squadra</th><th>PG</th><th className="hide-sm">V</th><th className="hide-sm">N</th><th className="hide-sm">P</th><th className="hide-sm">Gol</th><th>DR</th><th>Pt</th><th className="hide-xs">Forma</th></tr></thead>
             <tbody>{lg.rows.map(r => <tr key={r.teamId} className={zone(r.position) + fam(r.name)}>
-              <td><span className="pos">{r.position}</span></td>
+              <td><span className="st-pos">{r.position}</span></td>
               <td className="t-team"><Crest src={r.logo} name={r.name} size={24} /><span>{r.name}</span></td>
               <td>{r.played ?? '—'}</td><td className="hide-sm">{r.won ?? '—'}</td><td className="hide-sm">{r.draw ?? '—'}</td><td className="hide-sm">{r.lost ?? '—'}</td>
               <td className="hide-sm">{r.gf !== null && r.ga !== null ? r.gf + ':' + r.ga : '—'}</td>
