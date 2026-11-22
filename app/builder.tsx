@@ -92,7 +92,7 @@ function toOptions(r: any): Match | null {
   if (!opts.length) return null;
   // Highlight: the two most probable outcomes with a real price (≥ 1,10) among the markets measured by the backtest.
   const measured = new Set(GROUPS.flatMap(g => g[1]));
-  const best = new Set(opts.filter(o => o.odds >= 1.1 && measured.has(o.market)).sort((a, b) => b.p - a.p).slice(0, 2).map(o => o.market));
+  const best = new Set(opts.filter(o => !o.fair && o.odds >= 1.1 && measured.has(o.market)).sort((a, b) => b.p - a.p).slice(0, 2).map(o => o.market));
   return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best };
 }
 
