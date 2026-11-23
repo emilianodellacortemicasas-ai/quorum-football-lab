@@ -65,7 +65,7 @@ export function fitExtras(rows: ExtraRow[], now: number): ExtrasModel {
     goals[s.teamId][s.id].w += w; teamTot[s.teamId] = (teamTot[s.teamId] || 0) + w;
   }
   const scorers: ExtrasModel['scorers'] = {};
-  for (const [team, players] of Object.entries(goals)) scorers[team] = Object.entries(players).map(([id, p]) => ({ id: Number(id), name: p.name, share: p.w / (teamTot[team] || 1) })).sort((a, b) => b.share - a.share).slice(0, 8);
+  for (const [team, players] of Object.entries(goals)) scorers[team] = Object.entries(players).map(([id, p]) => ({ id: Number(id), name: p.name, share: p.w / (teamTot[team] || 1) })).sort((a, b) => b.share - a.share).slice(0, 14);
   return {
     corners: fitCount(rows, x => x.corners, now, 250, 6), yellow: fitCount(rows, x => x.yellow, now, 250, 4), red: fitCount(rows, x => x.red, now, 365, 1),
     pen, missRate: tot >= 20 ? Math.min(0.4, Math.max(0.1, (miss + 4) / (tot + 20))) : 0.22, scorers,
@@ -81,7 +81,7 @@ export function penaltyProbs(m: ExtrasModel, homeId: number, awayId: number) {
 // Anytime scorer: share of team goals × expected team goals, discounted 15% for minutes not played. Sidelined players excluded.
 export function scorerProbs(m: ExtrasModel, teamId: number, teamLambda: number, out: string[] | null | undefined) {
   const absent = (out || []).map(s => s.toLowerCase());
-  return (m.scorers[teamId] || []).filter(p => !absent.some(o => o.startsWith(p.name.toLowerCase()))).slice(0, 4)
+  return (m.scorers[teamId] || []).filter(p => !absent.some(o => o.startsWith(p.name.toLowerCase()))).slice(0, 12)
     .map(p => ({ id: p.id, name: p.name, p: 1 - Math.exp(-p.share * teamLambda * 0.85) }));
 }
 
