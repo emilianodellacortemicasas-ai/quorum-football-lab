@@ -116,9 +116,15 @@ function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (
   </article>;
 }
 
+const SECTIONS: [string, string][] = [['tutte', 'Tutte le schedine'], ['raddoppi', '🛡️ Raddoppi'], ['multiple', '📋 Multiple del giorno'], ['fasce', '🎯 3 e 5 squadre'], ['schemi', '🧩 Schemi (puoi sbagliare)'], ['sistemi', '🧮 Sistemi'], ['combo', '⚽ Combo, Multigol, esatti'], ['bombe', '💣 Bombe']];
+
 export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem, onOpenMatch }: { onOpenMatch?: (id: string) => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
   const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; combo?: ComboData; comboBombs?: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; label: string; p: number; odds: number }[]; p: number; fair: number }[]; days?: { day: string; n: number }[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   const dayF = useDay('tickets');
+  const [sec, setSecS] = useState('tutte');
+  useEffect(() => { try { const v = localStorage.getItem('quorum-sec'); if (v) setSecS(v); } catch {} }, []);
+  const setSec = (v: string) => { setSecS(v); try { localStorage.setItem('quorum-sec', v); } catch {} };
+  const show = (k: string) => sec === 'tutte' || sec === k;
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=tickets' + (dayF.day ? '&day=' + dayF.day : ''), { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
@@ -134,6 +140,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
     <div className="page-heading"><div><p className="eyebrow">SCHEDINE</p><h1>Pronte da giocare<span>.</span></h1><p>Obiettivo: far crescere il capitale. Prima le schedine con lo storico migliore, poi le giocate da sogno a puntata minima.</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Aggiornamento…' : 'Aggiorna ora'}</button></div>
     <DayFilter days={(data as any)?.days} day={dayF.day} onChange={dayF.setDay} />
+    <div className="section-pick"><label><span>Mostra</span><select value={sec} onChange={e => setSec(e.target.value)}>{SECTIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label></div>
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Compongo le schedine…</h3></div>
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Schedine non disponibili</h3><p>{error}</p></div>
       : !data?.run ? <div className="empty"><span className="empty-icon"><TicketIcon /></span><h3>Nessun dato ancora.</h3><p>Premi “Aggiorna ora”.</p></div>
@@ -142,38 +149,38 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
           const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} onRecord={onRecord} />;
           const bands = ['80', '70', '60'].map(b => ({ b, label: b === '80' ? '80–90%' : b === '70' ? '70–80%' : '60–70%', list: (data.banded || []).filter(t => t.kind.endsWith('-' + b)) })).filter(x => x.list.length);
           return <>
-            {data.sure && data.sure.length > 0 && <>
+            {show('raddoppi') && data.sure && data.sure.length > 0 && <>
               <h3 className="day-title">🛡️ Raddoppi</h3>
               <p className="small-note">Due squadre, quota circa 2: i due esiti più affidabili che insieme raddoppiano la puntata. Quote Lottomatica / Planetwin365, partite diverse tra una schedina e l’altra.</p>
               <BtBadge history={data.history} kinds={k => k.startsWith('raddoppio-sicuro')} />
               <div className="value-list">{data.sure.map(t => card(t))}</div>
             </>}
-            {data.multiples && data.multiples.length > 0 && <>
+            {show('multiple') && data.multiples && data.multiples.length > 0 && <>
               <h3 className="day-title">📋 Multiple del giorno</h3>
               <p className="small-note">Per ogni giornata due multiple pronte: 3 eventi a quota 2,8–5 e 5 eventi a quota 6–12. Tra tutte le combinazioni in quella fascia, la più probabile, con un premio a quelle che pagano più del dovuto.</p>
               <BtBadge history={data.history} kinds={k => k.startsWith('multipla-giorno')} />
               <div className="value-list">{data.multiples.map(t => card(t))}</div>
             </>}
-            {bands.length > 0 && <>
+            {show('fasce') && bands.length > 0 && <>
               <h3 className="day-title">🎯 Schedine da 3 e 5 squadre</h3>
               <p className="small-note">Ogni esito ha la probabilità della fascia indicata; dentro la fascia QUORUM sceglie quelli con più valore sulle quote italiane. Più alta la fascia, più sicura la schedina e più bassa la quota.</p>
               <BtBadge history={data.history} kinds={k => k.startsWith('fascia-')} />
               {bands.map(x => <div key={x.b} className="band-block"><p className={'band-tag b' + x.b}>Esiti al {x.label}</p><div className="value-list">{x.list.map(t => card(t))}</div></div>)}
             </>}
-            {data.schemes && data.schemes.length > 0 && <>
+            {show('schemi') && data.schemes && data.schemes.length > 0 && <>
               <h3 className="day-title">🧩 Schemi della settimana</h3>
               <p className="small-note">Sistemi su tutte le partite della settimana in cui <b>puoi sbagliare una partita</b> (4 su 5, 5 su 6) o <b>due</b> (5 su 7) e restare in profitto. Ogni schema usa partite diverse dagli altri. Esempio: nel 5 su 6 giochi le 6 cinquine possibili; se ne sbagli una, una cinquina è comunque vincente.</p>
               <BtBadge history={data.history} kinds={k => k.startsWith('schema-')} />
               <div className="value-list">{data.schemes.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
-            {data.systems && data.systems.length > 0 && <>
+            {show('sistemi') && data.systems && data.systems.length > 0 && <>
               <h3 className="day-title">🧮 Sistemi pronti</h3>
               <p className="small-note">Un sistema per ogni giorno di partite, con la struttura che dà la probabilità di profitto più alta. Copialo sul bookmaker, aprilo nel Laboratorio o registralo.</p>
               <BtBadge history={data.history} kinds={k => k === 'sistema-giorno'} />
               <div className="value-list">{data.systems.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
-            {data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} history={data.history} onOpenMatch={onOpenMatch} />}
-            {data.bombs && data.bombs.length > 0 && <>
+            {show('combo') && data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} history={data.history} onOpenMatch={onOpenMatch} />}
+            {show('bombe') && data.bombs && data.bombs.length > 0 && <>
               <h3 className="day-title">💣 Bombe</h3>
               <p className="small-note">Una per ogni giornata di partite: quota da 10 a 100 in base a quante partite ci sono. Per sognare, sempre a puntata minima.</p>
               <BtBadge history={data.history} kinds={k => k === 'bomba-giorno'} />

@@ -865,3 +865,8 @@ body{background:#eef3ee}
 .lab-picker .chip-row{display:flex;flex-wrap:wrap;gap:6px}
 .lab-empty-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 @media(max-width:640px){.lp-row{grid-template-columns:1fr}}
+.section-pick{position:sticky;top:0;z-index:15;margin:0 0 12px;padding:8px 0;background:linear-gradient(180deg,var(--paper,#f5f7f5) 80%,transparent)}
+.section-pick label,.mk-select{display:flex;align-items:center;gap:8px}
+.section-pick span,.mk-select span{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5d6f63;flex:none}
+.section-pick select,.mk-select select{flex:1;min-width:0;padding:10px 12px;border:1px solid #b9d79a;border-radius:12px;font-size:15px;font-weight:700;background:#fff;color:#0b2a1d;box-shadow:0 3px 0 #d3e6c0}
+.mk-select{margin:6px 0 8px}

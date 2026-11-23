@@ -93,7 +93,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         try {
           let r: any;
           // Minor leagues: only Goal/No Goal (corner, cards and scorers would double the credits).
-          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=' + (['Serie B', 'Championship', 'Champions League', 'Europa League'].includes(f.competition) ? 'btts' : 'btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime') + '&oddsFormat=decimal', 600); }
+          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=' + (['Serie B', 'Championship'].includes(f.competition) ? 'btts' : ['Champions League', 'Europa League'].includes(f.competition) ? 'btts,player_goal_scorer_anytime' : 'btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime') + '&oddsFormat=decimal', 600); }
           catch { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts&oddsFormat=decimal', 600); }
           books = Array.isArray(r.payload?.bookmakers) ? r.payload.bookmakers : []; bttsDownloaded++;
           if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
@@ -125,7 +125,13 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     // Per-match predictions: every paired match, with the model when available and the market otherwise.
     const matchRows: any[] = [];
     paired.forEach(({ f, e }, i) => {
-      const x = modelled[i], consensus = mapScorers(marketConsensus(e), fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {}, fit = itFor(f);
+      const raw0 = marketConsensus(e), fm0 = fetched[i] as any;
+      // Cups: scorer probabilities = domestic goal share × goals expected by the market.
+      if (!modelled[i] && fm0?.context?.scorerShares && raw0.home && raw0.draw && raw0.away) {
+        const ml0 = lambdasFromMarket({ home: raw0.home.pMarket, draw: raw0.draw.pMarket, away: raw0.away.pMarket, over25: raw0.over25?.pMarket });
+        if (ml0) { const sp = (list: any[], lam: number) => list.map((p: any) => ({ id: p.id, name: p.name, p: 1 - Math.exp(-p.share * lam * 0.85) })); fm0.context.scorers = { home: sp(fm0.context.scorerShares.home, ml0.lh), away: sp(fm0.context.scorerShares.away, ml0.la) }; }
+      }
+      const x = modelled[i], consensus = mapScorers(raw0, fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {}, fit = itFor(f);
       for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c) continue;
         const raw = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;

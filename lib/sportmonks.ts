@@ -95,6 +95,10 @@ export async function getSportmonksMatch(id:string):Promise<Match>{
  const tbl=state.tables[m.competition==='Coppa Italia'?'Serie A':m.competition]||[],ph=tbl.find(r=>r.teamId===h.id),pa=tbl.find(r=>r.teamId===a.id);
  const context={model:state.version,rho:league?.rho??0,homePos:ph?.position??null,awayPos:pa?.position??null,homePts:ph?.points??null,awayPts:pa?.points??null,teamsInTable:tbl.length,homeForm:state.forms[h.id]||'',awayForm:state.forms[a.id]||'',homeOut:sidelinedNames(f,h.id),awayOut:sidelinedNames(f,a.id),homeN:league?.teams[h.id]?.n??0,awayN:league?.teams[a.id]?.n??0,lineupConfirmed:Boolean(sh&&sa),adjust:{home:adjH,away:adjA},condition:{home:condH,away:condA}};
  const ex=state.extras?.[m.competition==='Coppa Italia'?'Serie A':m.competition];
+ // Cups: no cup model, but each team's scorers are known from its domestic league (if QUORUM follows it).
+ // The goal shares are stored; the scanner turns them into probabilities with the goals expected by the market.
+ if(!ex){const shares=(id:number,out:string[]|null|undefined)=>{for(const e of Object.values(state.extras||{})){const s=e?.scorers?.[id];if(s?.length){const ab=(out||[]).map(x=>x.toLowerCase());return s.filter(p=>!ab.some(o=>o.startsWith(p.name.toLowerCase()))).slice(0,12);}}return null;};
+  const sh2=shares(h.id,context.homeOut),sa2=shares(a.id,context.awayOut);if(sh2||sa2)(context as any).scorerShares={home:sh2||[],away:sa2||[]};}
  let counts:Match['counts'];
  if(ex){const c=expectedCount(ex.corners,h.id,a.id),y=expectedCount(ex.yellow,h.id,a.id),r=expectedCount(ex.red,h.id,a.id);if(c&&y&&r)counts={corners:c,yellow:y,red:r};
   const pen=penaltyProbs(ex,h.id,a.id);if(pen)(context as any).penalties=pen;
