@@ -874,3 +874,5 @@ body{background:#eef3ee}
 .sub-tabs::-webkit-scrollbar{display:none}
 .sub-tabs button{white-space:nowrap;font-size:13.5px;padding:9px 16px}
 .cup-bt{margin-top:18px}
+.metric-cash{position:relative}
+.metric-cash .topup-button{margin-top:10px;padding:7px 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;border-radius:999px}

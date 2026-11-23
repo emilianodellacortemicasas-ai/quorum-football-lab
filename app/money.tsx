@@ -59,12 +59,12 @@ export function MoneyGuide({ portfolio, equityCents, busy, onApply, onBudget }: 
     </div>
 
     <div className="mm-budget">
-      <div><strong>Il tuo budget</strong><p className="small-note">Quanto vuoi dedicare alle scommesse in totale. QUORUM adatta profilo e puntate a questa cifra.</p></div>
+      <div><strong>Totale versato</strong><p className="small-note">Tutti i soldi che hai messo finora. Per aggiungerne usa “Ricarica” in Panoramica; qui puoi correggere il totale se serve.</p></div>
       <form onSubmit={e => { e.preventDefault(); const v = Math.round(Number(budget.replace(',', '.')) * 100); if (Number.isFinite(v) && v >= 1000) onBudget(v); }}>
         <label><span>€</span><input inputMode="decimal" value={budget} onChange={e => setBudget(e.target.value.replace(/[^0-9.,]/g, ''))} aria-label="Budget iniziale in euro" /></label>
-        <button className="primary" disabled={busy || Math.round(Number(budget.replace(',', '.')) * 100) === portfolio.initialCents}>Salva budget</button>
+        <button className="primary" disabled={busy || Math.round(Number(budget.replace(',', '.')) * 100) === portfolio.initialCents}>Correggi totale</button>
       </form>
-      <div className="mm-rec"><span>Capitale attuale {money(equityCents)}{equityCents !== portfolio.initialCents ? ' (budget iniziale ' + money(portfolio.initialCents) + ')' : ''}</span>
+      <div className="mm-rec"><span>Saldo disponibile {money(equityCents)} = {money(portfolio.initialCents)} versati {equityCents >= portfolio.initialCents ? '+' : '−'} {money(Math.abs(equityCents - portfolio.initialCents))} di risultato</span>
         {equityCents < 4000 ? <b>Con meno di 40 € non si rispetta la giocata minima di 2 € con nessun profilo: QUORUM consiglia almeno 50 €.</b>
           : <b>Consigliato per te: {rec.name} · {money(Math.max(MIN_STAKE_CENTS, stakeCents(equityCents, rec.stake)))} a giocata</b>}</div>
     </div>
