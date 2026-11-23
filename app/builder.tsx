@@ -10,8 +10,8 @@ import type { RecordPlay, Selection } from '../lib/types';
 import { Count, Ring } from './motion';
 import { exactPicks, MULTIGOL, multigolP, scoreMatrix } from '../lib/exact';
 
-type Opt = { fair?: boolean; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
-type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string> };
+export type Opt = { fair?: boolean; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
+export type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string> };
 
 const GROUPS: [string, string[]][] = [
   ['Esito finale', ['home', 'draw', 'away']],
@@ -26,7 +26,7 @@ const pc = (p: number) => percent(p, p < 0.1 ? 1 : 0);
 const SLIP_KEY = 'quorum-slip-v1';
 const EXTRA = ['Under / Over squadra', 'Combo', 'Multigol', 'Risultato esatto', 'Corner', 'Cartellini', 'Corner e cartellini', 'Rigori', 'Marcatori'];
 
-function toOptions(r: any): Match | null {
+export function toOptions(r: any): Match | null {
   const mk = r.markets || {}, opts: Opt[] = [];
   const add = (key: string, group: string, label: string) => {
     const x = mk[key]; if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds)) return;
@@ -72,6 +72,14 @@ function toOptions(r: any): Match | null {
           const real = opts.find(o => o.market === k); if (real) { real.group = group; continue; }
           opts.push(fairOpt(k, (fam === 'corners' ? 'Corner ' : 'Cartellini ') + (side === 'over' ? 'Over ' : 'Under ') + String(line).replace('.', ','), group, p));
         }
+      }
+      // Scorers: every player the model knows (goals of the last year × expected goals), with the bookmaker's
+      // price when there is one; otherwise the fair price, editable in the slip.
+      const scs = mk.meta?.scorers;
+      if (scs) for (const [side, list] of [['home', scs.home], ['away', scs.away]] as const) for (const pl of (Array.isArray(list) ? list : []).slice(0, 14)) {
+        if (!Number.isFinite(pl?.p) || pl.p < 0.02 || has('scorer:' + pl.id)) continue;
+        const team = r.fixture.split(' – ')[side === 'home' ? 0 : 1] || '';
+        opts.push({ ...fairOpt('scorer:' + pl.id, pl.name + ' (' + team + ')', 'Marcatori', Math.min(0.95, pl.p)) });
       }
       const pen = mk.meta?.penalties;
       if (pen && Number.isFinite(pen.awarded)) { opts.push(fairOpt('pen:awarded:yes', 'Rigore assegnato: Sì', 'Rigori', pen.awarded)); opts.push(fairOpt('pen:awarded:no', 'Rigore assegnato: No', 'Rigori', 1 - pen.awarded));
@@ -171,7 +179,7 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
             {GROUPS.map(([g, keys]) => { const os = m.opts.filter(o => o.group === g).sort((x, y) => keys.indexOf(x.market) - keys.indexOf(y.market)); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market} className={m.best.has(o.market) ? 'starred' : ''}>{chip(o)}</span>)}</div></div> : null; })}
             {m.opts.some(o => EXTRA.includes(o.group)) && <>
               <button className="text-button" onClick={() => setOpen({ ...open, [m.fixtureId]: !open[m.fixtureId] })}>{open[m.fixtureId] ? 'Nascondi' : 'Altri mercati'}: gol per squadra, combo, multigol, risultato esatto, corner, cartellini, rigori, marcatori</button>
-              {open[m.fixtureId] && EXTRA.map(g => { const os = m.opts.filter(o => o.group === g).sort((a, b) => g === 'Multigol' || g.startsWith('Under / Over') || g === 'Corner' || g === 'Cartellini' || g === 'Rigori' ? 0 : b.p - a.p).slice(0, g === 'Combo' ? 19 : g === 'Risultato esatto' ? 16 : g === 'Corner' || g === 'Cartellini' ? 16 : 12); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market}>{chip(o, false)}<small className="chip-name">{o.label}</small></span>)}</div></div> : null; })}
+              {open[m.fixtureId] && EXTRA.map(g => { const os = m.opts.filter(o => o.group === g).sort((a, b) => g === 'Multigol' || g.startsWith('Under / Over') || g === 'Corner' || g === 'Cartellini' || g === 'Rigori' ? 0 : b.p - a.p).slice(0, g === 'Combo' ? 19 : g === 'Risultato esatto' ? 16 : g === 'Corner' || g === 'Cartellini' ? 16 : g === 'Marcatori' ? 28 : 12); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market}>{chip(o, false)}<small className="chip-name">{o.label}</small></span>)}</div></div> : null; })}
             </>}
           </article>)}
           <p className="footnote">Percentuale = probabilità stimata da QUORUM (modello + mercato, corretta con il backtest). * = quota estera, l’esito non è quotato da Lottomatica / Planetwin365. ≈ = quota equa: il bookmaker non la manda. Nella schedina puoi correggere la quota di ogni evento con quella che hai giocato davvero: QUORUM ricalcola quota totale, valore, puntata e vincita. Le quote italiane si aggiornano ogni 12 ore: controlla sempre quella sul tuo conto.</p>
@@ -193,5 +201,28 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
         <div className="slip-actions"><button className="primary" onClick={copy}><Copy size={15} />Copia schedina</button><button className="secondary" onClick={() => onLab(slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds, competition: l.competition, kickoff: l.kickoff })))}><FlaskConical size={15} />Sistemi nel Laboratorio</button></div>
       </>}
     </aside>
+  </div>;
+}
+
+// Picker used by the Laboratorio: any match of any competition, any market QUORUM offers.
+export function LabPicker({ onAdd, taken }: { onAdd: (s: Selection) => void; taken: string[] }) {
+  const [rows, setRows] = useState<Match[] | null>(null), [comp, setComp] = useState(''), [fid, setFid] = useState(''), [group, setGroup] = useState('Esito finale');
+  useEffect(() => { fetch('/api/scanner?view=predictions', { cache: 'no-store' }).then(r => r.json()).then((d: any) => setRows((d.matches || []).map(toOptions).filter(Boolean)), () => setRows([])); }, []);
+  if (!rows) return <p className="small-note">Carico le partite…</p>;
+  const now = Date.now(), live = rows.filter(m => Date.parse(m.kickoff) > now);
+  const comps = [...new Set(live.map(m => m.competition))];
+  const list = live.filter(m => !comp || m.competition === comp).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const m = list.find(x => x.fixtureId === fid);
+  const groups = m ? [...GROUPS.map(g => g[0]), ...EXTRA].filter(g => m.opts.some(o => o.group === g)) : [];
+  return <div className="lab-picker">
+    <div className="lp-row"><label>Campionato<select value={comp} onChange={e => { setComp(e.target.value); setFid(''); }}><option value="">Tutti</option>{comps.map(c => <option key={c}>{c}</option>)}</select></label>
+      <label>Partita<select value={fid} onChange={e => { setFid(e.target.value); setGroup('Esito finale'); }}><option value="">Scegli…</option>{list.map(x => <option key={x.fixtureId} value={x.fixtureId} disabled={taken.includes(x.fixtureId)}>{when(x.kickoff)} · {x.fixture}</option>)}</select></label></div>
+    {m && <>
+      <div className="archive-tabs">{groups.map(g => <button key={g} className={group === g ? 'on' : ''} onClick={() => setGroup(g)}>{g}</button>)}</div>
+      <div className="chip-row">{m.opts.filter(o => o.group === group).sort((a, b) => group === 'Marcatori' || group === 'Combo' || group === 'Risultato esatto' ? b.p - a.p : 0).map(o =>
+        <button key={o.market} className="pick-chip" onClick={() => onAdd({ fixtureId: o.fixtureId, fixture: o.fixture, market: o.market, label: o.label, p: o.p, odds: o.odds, competition: o.competition, kickoff: o.kickoff })}>
+          <span className="chip-label">{SHORT[o.market] ?? o.label}</span><b>{o.odds.toFixed(2)}{o.fair && <i title="Quota equa: correggila con la tua">≈</i>}</b><em>{percent(o.p, 0)}</em></button>)}</div>
+      <p className="small-note">Tocca un esito per aggiungerlo. Nel Laboratorio puoi poi cambiare la quota di ogni partita con quella che hai trovato tu.</p>
+    </>}
   </div>;
 }
