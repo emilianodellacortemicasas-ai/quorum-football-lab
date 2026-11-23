@@ -105,10 +105,15 @@ export function comboBombs(list: ExactPick[], now = Date.now()): ComboBomb[] {
 export function lambdasFromMarket(m: { home: number; draw: number; away: number; over25?: number }): { lh: number; la: number } | null {
   if (![m.home, m.draw, m.away].every(x => Number.isFinite(x) && x > 0)) return null;
   let best: { lh: number; la: number } | null = null, err = Infinity;
-  for (let lh = 0.2; lh <= 4.01; lh += 0.05) for (let la = 0.2; la <= 4.01; la += 0.05) {
+  const tryAt = (lh: number, la: number) => {
+    if (lh < 0.2 - 1e-9 || la < 0.2 - 1e-9 || lh > 4.01 || la > 4.01) return;
     const k = analyze(lh, la, 0).markets;
     const e = (k.home - m.home) ** 2 + (k.draw - m.draw) ** 2 + (k.away - m.away) ** 2 + (Number.isFinite(m.over25) ? (k.over25 - m.over25!) ** 2 : 0);
     if (e < err) { err = e; best = { lh: Math.round(lh * 100) / 100, la: Math.round(la * 100) / 100 }; }
-  }
+  };
+  // Coarse grid (step 0,25), then a fine search (step 0,05) around the best point: same result, ~15× faster.
+  for (let lh = 0.2; lh <= 4.01; lh += 0.25) for (let la = 0.2; la <= 4.01; la += 0.25) tryAt(lh, la);
+  const c = best as { lh: number; la: number } | null; if (!c) return null;
+  for (let i = -6; i <= 6; i++) for (let j = -6; j <= 6; j++) tryAt(c.lh + i * 0.05, c.la + j * 0.05);
   return best;
 }
