@@ -1,3 +1,4 @@
+import { lambdasFromMarket } from './exact.ts';
 import { tipsterPicks, tipsterTickets } from './tipster.ts';
 import { env } from 'cloudflare:workers';
 import { getModel, getSportmonksFixtures, getSportmonksMatch } from './sportmonks';
@@ -92,7 +93,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         try {
           let r: any;
           // Minor leagues: only Goal/No Goal (corner, cards and scorers would double the credits).
-          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=' + (['Serie B', 'Championship'].includes(f.competition) ? 'btts' : 'btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime') + '&oddsFormat=decimal', 600); }
+          try { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=' + (['Serie B', 'Championship', 'Champions League', 'Europa League'].includes(f.competition) ? 'btts' : 'btts,alternate_totals_corners,alternate_totals_cards,player_goal_scorer_anytime') + '&oddsFormat=decimal', 600); }
           catch { r = await oddsFeed('sports/' + key + '/events/' + e.id + '/odds?regions=eu&markets=btts&oddsFormat=decimal', 600); }
           books = Array.isArray(r.payload?.bookmakers) ? r.payload.bookmakers : []; bttsDownloaded++;
           if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
@@ -142,7 +143,9 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         markets[k] = { pModel: x.pModel !== null && y.pModel !== null ? x.pModel + y.pModel : null, pMarket: x.pMarket + y.pMarket, pBlend, bestOdds: best, bookmaker: sorted.filter(e => e[1].odds === best).map(e => e[0]).join(' / '), books: Math.min(x.books, y.books), it: Object.fromEntries(sorted.map(([bk, v]) => [bk, v.odds])), se: Math.sqrt((x.se ?? 0.02) ** 2 + (y.se ?? 0.02) ** 2) };
       }
       const fm = fetched[i]; if (fm) markets.meta = { calibration: cal ? { backtestSamples: cal.backtestSamples, liveSamples: cal.liveSamples, backtestAt: cal.backtestAt } : null, sampleHome: fm.sampleHome, sampleAway: fm.sampleAway, counts: fm.counts ?? null, ...fm.context };
-      if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : null, x ? x.m.lambdaAway : null, JSON.stringify(markets), new Date().toISOString()]);
+      // No model (e.g. European cups): expected goals taken from the market, so exact scores, combo and Multigol still work.
+      const ml = x ? null : lambdasFromMarket({ home: markets.home?.pMarket, draw: markets.draw?.pMarket, away: markets.away?.pMarket, over25: markets.over25?.pMarket });
+      if (Object.keys(markets).length) matchRows.push([crypto.randomUUID(), id, f.id, f.home + ' – ' + f.away, f.competition, f.kickoff, x ? 1 : 0, x ? x.m.lambdaHome : ml?.lh ?? null, x ? x.m.lambdaAway : ml?.la ?? null, JSON.stringify(markets), new Date().toISOString()]);
     });
     const insertMatch = db().prepare('INSERT INTO scanner_matches (id,run_id,fixture_id,fixture,competition,kickoff,modelled,lambda_home,lambda_away,markets,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');
     for (let i = 0; i < matchRows.length; i += 50) await db().batch(matchRows.slice(i, i + 50).map(r => insertMatch.bind(...r)));

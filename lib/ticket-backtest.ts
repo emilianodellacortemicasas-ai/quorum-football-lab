@@ -35,7 +35,7 @@ export const groupOf = (kind: string) => kind.startsWith('raddoppio-sicuro') ? '
   : kind.startsWith('sistema') ? 'Sistemi del giorno' : kind.startsWith('schema-') ? 'Schemi settimanali' : kind.startsWith('bomba') ? 'Bombe' : kind.startsWith('esatto') || kind.startsWith('multigol') || kind.startsWith('combo') ? 'Risultati esatti e combo' : 'Altre';
 
 export function ticketBacktest(results: Result[], odds: Map<string | number, FdRow>, testDays = 240, now = Date.now(), W = 0.35) {
-  const comps = [...new Set(results.map(r => r.comp))].filter(c => c !== 'Coppa Italia');
+  const comps = [...new Set(results.map(r => r.comp))].filter(c => !['Coppa Italia', 'Champions League', 'Europa League'].includes(c));
   const stats = new Map<string, { title: string; n: number; won: number; p: number; profit: number; odds: number; legs: number; staked: number; noOdds?: boolean }>();
   const series: { week: string; groups: Record<string, number> }[] = [];
   // Every market QUORUM predicts: when it said ≥ 60% (and 45–60%), how often it really happened.

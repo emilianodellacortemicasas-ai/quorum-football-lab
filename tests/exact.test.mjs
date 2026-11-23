@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { analyze } from '../lib/math.ts';
 import assert from 'node:assert/strict';
 import { scoreMatrix, multigolP, exactPicks } from '../lib/exact.ts';
 test('score matrix matches the blended 1X2 and sums to 1', () => {
@@ -22,4 +23,10 @@ test('combo probabilities are coherent and tickets use different matches', () =>
   const t = comboTickets(exactPicks(rows), Date.UTC(2026, 10, 22));
   const ids = t.tickets.flatMap(x => x.legs.map(l => l.fixtureId));
   assert.equal(new Set(ids).size, ids.length);
+});
+import { lambdasFromMarket } from '../lib/exact.ts';
+test('expected goals from market odds reproduce the market', () => {
+  const l = lambdasFromMarket({ home: 0.5, draw: 0.26, away: 0.24, over25: 0.52 });
+  const k = analyze(l.lh, l.la, 0).markets;
+  assert.ok(Math.abs(k.home - 0.5) < 0.03 && Math.abs(k.over25 - 0.52) < 0.03);
 });

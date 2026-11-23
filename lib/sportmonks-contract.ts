@@ -9,7 +9,7 @@ export function sportmonksCompetition(league:any):{id:number;name:string;group:s
   spain:{laliga:[140,'La Liga','Spagna'],laligaeasports:[140,'La Liga','Spagna']},
   france:{ligue1:[61,'Ligue 1','Francia'],ligue1mcdonalds:[61,'Ligue 1','Francia']}
  };
- const international:Record<string,[number,string,string]>={}; // Coppe europee e nazionali fuori perimetro (Starter + 1 lega extra).
+ const international:Record<string,[number,string,string]>={championsleague:[2,'Champions League','Europa'],uefachampionsleague:[2,'Champions League','Europa'],europaleague:[3,'Europa League','Europa'],uefaeuropaleague:[3,'Europa League','Europa']};
  const v=domestic[country]?.[n]||((country==='europe'||country==='world')?international[n]:undefined);
  return v?{id:v[0],name:v[1],group:v[2]}:null;
 }

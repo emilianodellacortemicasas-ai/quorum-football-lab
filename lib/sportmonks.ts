@@ -22,6 +22,8 @@ export async function getSportmonksFixtures(date:string,league?:string):Promise<
 }
 type ModelState={builtAt:string;version:string;extras?:Record<string,ExtrasModel>;leagues:Record<string,LeagueModel>;tables:Record<string,TableRow[]>;forms:Record<string,string>;results:number};
 let memo:{at:number;state:ModelState}|null=null;
+// Cups mix teams of different leagues: no league model, table or form from them (market-only predictions).
+const CUPS=['Coppa Italia','Champions League','Europa League'];
 // Builds the v2 model from ~13 months of results of the subscribed competitions and stores it in D1.
 export async function buildModel():Promise<ModelState>{
  const now=Date.now(),results:Result[]=[],extraRows:ExtraRow[]=[],seen=new Set<number>();
@@ -33,10 +35,10 @@ export async function buildModel():Promise<ModelState>{
  const unique=[...new Map(results.map(r=>[r.id,r])).values()],extras:Record<string,ExtrasModel>={},leagues:Record<string,LeagueModel>={},tables:Record<string,TableRow[]>={},forms:Record<string,string>={};
  for(const comp of new Set(unique.map(r=>r.comp))){
   const rs=unique.filter(r=>r.comp===comp);
-  if(comp!=='Coppa Italia'){const m=fitLeague(rs,now);if(m)leagues[comp]=m;extras[comp]=fitExtras(extraRows.filter(r=>r.comp===comp),now);}
+  if(!CUPS.includes(comp)){const m=fitLeague(rs,now);if(m)leagues[comp]=m;extras[comp]=fitExtras(extraRows.filter(r=>r.comp===comp),now);}
   const season=rs.reduce((a,b)=>b.ts>a.ts?b:a).season;tables[comp]=table(rs,season);
  }
- const leagueOnly=unique.filter(r=>r.comp!=='Coppa Italia');
+ const leagueOnly=unique.filter(r=>!CUPS.includes(r.comp));
  for(const id of new Set(leagueOnly.flatMap(r=>[r.homeId,r.awayId])))forms[id]=form(leagueOnly,id,5);
  const state={builtAt:new Date().toISOString(),version:MODEL_V2,extras,leagues,tables,forms,results:unique.length};
  const comps=[...new Set(unique.map(r=>r.comp))],compact=unique.map(r=>[r.id,r.ts,comps.indexOf(r.comp),r.homeId,r.awayId,r.hg,r.ag,r.season]);
@@ -128,7 +130,7 @@ export async function fixtureFinal(id:string):Promise<{status:'final'|'void'|'pe
 }
 
 // ---- Classifiche ufficiali e formazioni ----
-export const STANDING_LEAGUES:[number,string,string][]=[[384,'Serie A','🇮🇹'],[8,'Premier League','🏴'],[564,'La Liga','🇪🇸'],[82,'Bundesliga','🇩🇪'],[301,'Ligue 1','🇫🇷'],[387,'Serie B','🇮🇹'],[9,'Championship','🏴']];
+export const STANDING_LEAGUES:[number,string,string][]=[[384,'Serie A','🇮🇹'],[8,'Premier League','🏴'],[564,'La Liga','🇪🇸'],[82,'Bundesliga','🇩🇪'],[301,'Ligue 1','🇫🇷'],[387,'Serie B','🇮🇹'],[9,'Championship','🏴'],[2,'Champions League','🇪🇺'],[5,'Europa League','🇪🇺']];
 export type StandingRow={position:number;teamId:number;name:string;logo:string|null;played:number|null;won:number|null;draw:number|null;lost:number|null;gf:number|null;ga:number|null;points:number;form:string};
 const DETAIL:Record<string,keyof StandingRow>={OVERALL_MATCHES:'played',OVERALL_WINS:'won',OVERALL_DRAWS:'draw',OVERALL_LOST:'lost',OVERALL_SCORED:'gf',OVERALL_CONCEDED:'ga'};
 const DETAIL_ID:Record<number,keyof StandingRow>={129:'played',130:'won',131:'draw',132:'lost',133:'gf',134:'ga'};

@@ -14,10 +14,11 @@ export const IT_BOOKS = [{ key: 'lottomatica', label: 'Lottomatica', re: /lottom
   { key: 'snai', label: 'Snai', re: /snai/i, age: 72 }, { key: 'sisal', label: 'Sisal', re: /sisal/i, age: 72 }, { key: 'eurobet', label: 'Eurobet', re: /eurobet/i, age: 72 }] as const;
 const COMPS: Record<string, { cat: string; names: string[] }> = {
   'Serie A': { cat: 'italy', names: ['serie a'] }, 'Serie B': { cat: 'italy', names: ['serie b'] }, 'Championship': { cat: 'england', names: ['championship'] },
+  'Champions League': { cat: '', names: ['uefa champions league', 'champions league'] }, 'Europa League': { cat: '', names: ['uefa europa league', 'europa league'] },
   'Premier League': { cat: 'england', names: ['premier league'] }, 'La Liga': { cat: 'spain', names: ['laliga', 'la liga'] },
   'Bundesliga': { cat: 'germany', names: ['bundesliga'] }, 'Ligue 1': { cat: 'france', names: ['ligue 1'] },
 };
-const MINOR = ['Serie B', 'Championship'];
+const MINOR = ['Serie B', 'Championship', 'Champions League', 'Europa League'];
 const norm = (s: unknown) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 async function api(path: string, key: string) {
@@ -52,7 +53,7 @@ const MARKETS: Record<string, Record<string, string>> = {
 };
 
 async function meta(key: string): Promise<Meta> {
-  return cached<Meta>('oddspapi:meta4', 14 * 86400000, async () => {
+  return cached<Meta>('oddspapi:meta5', 14 * 86400000, async () => {
     const pause = () => new Promise(r => setTimeout(r, 1100));
     const tour = await api('tournaments?sportId=' + SOCCER, key); await pause();
     const books = await api('bookmakers', key); await pause();

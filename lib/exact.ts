@@ -99,3 +99,16 @@ export function comboBombs(list: ExactPick[], now = Date.now()): ComboBomb[] {
   }
   return out;
 }
+
+// Goals expected by the market, when the model has no history (European cups: teams from different leagues).
+// Searches the two Poisson means whose 1-X-2 and Under/Over 2,5 best match the market probabilities.
+export function lambdasFromMarket(m: { home: number; draw: number; away: number; over25?: number }): { lh: number; la: number } | null {
+  if (![m.home, m.draw, m.away].every(x => Number.isFinite(x) && x > 0)) return null;
+  let best: { lh: number; la: number } | null = null, err = Infinity;
+  for (let lh = 0.2; lh <= 4.01; lh += 0.05) for (let la = 0.2; la <= 4.01; la += 0.05) {
+    const k = analyze(lh, la, 0).markets;
+    const e = (k.home - m.home) ** 2 + (k.draw - m.draw) ** 2 + (k.away - m.away) ** 2 + (Number.isFinite(m.over25) ? (k.over25 - m.over25!) ** 2 : 0);
+    if (e < err) { err = e; best = { lh: Math.round(lh * 100) / 100, la: Math.round(la * 100) / 100 }; }
+  }
+  return best;
+}

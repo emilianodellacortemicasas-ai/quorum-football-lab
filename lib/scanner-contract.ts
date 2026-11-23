@@ -18,7 +18,7 @@ export const KELLY_CAP = 0.02;
 // The Odds API keys for the active perimeter (competition ids as in lib/demo.ts).
 export const ODDS_SPORT: Record<string, string> = {
   'Serie A': 'soccer_italy_serie_a', 'Premier League': 'soccer_epl', 'La Liga': 'soccer_spain_la_liga',
-  'Bundesliga': 'soccer_germany_bundesliga', 'Ligue 1': 'soccer_france_ligue_one', 'Serie B': 'soccer_italy_serie_b', 'Championship': 'soccer_efl_champ',
+  'Bundesliga': 'soccer_germany_bundesliga', 'Ligue 1': 'soccer_france_ligue_one', 'Serie B': 'soccer_italy_serie_b', 'Championship': 'soccer_efl_champ', 'Champions League': 'soccer_uefa_champs_league', 'Europa League': 'soccer_uefa_europa_league',
 };
 
 const STOP = new Set(['fc','cf','ac','as','ss','sc','afc','us','ssc','club','calcio','de','del','la','le','the','and','sv','vfb','vfl','tsg','fsv','bc','rc','ca','cd','ud','sd','rcd','ogc','losc','stade','1','04','05','1899','1907','1909','1913','hellas']);

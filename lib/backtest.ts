@@ -18,7 +18,7 @@ const clamp = (p: number) => Math.min(1 - 1e-6, Math.max(1e-6, p));
 
 export function backtest(results: Result[], cfg: BtConfig, testDays = 150, now = Date.now()): BtMetrics {
   const label = cfg.label || JSON.stringify(cfg);
-  const comps = [...new Set(results.map(r => r.comp))].filter(c => c !== 'Coppa Italia');
+  const comps = [...new Set(results.map(r => r.comp))].filter(c => !['Coppa Italia', 'Champions League', 'Europa League'].includes(c));
   const start = now - testDays * 86400000;
   let n = 0, ll = 0, br = 0, acc = 0, base = 0, llOU = 0, accOU = 0, pO = 0, rO = 0, llB = 0, accB = 0, pB = 0, rB = 0, pG = 0, rG = 0;
   const tips: { p: number; hit: boolean }[] = [], samples: Sample[] = [];
