@@ -1,0 +1,25 @@
+name: Diagnosi Cloudflare (sola lettura)
+on: workflow_dispatch
+permissions: { contents: read }
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22.13.0, cache: npm }
+      - run: npm run install:ci
+      - name: Diagnosi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          W="node node_modules/wrangler/bin/wrangler.js"
+          echo "== deployments"; $W deployments list --name quorum-football-lab 2>&1 | tail -40 || true
+          echo "== versions"; $W versions list --name quorum-football-lab 2>&1 | tail -30 || true
+          echo "== secret names"; $W secret list --name quorum-football-lab --format json 2>&1 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).map(x=>x.name).join(", "))}catch{console.log(s.slice(0,500))}})'
+          echo "== d1 list"; $W d1 list --json 2>&1 | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).map(x=>x.name+" "+x.uuid+" "+x.created_at).join("\n"))}catch{console.log(s.slice(0,500))}})'
+          ID=$($W d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const x=JSON.parse(s).find(d=>d.name==="quorum-football-lab-db");process.stdout.write(x?x.uuid:"")})')
+          echo "{\"name\":\"quorum-football-lab\",\"compatibility_date\":\"2026-05-15\",\"d1_databases\":[{\"binding\":\"DB\",\"database_name\":\"quorum-football-lab-db\",\"database_id\":\"$ID\"}]}" > /tmp/c.json
+          echo "== d1 counts"; $W d1 execute DB --remote --config /tmp/c.json --json --command "SELECT (SELECT COUNT(*) FROM service_credentials) AS creds, (SELECT COUNT(*) FROM scanner_runs) AS runs, (SELECT status||' '||started_at FROM scanner_runs ORDER BY started_at DESC LIMIT 1) AS last" 2>&1 | grep -E '"(creds|runs|last)"|rror' | head
+          echo "== worker settings"; curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/quorum-football-lab/settings" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(JSON.stringify({ok:j.success,errors:j.errors,bindings:(j.result?.bindings||[]).map(b=>b.type+":"+b.name)}))})'
