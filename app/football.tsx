@@ -107,8 +107,9 @@ export function LineupsView() {
   const [fx, setFx] = useState<Fx[] | null>(null), [err, setErr] = useState(''), [open, setOpen] = useState<string | null>(null);
   useEffect(() => { get('lineups-list').then(d => setFx(d.fixtures), e => setErr(e.message)); }, []);
   const list = useMemo(() => (fx || []).filter(f => !['FT', 'AET', 'FT_PEN', 'CANCL', 'POSTP'].includes(f.state)), [fx]);
-  const family = list.filter(f => fam(f.home) || fam(f.away));
-  const days = [...new Set(list.map(f => dayOf(f.kickoff)))];
+  // Next match of Roma and next match of Juventus (one card if they play each other), up to 10 days ahead.
+  const family = useMemo(() => { const next = (t: (n: string) => boolean) => list.find(f => t(f.home) || t(f.away)); return [...new Set([next(isRoma), next(isJuve)].filter(Boolean) as Fx[])].sort((a, b) => a.kickoff.localeCompare(b.kickoff)); }, [list]);
+  const days = [...new Set(list.map(f => dayOf(f.kickoff)))].slice(0, 3);
   const card = (f: Fx) => <article key={f.id} className={'lu-card' + fam(f.home) + fam(f.away) + (open === f.id ? ' open' : '')}>
     <button className="lu-row" onClick={() => setOpen(open === f.id ? null : f.id)}>
       <span className="lu-side"><Crest src={f.homeLogo} name={f.home} size={30} /><b>{f.home}</b></span>

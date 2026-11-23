@@ -877,3 +877,20 @@ body{background:#eef3ee}
 .metric-cash{position:relative}
 .metric-cash .topup-button{margin-top:10px;padding:7px 14px;font-size:13px;display:inline-flex;align-items:center;gap:6px;border-radius:999px}
 .metric-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+/* Costruisci schedina: nothing may overflow the match card, at any window width. */
+.builder-main,.builder-match,.builder-top,.market-row,.market-row>div,.builder-match-head>*{min-width:0}
+.builder-match{overflow:hidden}
+.builder-best{display:flex;flex-wrap:wrap;gap:6px;max-width:100%}
+.builder-best span{white-space:normal;max-width:100%}
+.market-row>div>span{max-width:100%;min-width:0}
+.market-row .pick-chip{max-width:100%}
+.mk-select{flex-wrap:wrap;max-width:100%}
+.mk-select select{width:100%;max-width:100%;text-overflow:ellipsis;font-size:14px}
+@media (max-width:1400px) and (min-width:981px){
+  .builder{grid-template-columns:minmax(0,1fr) 290px;gap:16px}
+  .market-row{grid-template-columns:1fr;gap:6px}
+  .market-row>span{padding-top:0;font-weight:700;font-size:11px;letter-spacing:.8px;text-transform:uppercase}
+  .market-row>div{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:6px}
+  .market-row>div>span,.market-row .pick-chip{width:100%}
+  .builder-match-head{flex-direction:column;align-items:flex-start}
+}

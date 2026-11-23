@@ -14,13 +14,13 @@ export function useDay(key: string) {
 }
 const label = (d: string) => {
   const t = todayRome(), tm = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(Date.now() + 86400000));
-  if (d === t) return 'Oggi'; if (d === tm) return 'Domani';
-  return new Date(d + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+  const date = new Date(d + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Rome' });
+  return d === t ? 'Oggi · ' + date : d === tm ? 'Domani · ' + date : date;
 };
 export function DayFilter({ days, day, onChange }: { days?: { day: string; n: number }[]; day: string; onChange: (d: string) => void }) {
   const list = (days || []).filter(x => x.day >= todayRome());
   return <div className="day-filter"><span><CalendarDays size={15} />Partite di</span>
-    {list.map(x => <button key={x.day} className={day === x.day ? 'on' : ''} onClick={() => onChange(x.day)}>{label(x.day)}<b>{x.n}</b></button>)}
+    {list.map(x => <button key={x.day} className={day === x.day ? 'on' : ''} onClick={() => onChange(x.day)}>{label(x.day)}<b title="partite">{x.n} {x.n === 1 ? 'partita' : 'partite'}</b></button>)}
     <button className={day === '' ? 'on' : ''} onClick={() => onChange('')}>Tutti i giorni</button>
   </div>;
 }

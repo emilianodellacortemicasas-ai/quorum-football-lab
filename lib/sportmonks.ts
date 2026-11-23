@@ -159,7 +159,8 @@ export async function allStandings(){
 // Matches of today and the next two days with crests.
 export async function lineupFixtures(){
  const out:any[]=[];
- for(let i=0;i<3;i++){const day=new Date(Date.now()+i*86400000).toLocaleDateString('en-CA',{timeZone:'Europe/Rome'});
+ // 10 days: the page shows the next 3 days in full, plus the next match of Roma and of Juventus even if later.
+ for(let i=0;i<10;i++){const day=new Date(Date.now()+i*86400000).toLocaleDateString('en-CA',{timeZone:'Europe/Rome'});
   let data:any[]=[];try{data=await pages('fixtures/date/'+day+'?include=participants;league.country;state&timezone=Europe%2FRome',3);}catch{continue;}
   for(const f of data){const c=sportmonksCompetition(f.league);if(!c)continue;const h=f.participants?.find((x:any)=>x.meta?.location==='home'),a=f.participants?.find((x:any)=>x.meta?.location==='away');if(!h||!a)continue;
    out.push({id:'sm-'+f.id,competition:c.name,kickoff:new Date(f.starting_at_timestamp*1000).toISOString(),state:f.state?.state||'NS',home:h.name,away:a.name,homeLogo:h.image_path||null,awayLogo:a.image_path||null});}}
