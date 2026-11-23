@@ -112,7 +112,7 @@ export function LineupsView() {
   const card = (f: Fx) => <article key={f.id} className={'lu-card' + fam(f.home) + fam(f.away) + (open === f.id ? ' open' : '')}>
     <button className="lu-row" onClick={() => setOpen(open === f.id ? null : f.id)}>
       <span className="lu-side"><Crest src={f.homeLogo} name={f.home} size={30} /><b>{f.home}</b></span>
-      <span className="lu-mid"><small>{f.competition}</small><em>{f.state === 'NS' ? new Date(f.kickoff).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'LIVE'}</em></span>
+      <span className="lu-mid"><small>{f.competition}</small><em>{f.state === 'NS' ? new Date(f.kickoff).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) : 'LIVE'}</em><small className="lu-day">{dayOf(f.kickoff) === dayOf(new Date().toISOString()) ? 'oggi' : new Date(f.kickoff).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' })}</small></span>
       <span className="lu-side right"><b>{f.away}</b><Crest src={f.awayLogo} name={f.away} size={30} /></span>
     </button>
     {open === f.id && <LineupDetail id={f.id} />}
@@ -123,7 +123,7 @@ export function LineupsView() {
       : !fx ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Carico le partite…</h3></div>
       : !list.length ? <div className="empty"><span className="empty-icon"><Shirt /></span><h3>Nessuna partita nei prossimi giorni.</h3></div>
       : <>
-        {family.length > 0 && <><h3 className="day-title">💛❤️ / 🤍🖤 Le partite di casa</h3><div className="lu-grid">{family.map(card)}</div></>}
+        {family.length > 0 && <><h3 className="day-title">💛❤️ / 🤍🖤 Le prossime di Roma e Juve</h3><div className="lu-grid">{family.map(card)}</div></>}
         {days.map(d => <div key={d}><h3 className="day-title">{d}</h3><div className="lu-grid">{list.filter(f => dayOf(f.kickoff) === d && !family.includes(f)).map(card)}</div></div>)}
       </>}
   </div>;

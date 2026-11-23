@@ -854,3 +854,4 @@ body{background:#eef3ee}
 .day-filter button.on{background:linear-gradient(180deg,#1b2f24,#0b1f17);color:var(--q-lime);border-color:#0b1f17;box-shadow:0 4px 0 #000}.day-filter button.on b{color:#fff}
 .near-table td.t-team span{display:flex;flex-direction:column;font-weight:500}.near-table td.t-team small{font-size:11px;color:#6b7a70}
 .near-table td.clv-pos{color:#0f6b46;font-weight:800}.near-table td.clv-neg{color:#b23b25;font-weight:800}
+.lu-day{font-size:10.5px!important;font-weight:800!important;color:#0f6b46!important;text-transform:capitalize;margin-top:2px}
