@@ -855,3 +855,7 @@ body{background:#eef3ee}
 .near-table td.t-team span{display:flex;flex-direction:column;font-weight:500}.near-table td.t-team small{font-size:11px;color:#6b7a70}
 .near-table td.clv-pos{color:#0f6b46;font-weight:800}.near-table td.clv-neg{color:#b23b25;font-weight:800}
 .lu-day{font-size:10.5px!important;font-weight:800!important;color:#0f6b46!important;text-transform:capitalize;margin-top:2px}
+.edit-play{margin-top:10px;padding:10px 12px;border:1px dashed #b9d79a;border-radius:12px;background:#f8fcf3;display:grid;gap:8px;animation:luIn .3s ease}
+.edit-play label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}.edit-play label span{display:flex;flex-direction:column;font-weight:700;color:#0b2a1d}.edit-play label small{font-weight:500;color:#5e7365}
+.edit-play input{width:84px;padding:7px 9px;border:1px solid #b9d79a;border-radius:9px;font-size:15px;font-weight:800;text-align:right;background:#fff}
+.edit-play .ep-stake{border-top:1px solid #e3eadf;padding-top:8px}

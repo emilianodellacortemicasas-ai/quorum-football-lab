@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Check, Copy, Trash2, Info, ListPlus, RefreshCw, Share2, Trophy, Users } from 'lucide-react';
+import { Check, Copy, Trash2, Info, ListPlus, RefreshCw, Share2, Trophy, Users , Pencil } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay, RecordSystem, Selection } from '../lib/types';
 
@@ -20,7 +20,21 @@ function ArchiveTabs({ items, tab, setTab }: { items: any[]; tab: string; setTab
   </div>;
 }
 
-function MyPlays({ onGo, refreshKey, onShare, onRemove }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean> }) {
+// Inline editor: stake and odds of each event, to match what was really played.
+function EditPlay({ x, onSave, onClose }: { x: any; onSave: (stakeCents: number, legOdds: number[]) => Promise<boolean>; onClose: () => void }) {
+  const [stake, setStake] = useState((x.stakeCents / 100).toFixed(2).replace('.', ',')), [odds, setOdds] = useState<string[]>(x.legs.map((l: any) => Number(l.odds).toFixed(2).replace('.', ','))), [busy, setBusy] = useState(false);
+  const num = (s: string) => Number(s.replace(',', '.'));
+  const o = odds.map(num), st = num(stake), valid = st >= 0.1 && o.every(v => v >= 1.01 && v < 1000), total = o.reduce((a, b) => a * b, 1);
+  return <div className="edit-play">
+    {x.legs.map((l: any, i: number) => <label key={i}><span>{l.fixture}<small>{l.label}</small></span><input inputMode="decimal" value={odds[i]} onChange={e => setOdds(odds.map((v, j) => j === i ? e.target.value : v))} /></label>)}
+    <label className="ep-stake"><span>{x.system ? 'Importo totale del sistema (€)' : 'Puntata (€)'}</span><input inputMode="decimal" value={stake} onChange={e => setStake(e.target.value)} /></label>
+    {!x.system && valid && <p className="small-note">Quota totale {total.toFixed(2)} · vincita potenziale {money(Math.round(st * 100 * total))}</p>}
+    <div className="play-actions"><button className="share-chip on" disabled={!valid || busy} onClick={async () => { setBusy(true); const ok = await onSave(Math.round(st * 100), o); setBusy(false); if (ok) onClose(); }}>Salva</button><button className="share-chip" onClick={onClose}>Annulla</button></div>
+  </div>;
+}
+
+function MyPlays({ onGo, refreshKey, onShare, onRemove, onEdit }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean>; onEdit?: (id: string, portfolioId: string, stakeCents: number, legOdds: number[]) => Promise<boolean> }) {
+  const [editing, setEditing] = useState('');
   const [m, setM] = useState<any>(null), [tick, setTick] = useState(0), [ask, setAsk] = useState(''), [tab, setTab] = useState('pending');
   useEffect(() => { fetch('/api/scanner?view=mine', { cache: 'no-store' }).then(r => r.json()).then(setM).catch(() => setM({ plays: [], summary: { total: 0 } })); }, [refreshKey, tick]);
   if (!m) return null;
@@ -43,9 +57,11 @@ function MyPlays({ onGo, refreshKey, onShare, onRemove }: { onGo?: (v: string) =
         <ul>{x.legs.map((l: any, i: number) => <li key={i}><span>{l.fixture}</span><b>{l.label}</b><i>{Number(l.odds).toFixed(2)}</i></li>)}</ul>
         <div className="my-play-foot"><span>Quota {Number(x.odds).toFixed(2)} · puntata {money(x.stakeCents)}</span><span>Probabilità QUORUM {percent(x.p, x.p < 0.1 ? 1 : 0)}</span></div>
         <div className="play-actions">{onShare && <button className={'share-chip' + (x.shared ? ' on' : '')} onClick={async () => { if (await onShare(x.id, x.portfolioId, !x.shared)) setTick(t => t + 1); }}><Share2 size={13} />{x.shared ? 'Condivisa · tocca per nasconderla' : 'Condividi con gli altri'}</button>}
+          {onEdit && !(x.system && x.status !== 'pending') && <button className="share-chip" onClick={() => setEditing(editing === x.id ? '' : x.id)}><Pencil size={13} />Modifica quote e puntata</button>}
           {onRemove && (ask === x.id
             ? <><button className="share-chip danger" onClick={async () => { setAsk(''); if (await onRemove(x.id, x.portfolioId)) setTick(t => t + 1); }}><Trash2 size={13} />Sì, elimina</button><button className="share-chip" onClick={() => setAsk('')}>Annulla</button></>
             : <button className="share-chip ghost" onClick={() => setAsk(x.id)}><Trash2 size={13} />Elimina</button>)}</div>
+        {editing === x.id && onEdit && <EditPlay x={x} onClose={() => setEditing('')} onSave={async (s, o) => { const ok = await onEdit(x.id, x.portfolioId, s, o); if (ok) setTick(t => t + 1); return ok; }} />}
         {ask === x.id && <p className="small-note">La giocata sparisce dal portafoglio e dai risultati{x.status !== 'pending' ? ' e il capitale viene ricalcolato senza il suo esito' : ''}. Non si può annullare.</p>}
       </article>)}</div>
     </>}
@@ -109,7 +125,7 @@ function SharedPlays({ onGo, refreshKey, onRecord, onRecordSystem, onLab }: { on
   </section>;
 }
 
-export function ResultsView({ onGo, refreshKey, onShare, onRemove, onRecord, onRecordSystem, onLab }: { onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean>; onRecord?: RecordPlay; onRecordSystem?: RecordSystem; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void }) {
+export function ResultsView({ onGo, refreshKey, onShare, onRemove, onEdit, onRecord, onRecordSystem, onLab }: { onEdit?: (id: string, portfolioId: string, stakeCents: number, legOdds: number[]) => Promise<boolean>; onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean>; onRecord?: RecordPlay; onRecordSystem?: RecordSystem; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void }) {
   const [d, setD] = useState<any>(null), [err, setErr] = useState(''), [loading, setLoading] = useState(true), [t, setT] = useState(0);
   const share = onShare ? async (id: string, pid: string, v: boolean) => { const ok = await onShare(id, pid, v); if (ok) setT(x => x + 1); return ok; } : undefined;
   useEffect(() => { fetch('/api/scanner?view=performance', { cache: 'no-store' }).then(async r => { const j: any = await r.json(); if (!r.ok) throw new Error(j.error); setD(j); }).catch(e => setErr(e.message)).finally(() => setLoading(false)); }, []);
@@ -118,7 +134,7 @@ export function ResultsView({ onGo, refreshKey, onShare, onRemove, onRecord, onR
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Calcolo il rendimento…</h3></div>
       : err ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Risultati non disponibili</h3><p>{err}</p></div>
       : <>
-        <MyPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} onShare={share} onRemove={onRemove ? async (id, pid) => { const ok = await onRemove(id, pid); if (ok) setT(x => x + 1); return ok; } : undefined} />
+        <MyPlays onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} onShare={share} onRemove={onRemove ? async (id, pid) => { const ok = await onRemove(id, pid); if (ok) setT(x => x + 1); return ok; } : undefined} onEdit={onEdit ? async (id, pid, s, o) => { const ok = await onEdit(id, pid, s, o); if (ok) setT(x => x + 1); return ok; } : undefined} />
         <SharedPlays onGo={onGo} onLab={onLab} onRecordSystem={onRecordSystem ? async (...a) => { const ok = await onRecordSystem(...a); if (ok) setT(x => x + 1); return ok; } : undefined} refreshKey={(refreshKey ?? 0) + t * 1000} onRecord={onRecord ? async (...a) => { const ok = await onRecord(...a); if (ok) setT(x => x + 1); return ok; } : undefined} />
         <section className="reliability"><div className="rel-head"><strong>Value bet</strong><span>Puntata fissa di 1 unità alla quota migliore vista prima del calcio d'inizio.</span></div>
           <div className="rel-grid"><Box title="Tutte le value bet" a={d.value} note={d.value.expectedHit !== null && d.value.n ? 'attese ' + percent(d.value.expectedHit, 0) : undefined} />{d.valueByMarket.map((g: any) => <Box key={g.group} title={g.group} a={g} />)}</div></section>

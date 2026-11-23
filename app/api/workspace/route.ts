@@ -113,6 +113,31 @@ export async function POST(request:Request) {
         // The row disappears: capital, Risultati and shared plays are recalculated without it.
         const b=z.object({id:z.string().max(80)}).parse(body);
         statement=raw.prepare('DELETE FROM bets WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(b.id,owner,portfolioId,portfolioId,revision);
+      } else if(body.action==='edit'){
+        // The user corrects stake and/or odds of one of their plays to match what they really played.
+        // Pending plays: any type. Closed singles and multiples: the result is recalculated with the new numbers.
+        const b=z.object({id:z.string().max(80),stakeCents:z.number().int().min(10).max(100000000),legOdds:z.array(z.number().min(1.01).max(1000)).min(1).max(30)}).parse(body);
+        const bet=(await db.select().from(bets).where(and(eq(bets.id,b.id),eq(bets.owner,owner),eq(bets.portfolioId,portfolioId))))[0];
+        if(!bet)return failure('Giocata non trovata.',404);
+        const kind=bet.fixtureId.startsWith('system:')?'system':bet.fixtureId.startsWith('multi:')?'multi':'single';
+        let snap:any={};try{snap=JSON.parse(bet.snapshot);}catch{}
+        let odds=bet.odds,stake=b.stakeCents,snapshot=bet.snapshot;
+        if(kind==='single'){if(b.legOdds.length!==1)return failure('Quote non valide.');odds=b.legOdds[0];if(Array.isArray(snap.legs)&&snap.legs[0]){snap.legs[0].odds=odds;snapshot=JSON.stringify(snap);}}
+        else{
+          const legs=Array.isArray(snap.legs)?snap.legs:[];if(legs.length!==b.legOdds.length)return failure('Quote non valide.');
+          legs.forEach((l:any,i:number)=>l.odds=b.legOdds[i]);
+          if(kind==='multi')odds=Math.round(legs.reduce((q:number,l:any)=>q*l.odds,1)*1000)/1000;
+          else{
+            if(bet.status!=='pending')return failure('Un sistema già chiuso non si può modificare.');
+            const cls=(snap.system?.classes??(snap.system?.k?[{k:snap.system.k,unitCents:snap.system.unitCents}]:[])) as {k:number;unitCents:number}[];
+            const old=evaluateClasses(legs,cls),f=b.stakeCents/Math.max(1,old.costCents),ncls=cls.map(c=>({k:c.k,unitCents:Math.max(5,Math.round(c.unitCents*f))})),r=evaluateClasses(legs,ncls);
+            snap.system={...snap.system,classes:ncls,costCents:r.costCents,minWinCents:r.minWinCents,maxReturnCents:r.maxReturnCents,breakEven:r.breakEven};
+            stake=r.costCents;odds=Math.round(r.maxReturnCents/r.costCents*1000)/1000;
+          }
+          snapshot=JSON.stringify(snap);
+        }
+        const pnl=bet.status==='won'?Math.round(stake*(odds-1)):bet.status==='lost'?-stake:0;
+        statement=raw.prepare('UPDATE bets SET odds=?,stake_cents=?,snapshot=?,pnl_cents=? WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(odds,stake,snapshot,pnl,b.id,owner,portfolioId,portfolioId,revision);
       } else if(body.action==='share'){
         // Show or hide one of the user's own plays to the other users of QUORUM.
         const b=z.object({id:z.string().max(80),shared:z.boolean()}).parse(body);
