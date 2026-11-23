@@ -870,3 +870,7 @@ body{background:#eef3ee}
 .section-pick span,.mk-select span{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5d6f63;flex:none}
 .section-pick select,.mk-select select{flex:1;min-width:0;padding:10px 12px;border:1px solid #b9d79a;border-radius:12px;font-size:15px;font-weight:700;background:#fff;color:#0b2a1d;box-shadow:0 3px 0 #d3e6c0}
 .mk-select{margin:6px 0 8px}
+.sub-tabs{margin:0 0 16px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.sub-tabs::-webkit-scrollbar{display:none}
+.sub-tabs button{white-space:nowrap;font-size:13.5px;padding:9px 16px}
+.cup-bt{margin-top:18px}

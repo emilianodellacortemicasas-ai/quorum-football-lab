@@ -1,5 +1,5 @@
 import { settleAll } from "../lib/settle";
-import { refreshBacktest } from "../lib/backtest-job";
+import { refreshBacktest, refreshCupBacktest } from "../lib/backtest-job";
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
@@ -33,7 +33,7 @@ const worker = {
   async scheduled(controller: ScheduledController, _env: Cloudflare.Env, ctx: ExecutionContext) {
     // Every hour: settle finished matches (fast), then the pre-kickoff refresh when a match is about to start.
     if (controller.cron === "10 * * * *") ctx.waitUntil(settleAll(120).catch(() => undefined).then(() => prematchDue()).then(due => (due ? runScan("prematch") : undefined)).catch(() => undefined));
-    else ctx.waitUntil(refreshBacktest().catch(() => undefined).then(() => runScan("cron")).catch(() => undefined));
+    else ctx.waitUntil(refreshBacktest().catch(() => undefined).then(() => refreshCupBacktest(25)).catch(() => undefined).then(() => runScan("cron")).catch(() => undefined));
   },
 };
 

@@ -46,3 +46,37 @@ export async function refreshTicketBacktest(weights?: number[]) {
   await env.DB!.prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('ticket-backtest',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(out.at, JSON.stringify(out)).run();
   return out;
 }
+
+// European cups backtest: historical odds of The Odds API (20 credits per match day and competition),
+// downloaded once and kept in D1, then the same market-based model used live for the cups.
+import { CUP_SPORT, cupBacktest, cupPlan, snapshotPath, trimSnapshot } from './cup-backtest';
+import { oddsFeed } from './odds-provider';
+import type { OddsEvent } from './scanner-contract';
+const CUP_RESERVE = 3000;
+export async function refreshCupBacktest(maxCalls = 25, force = false) {
+  const prev = await env.DB!.prepare("SELECT built_at,payload FROM model_state WHERE id='cup-backtest'").first<{ built_at: string; payload: string }>().catch(() => null);
+  const prevOut = prev ? JSON.parse(prev.payload) : null;
+  if (!force && prevOut?.complete && Date.now() - Date.parse(prev!.built_at) < WEEK) return { skipped: true, ...prevOut.progress };
+  const results = (await storedResults()).filter(r => CUP_SPORT[r.comp]);
+  const plan = cupPlan(results);
+  const have = new Set(((await env.DB!.prepare("SELECT id FROM model_state WHERE id LIKE 'cuphist:%'").all<{ id: string }>()).results || []).map(r => r.id));
+  let fetched = 0, remaining: number | null = null, stopped = '';
+  for (const p of plan) {
+    if (have.has(p.id)) continue;
+    if (fetched >= maxCalls) break;
+    if (remaining !== null && remaining < CUP_RESERVE) { stopped = 'Riserva crediti raggiunta (' + remaining + ').'; break; }
+    try {
+      const r = await oddsFeed(snapshotPath(p.sport, p.date), 60);
+      if (r.remaining !== null && Number.isFinite(Number(r.remaining))) remaining = Number(r.remaining);
+      await env.DB!.prepare('INSERT INTO model_state (id,built_at,payload) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload').bind(p.id, new Date().toISOString(), JSON.stringify(trimSnapshot(r.payload, p.date))).run();
+      have.add(p.id); fetched++;
+    } catch (e) { stopped = e instanceof Error ? e.message : 'Errore quote storiche'; break; }
+  }
+  const missing = plan.filter(p => !have.has(p.id)).length;
+  const snaps = new Map<string, OddsEvent[]>();
+  for (const p of plan) if (have.has(p.id)) { const row = await env.DB!.prepare('SELECT payload FROM model_state WHERE id=?').bind(p.id).first<{ payload: string }>(); if (row) snaps.set(p.id, JSON.parse(row.payload)); }
+  const progress = { planned: plan.length, have: plan.length - missing, fetched, missing, remaining, stopped: stopped || null };
+  const out = { ...cupBacktest(results, snaps), complete: missing === 0, progress };
+  await env.DB!.prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('cup-backtest',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(out.at, JSON.stringify(out)).run();
+  return progress;
+}

@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getIdentity, isOwner } from '../../../lib/identity';
+import { refreshCupBacktest } from '../../../lib/backtest-job';
 import { kindFactor, ticketReliability } from '../../../lib/calibration';
 import { loadCalibration } from '../../../lib/calibration-store';
 import { italianMarkets, italianDebug, italianStatus } from '../../../lib/italian-odds';
@@ -24,6 +25,7 @@ export async function GET(request:Request){
   if(view==='runs'&&await isOwner(request,await getIdentity(request)))return reply((await env.DB!.prepare('SELECT trigger,status,started_at,finished_at,fixtures,matched,modelled,message FROM scanner_runs ORDER BY started_at DESC LIMIT 6').all()).results);
   if(view==='tipster'){const day=new URL(request.url).searchParams.get('day');const p0=await latestPredictions(),p={...p0,matches:day?p0.matches.filter((m:any)=>romeDay(m.kickoff)===day):p0.matches},[rec]=await Promise.all([tipsterRecord().catch(()=>({}))]);return reply({run:p.run?{finished_at:p.run.finished_at}:null,...tipsterPicks(p.matches),record:rec,study:LEAGUE_STUDY,days:dayList(p0.matches),day});}
   if(view==='backtest'){const [t,perf]=await Promise.all([env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null),performance().catch(()=>null)]);return reply({backtest:t?{at:t.at,testDays:t.testDays,weeks:t.weeks,matches:t.matches,byKind:t.byKind,series:t.series||[],markets:t.markets||[]}:null,track:perf?.tickets??[]});}
+  if(view==='cup-backtest'){const r=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='cup-backtest'").first<{payload:string}>().catch(()=>null);return reply({backtest:r?JSON.parse(r.payload):null});}
   if(view==='standings')return reply(await allStandings());
   if(view==='lineups-list')return reply({fixtures:await lineupFixtures()});
   if(view==='lineup'){try{return reply(await fixtureLineup(new URL(request.url).searchParams.get('id')||''));}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
@@ -49,6 +51,8 @@ export async function POST(request:Request){
  const who=await getIdentity(request);if(!who)return reply({error:'Accedi al laboratorio.'},401);
  if(request.headers.get('origin')!==new URL(request.url).origin)return reply({error:'Origine non valida.'},403);
  if(!await isOwner(request,who))return reply({error:'Solo l’amministratore può avviare una scansione manuale.'},403);
+ const body:any=await request.clone().json().catch(()=>({}));
+ if(body?.action==='cup-backtest'){try{return reply(await refreshCupBacktest(Number(body.max)||25,!!body.force));}catch(e){return reply({error:e instanceof Error?e.message:'Backtest coppe non riuscito.'},422);}}
  try{
   await runScan('manual');return reply(await latestPicks());
  }catch(e){return reply({error:e instanceof Error?e.message:'Scansione non riuscita.'},422);}
