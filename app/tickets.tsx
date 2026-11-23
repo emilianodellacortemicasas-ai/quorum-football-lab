@@ -5,6 +5,7 @@ import { money, percent } from '../lib/math';
 import type { RecordPlay, Selection } from '../lib/types';
 import type { SystemTicket, Ticket } from '../lib/tickets';
 import type { ExactPick } from '../lib/exact';
+import { DayFilter, useDay } from './day-filter';
 type ComboData = { top: { fixtureId: string; fixture: string; competition: string; kickoff: string; combo: string; p: number; others: { name: string; p: number }[] }[]; tickets: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; combo: string; p: number }[]; p: number; fair: number }[] };
 import { Count, Ring } from './motion';
 
@@ -116,13 +117,14 @@ function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (
 }
 
 export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem, onOpenMatch }: { onOpenMatch?: (id: string) => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
-  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; combo?: ComboData; comboBombs?: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; label: string; p: number; odds: number }[]; p: number; fair: number }[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+  const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; combo?: ComboData; comboBombs?: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; label: string; p: number; odds: number }[]; p: number; fair: number }[]; days?: { day: string; n: number }[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
+  const dayF = useDay('tickets');
   async function load() {
     setLoading(true); setError('');
-    try { const r = await fetch('/api/scanner?view=tickets', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
+    try { const r = await fetch('/api/scanner?view=tickets' + (dayF.day ? '&day=' + dayF.day : ''), { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }
     catch (e) { setError(e instanceof Error ? e.message : 'Schedine non disponibili.'); } finally { setLoading(false); }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (dayF.ready) load(); }, [dayF.ready, dayF.day]);
   async function scan() {
     setScanning(true);
     try { const r = await fetch('/api/scanner', { method: 'POST' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); await load(); notify('Schedine aggiornate.'); }
@@ -131,6 +133,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
   return <>
     <div className="page-heading"><div><p className="eyebrow">SCHEDINE</p><h1>Pronte da giocare<span>.</span></h1><p>Obiettivo: far crescere il capitale. Prima le schedine con lo storico migliore, poi le giocate da sogno a puntata minima.</p></div>
       <button className="secondary" onClick={scan} disabled={scanning}><RefreshCw size={16} className={scanning ? 'spin' : ''} />{scanning ? 'Aggiornamento…' : 'Aggiorna ora'}</button></div>
+    <DayFilter days={(data as any)?.days} day={dayF.day} onChange={dayF.setDay} />
     {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Compongo le schedine…</h3></div>
       : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Schedine non disponibili</h3><p>{error}</p></div>
       : !data?.run ? <div className="empty"><span className="empty-icon"><TicketIcon /></span><h3>Nessun dato ancora.</h3><p>Premi “Aggiorna ora”.</p></div>

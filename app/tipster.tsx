@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { Check, Crosshair, Info, RefreshCw } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay } from '../lib/types';
+import { DayFilter, useDay } from './day-filter';
 
 type L = { all?: Record<string, number>; ageH?: number | null; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; edge: number; pTrue: number; source: string; modelAgrees: boolean | null; stake: number };
 type D = { legs: L[]; odds: number; p: number; edge: number; stake: number };
 type Rec = { n: number; won: number; roi: number | null; clv: number | null; clvN: number; pending: number; recent: any[] };
 type Study = { code: string; name: string; matches: number; margin: number; single: [number, number]; shop: [number, number]; clv: number | null };
-type Data = { singles: L[]; doubles: D[]; record: Record<string, Rec>; study: Study[]; run: { finished_at: string } | null };
+type Near = { fixture: string; competition: string; kickoff: string; label: string; odds: number; bookmaker: string; fair: number; edge: number; source: string };
+type Data = { compared?: number; matches?: number; near?: Near[]; days?: { day: string; n: number }[]; singles: L[]; doubles: D[]; record: Record<string, Rec>; study: Study[]; run: { finished_at: string } | null };
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const OURS = ['I1', 'E0', 'SP1', 'D1', 'F1', 'I2', 'E1'];
 
@@ -27,7 +29,10 @@ function RecordCard({ title, r }: { title: string; r?: Rec }) {
 
 export function TipsterView({ equityCents, onRecord }: { equityCents: number; onRecord?: RecordPlay }) {
   const [d, setD] = useState<Data | null>(null), [err, setErr] = useState('');
-  useEffect(() => { fetch('/api/scanner?view=tipster', { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, []);
+  const dayF = useDay('tipster');
+  useEffect(() => { if (!dayF.ready) return; setD(null); fetch('/api/scanner?view=tipster' + (dayF.day ? '&day=' + dayF.day : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [dayF.ready, dayF.day]);
+  const [days, setDays] = useState<{ day: string; n: number }[] | undefined>(undefined);
+  useEffect(() => { if (d?.days) setDays(d.days); }, [d]);
   const stakeOf = (s: number) => Math.max(200, Math.round(equityCents * s / 50) * 50);
   const leg = (l: L) => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, p: l.pTrue, odds: l.odds });
   return <div className="page tipster-page">
@@ -38,6 +43,7 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
         ['3', 'Solo singole e doppie', 'Ogni partita in più moltiplica il margine del banco: niente multiple lunghe.'],
         ['4', 'Puntata in % del capitale', '¼ di Kelly: più valore = puntata più alta, mai oltre il 2% (1% per le doppie).']].map(([n, t, x]) => <div key={n} className="tip-rule"><span>{n}</span><b>{t}</b><small>{x}</small></div>)}
     </div>
+    <DayFilter days={days} day={dayF.day} onChange={dayF.setDay} />
     {err ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Tipster non disponibile</h3><p>{err}</p></div>
       : !d ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Cerco le quote sbagliate…</h3></div>
       : <>
@@ -58,6 +64,11 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
             {onRecord && <button className="secondary played-button" onClick={() => onRecord([leg(l)], stakeOf(l.stake), 'value', 'tipster-singola')}><Check size={15} />L’ho giocata ({money(stakeOf(l.stake))})</button>}
           </article>)}</div>}
 
+        <h3 className="day-title">🔎 Il controllo di QUORUM</h3>
+        <p className="small-note">Come un tipster: per ogni partita {dayF.day ? 'del giorno scelto' : 'dei prossimi giorni'} QUORUM confronta la quota più alta tra Lottomatica / Planetwin365, Snai, Sisal ed Eurobet con la quota giusta di Pinnacle (o della media del mercato). Adesso: <b>{d.compared ?? 0} quote controllate</b> su <b>{d.matches ?? 0} partite</b>, comprese Champions ed Europa League.</p>
+        {d.near && d.near.length > 0 && <div className="standings-card"><table className="standings near-table"><thead><tr><th className="t-team">Le più vicine al valore</th><th>Quota</th><th>Giusta</th><th>Errore</th></tr></thead>
+          <tbody>{d.near.map(n => <tr key={n.fixture + n.label}><td className="t-team"><span><b>{n.label}</b> · {n.fixture}<small>{n.competition} · {when(n.kickoff)} · {n.bookmaker === 'Lottomatica' ? 'Planetwin' : n.bookmaker}</small></span></td><td><b>{n.odds.toFixed(2)}</b></td><td>{n.fair.toFixed(2)}</td><td className={n.edge >= 0 ? 'clv-pos' : 'clv-neg'}>{(n.edge >= 0 ? '+' : '') + (n.edge * 100).toFixed(1)}%</td></tr>)}</tbody></table>
+          <p className="legend-zones"><span>Errore = quanto la quota del bookmaker paga in più (+) o in meno (−) rispetto a quella giusta. Una giocata diventa “di valore” da +3%: se una di queste quote sale, compare nelle singole.</span></p></div>}
         {d.doubles.length > 0 && <>
           <h3 className="day-title">✌️ Doppie di valore</h3>
           <p className="small-note">Due singole di valore insieme: il valore si moltiplica, ma vincono meno spesso. Puntata più bassa.</p>

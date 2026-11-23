@@ -17,8 +17,9 @@ function truth(mk: Record<string, any>, key: string): { p: number; source: TipLe
 }
 const kelly = (p: number, o: number, cap: number) => { const e = p * o - 1; return e > 0 ? Math.min(cap, 0.25 * e / (o - 1)) : 0; };
 
+export type Check = { fixture: string; competition: string; kickoff: string; label: string; odds: number; bookmaker: string; fair: number; edge: number; source: string };
 export function tipsterPicks(rows: Row[], now = Date.now()) {
-  const legs: TipLeg[] = [];
+  const legs: TipLeg[] = [], checks: Check[] = []; let compared = 0;
   for (const r of rows) {
     const t = Date.parse(r.kickoff); if (t <= now + 10 * 60000 || t > now + 7 * 86400000) continue;
     for (const key of Object.keys(LABELS)) {
@@ -26,7 +27,8 @@ export function tipsterPicks(rows: Row[], now = Date.now()) {
       const tr = truth(r.markets, key); if (!tr) continue;
       const best = Object.entries(it).sort((a, b) => b[1] - a[1])[0], odds = best[1];
       if (odds < 1.4 || odds > 4) continue;
-      const edge = tr.p * odds - 1; if (edge < TIP_MIN_EDGE) continue;
+      const edge = tr.p * odds - 1; compared++;
+      if (edge < TIP_MIN_EDGE) { if (edge > -0.04) checks.push({ fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, label: LABELS[key], odds, bookmaker: best[0], fair: 1 / tr.p, edge, source: tr.source }); continue; }
       // Stale prices: the Italian price is refreshed less often than the market. A pick is valid only if
       // the price is recent (≤ 14h for Lottomatica, ≤ 74h for the others) and not far above the best European price
       // (an Italian book paying 4% more than every European book is almost always an old quote).
@@ -50,7 +52,8 @@ export function tipsterPicks(rows: Row[], now = Date.now()) {
   for (let i = 0; i < base.length; i++) for (let j = i + 1; j < base.length; j++) { const o = base[i].odds * base[j].odds, p = base[i].pTrue * base[j].pTrue; pairs.push({ legs: [base[i], base[j]], odds: o, p, edge: p * o - 1 }); }
   const used = new Set<string>();
   for (const x of pairs.sort((a, b) => b.edge - a.edge)) { if (doubles.length >= 3) break; if (x.legs.some(l => used.has(l.fixtureId))) continue; x.legs.forEach(l => used.add(l.fixtureId)); doubles.push({ ...x, stake: kelly(x.p, x.odds, 0.01) }); }
-  return { singles, doubles };
+  const near = checks.sort((a, b) => b.edge - a.edge).filter((c, i, a) => a.findIndex(x => x.fixture === c.fixture) === i).slice(0, 10);
+  return { singles, doubles, compared, matches: new Set(rows.filter(r => Date.parse(r.kickoff) > now + 10 * 60000).map(r => r.fixture_id)).size, near };
 }
 
 // Tickets to record (to measure the method on real results): the odds stay the ones of the first proposal.

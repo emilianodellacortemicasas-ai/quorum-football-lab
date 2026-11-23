@@ -79,7 +79,7 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
   const ids = Object.entries(m.tournaments); if (!ids.length) return [];
   const compOf = (tid: number) => ids.find(([, v]) => v === tid)?.[0] ?? '';
   // The API accepts at most 5 tournaments per call: main leagues and minor leagues in two calls per bookmaker.
-  const groups: [string, number[]][] = [['main', ids.filter(([c]) => !MINOR.includes(c)).map(x => x[1])], ['minor', ids.filter(([c]) => MINOR.includes(c)).map(x => x[1])]];
+  const groups: [string, number[]][] = [['main', ids.filter(([c]) => !MINOR.includes(c)).map(x => x[1])], ['minor2', ids.filter(([c]) => MINOR.includes(c)).map(x => x[1])]];
   const byFixture = new Map<string, ItalianFixture>();
   // Planetwin365 belongs to Lottomatica and shows the same prices: one request, both names.
   const books = IT_BOOKS.filter(b => b.key !== 'planetwin' || !m.books.lottomatica);
