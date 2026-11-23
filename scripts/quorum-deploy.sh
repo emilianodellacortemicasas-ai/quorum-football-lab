@@ -28,11 +28,7 @@ cat > "$TMP/migrations.json" <<JSON
 JSON
 $WRANGLER d1 migrations apply DB --remote --config "$TMP/migrations.json"
 
-echo "== 3. Build e deploy =="
-npm run build
-$WRANGLER deploy --config dist/server/wrangler.json
-
-echo "== 4. Segreti =="
+echo "== 3. Segreti (prima del deploy, così la versione pubblicata li contiene insieme al database) =="
 # The secret list must be read successfully: a failed read must never be mistaken for "first run",
 # otherwise the vault would be regenerated and every saved key would become unreadable.
 EXISTING=""
@@ -62,6 +58,23 @@ require("fs").writeFileSync(process.argv[1],JSON.stringify(o),{mode:0o600});' "$
   $WRANGLER secret bulk "$TMP/settings.json" --name "$QUORUM_WORKER_NAME" >/dev/null
   echo "Segreti aggiornati (valori non mostrati)."
 fi
+
+echo "== 4. Build e deploy =="
+npm run build
+$WRANGLER deploy --config dist/server/wrangler.json
+
+
+echo "== 5. Verifica collegamenti =="
+# The live version must have the D1 binding DB: if a secret update created a version without it, deploy again.
+check_db() { curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$QUORUM_WORKER_NAME/settings" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);process.stdout.write((j.result?.bindings||[]).some(b=>b.type==="d1"&&b.name==="DB")?"ok":"missing")}catch{process.stdout.write("unknown")}})'; }
+DBSTATE="$(check_db)"
+if [ "$DBSTATE" = "missing" ]; then
+  echo "Database non collegato alla versione attiva: ripubblico."
+  $WRANGLER deploy --config dist/server/wrangler.json
+  DBSTATE="$(check_db)"
+fi
+echo "Database collegato: $DBSTATE"
+[ "$DBSTATE" != "missing" ] || { echo "ERRORE: database ancora non collegato"; exit 1; }
 
 if [ -z "${CF_ACCESS_TEAM_DOMAIN:-}" ] || [ -z "${CF_ACCESS_AUD:-}" ]; then
   echo "ATTENZIONE: Cloudflare Access non configurato. L'app resta chiusa a tutti finché non lo è (fail-closed)."
