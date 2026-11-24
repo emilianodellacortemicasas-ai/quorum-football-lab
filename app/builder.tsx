@@ -148,7 +148,7 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
 
   // Ticket measures.
   const odds = slip.reduce((s, l) => s * l.odds, 1), rel = slip.length ? ticketReliability(slip) : null, ev = rel ? rel.p * odds - 1 : 0;
-  const kelly = ev > 0 ? Math.min(0.02, (ev / (odds - 1)) * 0.25) : 0, suggested = Math.max(200, Math.floor(equityCents * kelly / 100) * 100);
+  const kelly = ev > 0 ? Math.min(0.02, (ev / (odds - 1)) * 0.25) : 0, suggested = Math.max(100, Math.floor(equityCents * kelly / 100) * 100);
   const stake = stakeText ? Math.round(Number(stakeText.replace(',', '.')) * 100) || 0 : suggested;
   const verdict = !rel ? '' : rel.p >= 0.6 ? 'alta' : rel.p >= 0.35 ? 'media' : rel.p >= 0.12 ? 'bassa' : 'molto bassa';
   const oneIn = !rel ? '' : rel.p >= 0.5 ? 'vince circa ' + Math.round(rel.p * 10) + ' volte su 10' : 'vince circa 1 volta su ' + Math.max(2, Math.round(1 / Math.max(rel.p, 1e-6)));

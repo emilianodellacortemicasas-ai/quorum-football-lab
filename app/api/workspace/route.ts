@@ -19,7 +19,7 @@ export async function GET(request:Request) {
   if(!owner)return Response.json({authenticated:false,portfolios:previewPortfolios,bets:[],providerConnected:await hasFootballKey(),aiConnected:await credentialExists('openai')},{headers:{'Cache-Control':'no-store'}});
   try{return Response.json({...await workspace(owner),admin:await isOwner(request,who)},{headers:{'Cache-Control':'no-store'}});}catch{return failure('Archivio non disponibile. Riprova tra poco.',503);}
 }
-const settings=z.object({portfolioId:z.string(),stakeBps:z.number().int().min(1).max(500),exposureBps:z.number().int().min(1).max(2000),dayBps:z.number().int().min(1).max(2000),drawdownBps:z.number().int().min(1).max(5000)});
+const settings=z.object({portfolioId:z.string(),stakeBps:z.number().int().min(1).max(2000),exposureBps:z.number().int().min(1).max(6000),dayBps:z.number().int().min(1).max(6000),drawdownBps:z.number().int().min(1).max(9000)});
 export async function POST(request:Request) {
   const owner=(await getIdentity(request))?.userId;if(!owner)return failure('Accedi a QUORUM per salvare i dati.',401);
   if(request.headers.get('origin')!==new URL(request.url).origin)return failure('Origine della richiesta non valida.',403);

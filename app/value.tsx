@@ -51,7 +51,7 @@ export function ValueView({ equityCents, onOpen, notify, onRecord }: { equityCen
       : <div className="value-list">{picks.map(p => {
         // When an Italian book has the market, the stake follows the Italian price (the one you can actually play).
         const itOk = !!p.it_odds && (p.it_edge ?? 0) > 0, k = p.it_odds ? (p.it_kelly ?? 0) : p.kelly;
-        const raw = Math.floor(equityCents * k / 100) * 100, stake = k > 0 ? Math.max(200, raw) : 0, atMin = k > 0 && raw < 200;
+        const raw = Math.floor(equityCents * k / 100) * 100, stake = k > 0 ? Math.max(100, raw) : 0, atMin = k > 0 && raw < 100;
         const why = p.is_pick ? [] : evaluateOutcome(p.p_model, { pMarket: p.p_market, bestOdds: p.best_odds, books: p.books }).reasons;
         return <article className={'value-card' + (p.is_pick ? ' checked' : '')} key={p.id}>
           <div className="value-head"><span>{p.competition} · {when(p.kickoff)}</span><b className="edge">{signed(p.edge)} valore</b></div>

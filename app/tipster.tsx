@@ -33,7 +33,7 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
   useEffect(() => { if (!dayF.ready) return; setD(null); fetch('/api/scanner?view=tipster' + (dayF.day ? '&day=' + dayF.day : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [dayF.ready, dayF.day]);
   const [days, setDays] = useState<{ day: string; n: number }[] | undefined>(undefined);
   useEffect(() => { if (d?.days) setDays(d.days); }, [d]);
-  const stakeOf = (s: number) => Math.max(200, Math.round(equityCents * s / 50) * 50);
+  const stakeOf = (s: number) => Math.max(100, Math.round(equityCents * s / 50) * 50);
   const leg = (l: L) => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, p: l.pTrue, odds: l.odds });
   return <div className="page tipster-page">
     <div className="page-head"><div><p className="eyebrow">IL METODO DEI PROFESSIONISTI</p><h1><Crosshair className="h1-icon" />Tipster</h1><p>Si gioca solo quando la quota italiana è più alta della probabilità vera. Poche giocate, singole e doppie, puntata proporzionata al valore.</p></div></div>

@@ -32,7 +32,7 @@ function BtBadge({ history, kinds }: { history?: Hist; kinds: (k: string) => boo
 function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core', onRecord }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void; cal?: Cal; track?: Track; history?: Hist; role?: 'core' | 'min'; onRecord?: RecordPlay }) {
   const h = history?.byKind.find(x => x.kind === btKind(t.kind));
   const kindBase = t.kind.replace(/-\d+$/, ''), real = track?.filter(x => x.kind === t.kind || x.kind.replace(/-\d+$/, '') === kindBase).reduce((a, x) => ({ n: a.n + x.n, won: a.won + x.won, exp: a.exp + (x.expectedHit ?? 0) * x.n }), { n: 0, won: 0, exp: 0 });
-  const raw = Math.floor(equityCents * t.kelly / 100) * 100, stake = role === 'min' ? 200 : t.kelly > 0 ? Math.max(200, raw) : 0, started = (t as any).started;
+  const raw = Math.floor(equityCents * t.kelly / 100) * 100, stake = role === 'min' ? 100 : t.kelly > 0 ? Math.max(100, raw) : 0, started = (t as any).started;
   return <article className={'value-card ticket ' + t.kind}>
     <div className="value-head"><span>{t.title}</span><b className={t.ev > 0 ? 'edge' : 'edge neutral'}>{t.ev > 0 ? '+' + percent(t.ev) + ' valore' : 'valore ' + percent(t.ev)}</b></div>
     <div className={'reliability r-' + verdict(t.p).replace(' ', '-')}>

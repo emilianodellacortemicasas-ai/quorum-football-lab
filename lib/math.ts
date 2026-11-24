@@ -81,7 +81,7 @@ export function portfolioMetrics(portfolio: Portfolio, bets: Bet[], now = new Da
 }
 export function riskCheck(portfolio: Portfolio, bets: Bet[], stakeCents: number, now = new Date()) {
   const m = portfolioMetrics(portfolio,bets,now), reasons: string[] = [];
-  const singleCap = Math.floor(m.equity * portfolio.stakeBps / 10000), openCap = Math.floor(m.equity * portfolio.exposureBps / 10000), dayCap = Math.floor(m.dayStartCents * portfolio.dayBps / 10000);
+  const singleCap = Math.max(100, Math.floor(m.equity * portfolio.stakeBps / 10000)), openCap = Math.floor(m.equity * portfolio.exposureBps / 10000), dayCap = Math.floor(m.dayStartCents * portfolio.dayBps / 10000);
   if (!Number.isSafeInteger(stakeCents) || stakeCents <= 0) reasons.push('Inserisci un importo positivo in centesimi.');
   // Money-management rules are optional per portfolio; the available-capital check is accounting and always applies.
   const rules = portfolio.limitsEnabled !== false;
