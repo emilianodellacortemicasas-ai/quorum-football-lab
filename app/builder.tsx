@@ -8,10 +8,11 @@ import { analyzeMatch, marketLabel, money, percent } from '../lib/math';
 import { ticketReliability } from '../lib/calibration';
 import type { RecordPlay, Selection } from '../lib/types';
 import { Count, Ring } from './motion';
-import { exactPicks, MULTIGOL, multigolP, scoreMatrix } from '../lib/exact';
+import { exactPicks, MULTIGOL, multigolP, scoreMatrix, comboSlot, customComboP, scorerShare, RESULT_PARTS, GOAL_PARTS, TEAM_MULTIGOL, HT_PARTS } from '../lib/exact';
 
 export type Opt = { fair?: boolean; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
-export type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string> };
+export type Player = { id: number; name: string; side: 'home' | 'away'; p: number };
+export type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string>; sc?: { home: number; away: number; p: number }[]; lh?: number; la?: number; players?: Player[] };
 
 const GROUPS: [string, string[]][] = [
   ['Esito finale', ['home', 'draw', 'away']],
@@ -24,7 +25,8 @@ const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Eur
 const dayKey = (s: string) => new Date(s).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', weekday: 'long', day: 'numeric', month: 'long' });
 const pc = (p: number) => percent(p, p < 0.1 ? 1 : 0);
 const SLIP_KEY = 'quorum-slip-v1';
-const EXTRA = ['Under / Over squadra', 'Combo', 'Multigol', 'Risultato esatto', 'Corner', 'Cartellini', 'Corner e cartellini', 'Rigori', 'Marcatori'];
+const COMBO_GROUPS = ['Combo 1X', 'Combo X2', 'Combo 12', 'Combo 1', 'Combo X', 'Combo 2', 'Combo Gol'];
+const EXTRA = ['Under / Over squadra', ...COMBO_GROUPS, 'Multigol', 'Risultato esatto', 'Corner', 'Cartellini', 'Corner e cartellini', 'Rigori', 'Marcatori'];
 
 export function toOptions(r: any): Match | null {
   const mk = r.markets || {}, opts: Opt[] = [];
@@ -47,7 +49,7 @@ export function toOptions(r: any): Match | null {
   if (ex) {
     const base = { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff };
     const fairOpt = (market: string, label: string, group: string, p: number): Opt => ({ ...base, market, label, group, p, odds: Math.round(100 / p) / 100, bookmaker: 'quota equa', italian: false, fair: true, se: Math.sqrt(p * (1 - p) / 40), value: 0 });
-    for (const c of ex.combos) if (c.p >= 0.03) opts.push(fairOpt('combo:' + c.name, c.name, 'Combo', c.p));
+    for (const c of ex.combos) if (c.p >= 0.04) opts.push(fairOpt('combo:' + c.name, c.name, 'Combo ' + comboSlot(c.name), c.p));
     const u = mk.under25?.pBlend, b = ['home', 'draw', 'away'].map(k => mk[k]?.pBlend);
     const sc = b.every(x => Number.isFinite(x)) ? scoreMatrix(r.lambda_home, r.lambda_away, mk.meta?.rho ?? 0, { home: b[0], draw: b[1], away: b[2], ...(Number.isFinite(u) ? { under25: u } : {}) }) : null;
     if (sc) {
@@ -98,10 +100,16 @@ export function toOptions(r: any): Match | null {
     }
   }
   if (!opts.length) return null;
+  // Data for "Costruisci la tua combo": score matrix, expected goals and the players who can score.
+  let sc0: { home: number; away: number; p: number }[] | undefined, players: Player[] | undefined;
+  { const u = mk.under25?.pBlend, b = ['home', 'draw', 'away'].map(k => mk[k]?.pBlend);
+    if (Number.isFinite(r.lambda_home) && Number.isFinite(r.lambda_away) && b.every(x => Number.isFinite(x))) sc0 = scoreMatrix(r.lambda_home, r.lambda_away, mk.meta?.rho ?? 0, { home: b[0], draw: b[1], away: b[2], ...(Number.isFinite(u) ? { under25: u } : {}) });
+    const scs = mk.meta?.scorers;
+    if (scs) players = (['home', 'away'] as const).flatMap(side => (Array.isArray(scs[side]) ? scs[side] : []).filter((pl: any) => pl?.id && Number.isFinite(pl.p) && pl.p >= 0.02).slice(0, 14).map((pl: any) => ({ id: pl.id, name: pl.name, side, p: Number.isFinite(mk['scorer:' + pl.id]?.pBlend) ? mk['scorer:' + pl.id].pBlend : pl.p }))); }
   // Highlight: the two most probable outcomes with a real price (≥ 1,10) among the markets measured by the backtest.
   const measured = new Set(GROUPS.flatMap(g => g[1]));
   const best = new Set(opts.filter(o => !o.fair && o.odds >= 1.1 && measured.has(o.market)).sort((a, b) => b.p - a.p).slice(0, 2).map(o => o.market));
-  return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best };
+  return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best, sc: sc0, lh: r.lambda_home, la: r.lambda_away, players };
 }
 
 export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
@@ -110,7 +118,7 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
   const toggleShare = (v: boolean) => { setShare(v); try { localStorage.setItem('quorum-share', v ? '1' : '0'); } catch { } };
   const [matches, setMatches] = useState<Match[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const [slip, setSlip] = useState<Opt[]>([]), [league, setLeague] = useState('Tutte'), [q, setQ] = useState(''), [sort, setSort] = useState<'time' | 'prob'>('time');
-  const [open, setOpen] = useState<Record<string, any>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
+  const [comboFor, setComboFor] = useState(''), [open, setOpen] = useState<Record<string, any>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem(SLIP_KEY) || '[]'); if (Array.isArray(s)) setSlip(s.filter((x: Opt) => Date.parse(x.kickoff) > Date.now())); } catch { } }, []);
   useEffect(() => { try { localStorage.setItem(SLIP_KEY, JSON.stringify(slip)); } catch { } }, [slip]);
   async function load() {
@@ -169,17 +177,18 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
             <div className="chip-row">{topProb.map(o => chip(o, true))}</div>
             {topValue.length > 0 && <><h3>Le quote con più valore</h3><p className="small-note">Probabilità almeno 45% e quota italiana che paga almeno il 3% in più del dovuto. Il valore da solo non garantisce nulla: guarda anche la probabilità.</p><div className="chip-row">{topValue.map(o => chip(o, true))}</div></>}
           </section>
+          <ComboMaker matches={matches} pick={comboFor} setPick={setComboFor} onAdd={o => { if (Date.parse(o.kickoff) <= Date.now()) { notify('Partita già iniziata.'); return; } const same = slip.find(x => x.fixtureId === o.fixtureId); setSlip([...slip.filter(x => x.fixtureId !== o.fixtureId), o].sort((a, b) => a.kickoff.localeCompare(b.kickoff))); notify(same ? 'Combo inserita al posto di ' + same.label + ': un solo esito per partita.' : 'Combo aggiunta alla schedina.'); }} />
           <div className="filters">{leagues.map(l => <button key={l} className={league === l ? 'selected' : ''} onClick={() => setLeague(l)}>{l}</button>)}
             <button className={sort === 'prob' ? 'selected' : ''} onClick={() => setSort(sort === 'time' ? 'prob' : 'time')}>{sort === 'time' ? 'Ordina per probabilità' : 'Ordina per orario'}</button>
             <label className="builder-search"><Search size={14} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Cerca squadra" /></label></div>
           {shown.map((m, i) => <article key={m.fixtureId} className="panel builder-match">
             {(i === 0 || dayKey(shown[i - 1].kickoff) !== dayKey(m.kickoff)) && sort === 'time' && <p className="eyebrow builder-day">{dayKey(m.kickoff)}</p>}
-            <div className="builder-match-head"><div><strong>{m.fixture}</strong><small>{m.competition} · {when(m.kickoff)}</small></div>
+            <div className="builder-match-head"><div><strong>{m.fixture}</strong><small>{m.competition} · {when(m.kickoff)}</small>{m.sc && <button className="combo-open" onClick={() => { setComboFor(m.fixtureId); document.getElementById('combo-maker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>🧩 Crea una combo su questa partita</button>}</div>
               <div className="builder-best">{m.opts.filter(o => m.best.has(o.market)).sort((a, b) => b.p - a.p).map(o => <span key={o.market}>★ {o.label} {percent(o.p, 0)} · {o.odds.toFixed(2)}</span>)}</div></div>
             {GROUPS.map(([g, keys]) => { const os = m.opts.filter(o => o.group === g).sort((x, y) => keys.indexOf(x.market) - keys.indexOf(y.market)); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market} className={m.best.has(o.market) ? 'starred' : ''}>{chip(o)}</span>)}</div></div> : null; })}
             {m.opts.some(o => EXTRA.includes(o.group)) && <>
               <label className="mk-select"><span>Altri mercati</span><select value={(open as any)[m.fixtureId] || ''} onChange={e => setOpen({ ...open, [m.fixtureId]: e.target.value as any })}><option value="">Scegli un mercato…</option>{EXTRA.filter(g => m.opts.some(o => o.group === g)).map(g => <option key={g} value={g}>{g} ({m.opts.filter(o => o.group === g).length})</option>)}</select></label>
-              {(open as any)[m.fixtureId] && EXTRA.filter(g => g === (open as any)[m.fixtureId]).map(g => { const os = m.opts.filter(o => o.group === g).sort((a, b) => g === 'Multigol' || g.startsWith('Under / Over') || g === 'Corner' || g === 'Cartellini' || g === 'Rigori' ? 0 : b.p - a.p).slice(0, g === 'Combo' ? 19 : g === 'Risultato esatto' ? 16 : g === 'Corner' || g === 'Cartellini' ? 16 : g === 'Marcatori' ? 28 : 12); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market}>{chip(o, false)}<small className="chip-name">{o.label}</small></span>)}</div></div> : null; })}
+              {(open as any)[m.fixtureId] && EXTRA.filter(g => g === (open as any)[m.fixtureId]).map(g => { const os = m.opts.filter(o => o.group === g).sort((a, b) => g === 'Multigol' || g.startsWith('Combo') || g.startsWith('Under / Over') || g === 'Corner' || g === 'Cartellini' || g === 'Rigori' ? 0 : b.p - a.p).slice(0, g === 'Combo' ? 19 : g === 'Risultato esatto' ? 16 : g === 'Corner' || g === 'Cartellini' ? 16 : g === 'Marcatori' ? 28 : 12); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market}>{chip(o, false)}<small className="chip-name">{o.label}</small></span>)}</div></div> : null; })}
             </>}
           </article>)}
           <p className="footnote">Percentuale = probabilità stimata da QUORUM (modello + mercato, corretta con il backtest). * = quota estera, l’esito non è quotato da Lottomatica / Planetwin365. ≈ = quota equa: il bookmaker non la manda. Nella schedina puoi correggere la quota di ogni evento con quella che hai giocato davvero: QUORUM ricalcola quota totale, valore, puntata e vincita. Le quote italiane si aggiornano ogni 12 ore: controlla sempre quella sul tuo conto.</p>
@@ -219,10 +228,58 @@ export function LabPicker({ onAdd, taken }: { onAdd: (s: Selection) => void; tak
       <label>Partita<select value={fid} onChange={e => { setFid(e.target.value); setGroup('Esito finale'); }}><option value="">Scegli…</option>{list.map(x => <option key={x.fixtureId} value={x.fixtureId} disabled={taken.includes(x.fixtureId)}>{when(x.kickoff)} · {x.fixture}</option>)}</select></label></div>
     {m && <>
       <div className="archive-tabs">{groups.map(g => <button key={g} className={group === g ? 'on' : ''} onClick={() => setGroup(g)}>{g}</button>)}</div>
-      <div className="chip-row">{m.opts.filter(o => o.group === group).sort((a, b) => group === 'Marcatori' || group === 'Combo' || group === 'Risultato esatto' ? b.p - a.p : 0).map(o =>
+      <div className="chip-row">{m.opts.filter(o => o.group === group).sort((a, b) => group === 'Marcatori' || group.startsWith('Combo') || group === 'Risultato esatto' ? b.p - a.p : 0).map(o =>
         <button key={o.market} className="pick-chip" onClick={() => onAdd({ fixtureId: o.fixtureId, fixture: o.fixture, market: o.market, label: o.label, p: o.p, odds: o.odds, competition: o.competition, kickoff: o.kickoff })}>
           <span className="chip-label">{SHORT[o.market] ?? o.label}</span><b>{o.odds.toFixed(2)}{o.fair && <i title="Quota equa: correggila con la tua">≈</i>}</b><em>{percent(o.p, 0)}</em></button>)}</div>
       <p className="small-note">Tocca un esito per aggiungerlo. Nel Laboratorio puoi poi cambiare la quota di ogni partita con quella che hai trovato tu.</p>
     </>}
   </div>;
+}
+
+// "Costruisci la tua combo": the user picks the parts (result or double chance, goals, team goals, up to two
+// scorers) and QUORUM computes the joint probability on the score matrix of the match. Scorers: given a score,
+// the player scores with probability 1 − (1 − share)^goals of his team.
+function ComboMaker({ matches, pick, setPick, onAdd }: { matches: Match[]; pick: string; setPick: (id: string) => void; onAdd: (o: Opt) => void }) {
+  const list = matches.filter(m => m.sc && Date.parse(m.kickoff) > Date.now()).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const m = list.find(x => x.fixtureId === pick) ?? null;
+  const [res, setRes] = useState(''), [goal, setGoal] = useState(''), [team, setTeam] = useState(''), [tmg, setTmg] = useState(''), [ht, setHt] = useState(''), [s1, setS1] = useState(''), [s2, setS2] = useState(''), [odds, setOdds] = useState('');
+  useEffect(() => { setRes(''); setGoal(''); setTeam(''); setTmg(''); setHt(''); setS1(''); setS2(''); setOdds(''); }, [pick]);
+  const [home, away] = m ? m.fixture.split(' – ') : ['Casa', 'Ospite'];
+  const teamParts = [['Casa Over 0,5', home + ' segna'], ['Casa Over 1,5', home + ' segna 2+ gol'], ['Casa Under 1,5', home + ' segna al massimo 1'], ['Ospite Over 0,5', away + ' segna'], ['Ospite Over 1,5', away + ' segna 2+ gol'], ['Ospite Under 1,5', away + ' segna al massimo 1']];
+  const tmgParts: [string, string][] = (['casa', 'ospite'] as const).flatMap(t => TEAM_MULTIGOL.map(([a, b]) => ['Multigol ' + t + ' ' + a + '-' + b, 'Multigol ' + (t === 'casa' ? home : away) + ' ' + a + '-' + b] as [string, string]));
+  const players = (m?.players ?? []).slice().sort((a, b) => b.p - a.p);
+  const chosen = [s1, s2].filter(Boolean).map(id => players.find(p => String(p.id) === id)).filter(Boolean) as Player[];
+  const parts = [res, goal, team, tmg, ht].filter(Boolean);
+  const n = parts.length + chosen.length;
+  const p = m?.sc && n >= 2 ? customComboP(m.sc, parts, chosen.map(pl => ({ side: pl.side, share: scorerShare(pl.p, pl.side === 'home' ? m.lh ?? 1.3 : m.la ?? 1.1) }))) : null;
+  const typed = Number(odds.replace(',', '.')), fair = p ? 1 / p : 0;
+  const label = [res, goal, team ? teamParts.find(t => t[0] === team)![1] : '', tmg ? tmgParts.find(t => t[0] === tmg)![1] : '', ht, ...chosen.map(pl => 'segna ' + pl.name)].filter(Boolean).join(' + ');
+  const add = () => { if (!m || !p) return; const o = typed > 1 ? typed : Math.round(fair * 100) / 100;
+    onAdd({ fixtureId: m.fixtureId, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: 'combo:' + [...parts, ...chosen.map(pl => 'scorer=' + pl.id)].join(' + '), label: 'Combo: ' + label, group: 'Combo', p, odds: o, bookmaker: typed > 1 ? 'la tua quota' : 'quota equa', italian: false, fair: !(typed > 1), se: Math.sqrt(p * (1 - p) / 40), value: p * o - 1 }); };
+  const sel = (v: string, set: (x: string) => void, opts: [string, string][], none: string) => <select value={v} onChange={e => set(e.target.value)}><option value="">{none}</option>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>;
+  return <section className="panel combo-maker" id="combo-maker">
+    <h3>🧩 Costruisci la tua combo</h3>
+    <p className="small-note">Scegli una partita e almeno due condizioni: esito o doppia chance, Under / Over, Goal / No Goal, Multigol (partita, casa, ospite o 1° tempo), gol di una squadra, fino a due marcatori. QUORUM calcola la probabilità che si avverino <b>tutte insieme</b> e la quota equa. Poi scrivi la quota che vedi sul tuo bookmaker e aggiungila alla schedina.</p>
+    <label className="cm-match"><span>Partita</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="">Scegli la partita…</option>{list.map(x => <option key={x.fixtureId} value={x.fixtureId}>{x.fixture} · {when(x.kickoff)}</option>)}</select></label>
+    {m && <>
+      <div className="cm-grid">
+        <label><span>Esito / doppia chance</span>{sel(res, setRes, RESULT_PARTS.map(r => [r, ({ '1': '1 · vince ' + home, X: 'X · pareggio', '2': '2 · vince ' + away, '1X': '1X · ' + home + ' non perde', X2: 'X2 · ' + away + ' non perde', '12': '12 · non finisce pari' } as Record<string, string>)[r]]), 'Nessuno')}</label>
+        <label><span>Gol della partita</span>{sel(goal, setGoal, GOAL_PARTS.map(g => [g, g]), 'Nessuno')}</label>
+        <label><span>Gol di una squadra</span>{sel(team, setTeam, teamParts as [string, string][], 'Nessuno')}</label>
+        <label><span>Multigol casa / ospite</span>{sel(tmg, setTmg, tmgParts, 'Nessuno')}</label>
+        <label><span>Multigol 1° tempo</span>{sel(ht, setHt, HT_PARTS.map(x => [x, x]), 'Nessuno')}</label>
+        <label><span>Marcatore</span>{sel(s1, setS1, players.filter(pl => String(pl.id) !== s2).map(pl => [String(pl.id), pl.name + ' (' + (pl.side === 'home' ? home : away) + ') · ' + percent(pl.p, 0)]), players.length ? 'Nessuno' : 'Marcatori non disponibili')}</label>
+        {s1 && <label><span>Secondo marcatore</span>{sel(s2, setS2, players.filter(pl => String(pl.id) !== s1).map(pl => [String(pl.id), pl.name + ' (' + (pl.side === 'home' ? home : away) + ') · ' + percent(pl.p, 0)]), 'Nessuno')}</label>}
+      </div>
+      {n < 2 ? <p className="small-note">Scegli almeno due condizioni.</p> : p !== null && <div className="cm-result">
+        <div><span>La tua combo</span><b>{label}</b></div>
+        <div className="cm-nums"><div><em>{percent(p, p < 0.1 ? 1 : 0)}</em><small>probabilità</small></div><div><em>{fair.toFixed(2)}</em><small>quota equa</small></div>
+          <label><small>Quota del tuo bookmaker</small><input inputMode="decimal" value={odds} onChange={e => setOdds(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder={fair.toFixed(2)} /></label></div>
+        {typed > 1 && <p className={'cm-verdict ' + (typed * p - 1 >= 0 ? 'ok' : 'ko')}>{typed * p - 1 >= 0 ? 'Valore +' + Math.round((typed * p - 1) * 100) + '%: la quota paga più del rischio.' : 'Valore ' + Math.round((typed * p - 1) * 100) + '%: la quota paga meno di quanto dovrebbe.'}</p>}
+        <button className="lime-button" onClick={add}><Plus size={16} />Aggiungi alla schedina</button>
+        {ht && <p className="small-note">Multigol 1° tempo: gol segnati nei primi 45 minuti più recupero (circa il 45% dei gol di una partita arriva nel primo tempo).</p>}
+        {chosen.length > 0 && <p className="small-note">Marcatori: rigori compresi, autogol esclusi. La probabilità del marcatore tiene conto dei gol che la sua squadra fa in quel risultato.</p>}
+      </div>}
+    </>}
+  </section>;
 }

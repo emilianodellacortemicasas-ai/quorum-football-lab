@@ -30,3 +30,29 @@ test('expected goals from market odds reproduce the market', () => {
   const k = analyze(l.lh, l.la, 0).markets;
   assert.ok(Math.abs(k.home - 0.5) < 0.03 && Math.abs(k.over25 - 0.52) < 0.03);
 });
+
+import { customComboP, partProb, scorerShare } from '../lib/exact.ts';
+import { outcome } from '../lib/settle-contract.ts';
+test('double chance, team and half-time Multigol combos', () => {
+  const sc = scoreMatrix(1.6, 1.1, 0);
+  const c = Object.fromEntries(comboProbs(sc).map(x => [x.name, x.p]));
+  assert.ok(c['1X + Multigol 1-3'] > 0 && c['1X + Multigol 1-3'] < c['1X + Multigol 1-4']);
+  assert.ok(c['X2 + Multigol ospite 1-2'] > 0 && c['1X + Multigol 1° tempo 0-1'] > 0);
+  assert.ok(comboWins('1X + Multigol casa 1-2', 2, 2) && !comboWins('1X + Multigol casa 1-2', 3, 0));
+  assert.ok(comboWins('12 + Multigol 1° tempo 1-2', 2, 1, [1, 0]) && !comboWins('12 + Multigol 1° tempo 1-2', 2, 1, null));
+  // half-time part: binomial over the goals of the final score, sums to 1 over complementary ranges
+  assert.ok(Math.abs(partProb('Multigol 1° tempo 0-1', { home: 2, away: 1 }) + partProb('Multigol 1° tempo 2-3', { home: 2, away: 1 }) - 1) < 1e-9);
+  // custom combo = sum over the matrix; a scorer can only lower it
+  const base = customComboP(sc, ['1X', 'Over 1,5']), withS = customComboP(sc, ['1X', 'Over 1,5'], [{ side: 'home', share: scorerShare(0.4, 1.6) }]);
+  assert.ok(Math.abs(base - c['1X + Over 1,5']) < 1e-9 && withS < base && withS > 0);
+  // the scorer alone reproduces his probability
+  assert.ok(Math.abs(customComboP(sc, [], [{ side: 'home', share: scorerShare(0.4, 1.6) }]) - 0.4) < 0.02);
+});
+test('settles custom combos with scorers and half-time', () => {
+  const f = { hg: 2, ag: 1, corners: null, yellow: null, red: null, penAwarded: null, penMissed: null, scorers: [11, 22], ht: [1, 1] };
+  assert.equal(outcome('combo:1X + Over 1,5 + scorer=11', f), 'won');
+  assert.equal(outcome('combo:1X + scorer=33', f), 'lost');
+  assert.equal(outcome('combo:1 + Multigol 1° tempo 1-2', f), 'won');
+  assert.equal(outcome('combo:1 + Multigol 1° tempo 1-2', { ...f, ht: null }), null);
+  assert.equal(outcome('combo:2 + Multigol ospite 1-2', f), 'lost');
+});

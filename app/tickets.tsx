@@ -6,7 +6,7 @@ import type { RecordPlay, Selection } from '../lib/types';
 import type { SystemTicket, Ticket } from '../lib/tickets';
 import type { ExactPick } from '../lib/exact';
 import { DayFilter, useDay } from './day-filter';
-type ComboData = { top: { fixtureId: string; fixture: string; competition: string; kickoff: string; combo: string; p: number; others: { name: string; p: number }[] }[]; tickets: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; combo: string; p: number }[]; p: number; fair: number }[] };
+type ComboData = { top: { fixtureId: string; fixture: string; competition: string; kickoff: string; combo: string; p: number; others: { name: string; p: number }[] }[]; tickets: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; combo: string; p: number }[]; p: number; fair: number }[]; slots?: { slot: string; items: { fixtureId: string; fixture: string; competition: string; kickoff: string; combo: string; p: number; others: { name: string; p: number }[] }[] }[] };
 import { Count, Ring } from './motion';
 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -50,51 +50,61 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core',
   </article>;
 }
 
-function ExactSection({ list, combo, history, onOpenMatch }: { list: ExactPick[]; combo?: ComboData; history?: Hist; onOpenMatch?: (id: string) => void }) {
+type ScorerPick = { fixtureId: string; fixture: string; competition: string; kickoff: string; id: number; name: string; team: string; p: number; odds: number | null; book: string | null; italian: boolean; value: number | null };
+const SLOT_INFO: Record<string, string> = { '1X': 'Casa non perde', 'X2': 'Ospite non perde', '12': 'Non finisce pari', '1': 'Vince la squadra di casa', 'X': 'Pareggio', '2': 'Vince l’ospite', 'Gol': 'Solo gol (Goal + Over, No Goal + Under)' };
+function ExactSection({ list, combo, scorers, history, onOpenMatch }: { list: ExactPick[]; combo?: ComboData; scorers?: ScorerPick[]; history?: Hist; onOpenMatch?: (id: string) => void }) {
   const [open, setOpen] = useState<string | null>(null), [help, setHelp] = useState(false);
-  const detail = (id: string) => { const e = list.find(x => x.fixtureId === id); if (!e) return null; return <div className="combo-detail" onClick={ev => ev.stopPropagation()}>
-    <p className="cd-title">Tutte le combo di questa partita</p>
-    <table className="cd-table"><thead><tr><th>Combo</th><th>Probabilità</th><th>Quota equa</th></tr></thead><tbody>{e.combos.slice(0, 12).map(c => <tr key={c.name}><td>{c.name}</td><td><b>{percent(c.p, 0)}</b></td><td>{(1 / c.p).toFixed(2)}</td></tr>)}</tbody></table>
-    <p className="cd-note">Su Planetwin la trovi tra le scommesse “Combo” della partita. Se la quota che vedi lì è <b>più alta</b> della quota equa, la combo ha valore; se è più bassa, il bookmaker si tiene troppo margine.</p>
-    {onOpenMatch && <button className="secondary" onClick={() => onOpenMatch(id)}>Apri la partita: tutti i mercati, forma e assenze</button>}
-  </div>; };
-  const [tab, setTab] = useState<'multigol' | 'esatti' | 'combo'>('combo');
-  const hCb = history?.byKind.find(k => k.kind === 'combo-55');
+  const [tab, setTab] = useState<'multigol' | 'marcatori' | 'combo'>('combo'), [slot, setSlot] = useState('tutte');
+  const detail = (id: string, only?: string) => { const e = list.find(x => x.fixtureId === id); if (!e) return null; const cs = e.combos.filter(c => !only || only === 'tutte' || c.name.split(' + ')[0] === only || (only === 'Gol' && !['1', 'X', '2', '1X', 'X2', '12'].includes(c.name.split(' + ')[0]))).slice(0, 14);
+    return <div className="combo-detail" onClick={ev => ev.stopPropagation()}>
+      <p className="cd-title">Le combo più probabili di questa partita{only && only !== 'tutte' ? ' · slot ' + only : ''}</p>
+      <table className="cd-table"><thead><tr><th>Combo</th><th>Probabilità</th><th>Quota equa</th></tr></thead><tbody>{cs.map(c => <tr key={c.name}><td>{c.name}</td><td><b>{percent(c.p, 0)}</b></td><td>{(1 / c.p).toFixed(2)}</td></tr>)}</tbody></table>
+      <p className="cd-note">Su Planetwin la trovi tra le scommesse “Combo” della partita. Se la quota che vedi lì è <b>più alta</b> della quota equa, la combo ha valore. Vuoi una combo diversa? Costruiscila tu in <b>Costruisci schedina → Costruisci la tua combo</b>.</p>
+      {onOpenMatch && <button className="secondary" onClick={() => onOpenMatch(id)}>Apri la partita: tutti i mercati, forma e assenze</button>}
+    </div>; };
+  const hCb = history?.byKind.find(k => k.kind === 'combo-55'), hMg = history?.byKind.find(k => k.kind === 'multigol-65');
   const mg = list.map(e => ({ e, m: e.multigol.filter(x => { const [a, b] = x.range.split('-').map(Number); return b - a <= 2 && x.p >= 0.65; }).sort((x, y) => y.p - x.p)[0] })).filter(x => x.m).sort((a, b) => b.m!.p - a.m!.p).slice(0, 10);
-  const ex = [...list].sort((a, b) => b.top[0].p - a.top[0].p).slice(0, 10);
-  const hMg = history?.byKind.find(k => k.kind === 'multigol-65'), hEx = history?.byKind.find(k => k.kind === 'esatto-top');
+  const slots = combo?.slots ?? [], items = slot === 'tutte' ? combo?.top ?? [] : slots.find(x => x.slot === slot)?.items ?? [];
+  const sc = scorers ?? [];
   return <>
-    <h3 className="day-title">🎯 Combo, Multigol e risultati esatti</h3>
-    <p className="small-note">Un risultato esatto da solo non arriva mai al 65–70%: il più probabile di una partita sta di solito tra il 10% e il 20%. Al 65–70% ci arriva il <b>Multigol</b> (es. 1-3 = la partita finisce con 1, 2 o 3 gol totali), che su Lottomatica / Planetwin365 è una giocata unica. Qui trovi le <b>Combo</b> (esito + gol, es. “1X + Under 3,5”), i Multigol al 65% o più e i risultati esatti più probabili. Le quote italiane di questi mercati QUORUM non le riceve: trovi la <b>quota equa</b>, gioca solo se sul bookmaker paga di più.</p>
-    <div className="archive-tabs"><button className={tab === 'combo' ? 'on' : ''} onClick={() => setTab('combo')}>Combo <b>{combo?.top.length ?? 0}</b></button><button className={tab === 'multigol' ? 'on' : ''} onClick={() => setTab('multigol')}>Multigol ≥ 65% <b>{mg.length}</b></button><button className={tab === 'esatti' ? 'on' : ''} onClick={() => setTab('esatti')}>Risultati esatti <b>{ex.length}</b></button></div>
+    <h3 className="day-title">⚽ Combo, Multigol e Marcatori</h3>
+    <p className="small-note">Le <b>Combo</b> uniscono esito o doppia chance e gol (es. “1X + Multigol 1-3”); il <b>Multigol</b> indica quanti gol totali; i <b>Marcatori</b> sono i giocatori che QUORUM vede più vicini al gol. Quando manca la quota del bookmaker trovi la <b>quota equa</b>: gioca solo se sul tuo conto paga di più.</p>
+    <div className="archive-tabs"><button className={tab === 'combo' ? 'on' : ''} onClick={() => setTab('combo')}>Combo</button><button className={tab === 'multigol' ? 'on' : ''} onClick={() => setTab('multigol')}>Multigol ≥ 65% <b>{mg.length}</b></button><button className={tab === 'marcatori' ? 'on' : ''} onClick={() => setTab('marcatori')}>Marcatori <b>{sc.length}</b></button></div>
     {tab === 'combo' && hCb && hCb.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hCb.won} prese su {hCb.n}</b><small>({Math.round(hCb.hit * 100)}% · previsto {Math.round(hCb.expected * 100)}%)</small></div>}
     {tab === 'combo' && combo && <>
-      <button className="intro-pill" onClick={() => setHelp(!help)}>ⓘ Come funzionano le combo e le schedine combo</button>
+      <button className="intro-pill" onClick={() => setHelp(!help)}>ⓘ Come funzionano le combo e gli slot</button>
       {help && <div className="page-intro"><ul>
-        <li><b>Combo</b> = due condizioni sulla stessa partita che devono avverarsi entrambe. “1X + Over 1,5” vince se la squadra di casa non perde <b>e</b> si segnano almeno 2 gol (2-0, 2-1, 1-1, 3-1… sì; 1-0, 0-0, 0-2 no).</li>
-        <li><b>Probabilità</b> = quante volte su 100 la combo si avvera secondo QUORUM. <b>Quota equa</b> = 100 ÷ probabilità: è la quota “giusta”, senza il margine del bookmaker.</li>
-        <li><b>Doppia / Tripla combo</b> = 2 o 3 combo di partite diverse nella stessa schedina. La probabilità si moltiplica (71% × 71% ≈ 50%) e anche la quota (1,41 × 1,42 ≈ 2,00).</li>
-        <li><b>Come si gioca</b>: su Planetwin apri la partita, sezione Combo, scegli la stessa combo e mettila in schedina. Gioca solo se la quota totale è più alta della quota equa indicata.</li>
-        <li>Tocca una partita qui sotto per vedere tutte le sue combo.</li>
+        <li><b>Combo</b> = condizioni sulla stessa partita che devono avverarsi tutte. “X2 + Over 1,5” vince se l’ospite non perde <b>e</b> si segnano almeno 2 gol.</li>
+        <li><b>Slot</b> = le combo divise per la prima parte: <b>1X</b> (casa non perde), <b>X2</b> (ospite non perde), <b>12</b>, <b>1</b>, <b>X</b>, <b>2</b> e <b>Gol</b>. In ogni slot la combo più probabile di ogni partita, dalla più sicura.</li>
+        <li>Ogni doppia chance si combina con Goal / No Goal, Under / Over (1,5 · 2,5 · 3,5 · 4,5) e tutti i Multigol.</li>
+        <li><b>Quota equa</b> = 100 ÷ probabilità. Gioca solo se il bookmaker paga di più.</li>
       </ul></div>}
-      {combo.tickets.length > 0 && <div className="xs-grid">{combo.tickets.map(t => <article key={t.kind + t.legs.map(l => l.fixtureId).join()} className="xs-card combo-ticket"><small>Schedina pronta</small><strong>{t.title}</strong>
+      <div className="slot-row">{[['tutte', 'Le migliori'], ...slots.map(x => [x.slot, x.slot === 'Gol' ? 'Gol' : x.slot])].map(([k, l]) => <button key={k} className={slot === k ? 'on' : ''} onClick={() => { setSlot(k); setOpen(null); }}>{l}{k !== 'tutte' && <small>{SLOT_INFO[k]}</small>}</button>)}</div>
+      {slot === 'tutte' && combo.tickets.length > 0 && <div className="xs-grid">{combo.tickets.map(t => <article key={t.kind + t.legs.map(l => l.fixtureId).join()} className="xs-card combo-ticket"><small>Schedina pronta</small><strong>{t.title}</strong>
         {t.legs.map(l => <div key={l.fixtureId} className="tip-leg clickable" onClick={() => onOpenMatch?.(l.fixtureId)}><span>{l.fixture}<small>{when(l.kickoff)} · apri la partita</small></span><b>{l.combo}</b></div>)}
         <div className="xs-main"><span className="xs-pick">Quota equa {t.fair.toFixed(2)}</span><b className={t.p >= 0.4 ? 'hi' : ''}>{percent(t.p, 0)}</b></div>
         <p>Conviene solo se sul bookmaker la quota totale è più alta di {t.fair.toFixed(2)}.</p></article>)}</div>}
-      <div className="xs-grid">{combo.top.map(c => <article key={c.fixtureId} className={'xs-card clickable' + (open === c.fixtureId ? ' open' : '')} onClick={() => setOpen(open === c.fixtureId ? null : c.fixtureId)}><small>{c.competition} · {when(c.kickoff)}</small><strong>{c.fixture}</strong>
+      <div className="xs-grid">{items.map((c, i) => <article key={c.fixtureId + c.combo} className={'xs-card clickable' + (open === c.fixtureId ? ' open' : '')} onClick={() => setOpen(open === c.fixtureId ? null : c.fixtureId)}><small><span className="slot-n">#{i + 1}</span> {c.competition} · {when(c.kickoff)}</small><strong>{c.fixture}</strong>
         <div className="xs-main"><span className="xs-pick">{c.combo}</span><b className={c.p >= 0.65 ? 'hi' : ''}>{percent(c.p, 0)}</b></div>
         <p>Quota equa {(1 / c.p).toFixed(2)}.{c.others.length ? ' Alternative: ' + c.others.map(o => o.name + ' ' + percent(o.p, 0)).join(' · ') : ''}</p>
         <span className="cd-more">{open === c.fixtureId ? 'Chiudi ▲' : 'Tocca per tutte le combo ▼'}</span>
-        {open === c.fixtureId && detail(c.fixtureId)}</article>)}</div>
+        {open === c.fixtureId && detail(c.fixtureId, slot)}</article>)}</div>
+      {!items.length && <p className="small-note">Nessuna combo in questo slot per il giorno scelto.</p>}
     </>}
     {tab === 'multigol' && hMg && hMg.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hMg.won} presi su {hMg.n}</b><small>({Math.round(hMg.hit * 100)}% · previsto {Math.round(hMg.expected * 100)}%)</small></div>}
-    {tab === 'esatti' && hEx && hEx.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hEx.won} presi su {hEx.n}</b><small>({Math.round(hEx.hit * 100)}% · previsto {Math.round(hEx.expected * 100)}%)</small></div>}
-    {tab !== 'combo' && <div className="xs-grid">{(tab === 'multigol' ? mg.map(({ e, m }) => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
+    {tab === 'multigol' && <div className="xs-grid">{mg.map(({ e, m }) => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
       <div className="xs-main"><span className="xs-pick">Multigol {m!.range}</span><b className={m!.p >= 0.7 ? 'hi' : ''}>{percent(m!.p, 0)}</b></div>
-      <p>Quota equa {(1 / m!.p).toFixed(2)}: conviene se sul bookmaker la quota è più alta.</p>
-      {e.cover65 && <p className="xs-cover">Risultati che coprono il {percent(e.cover65.p, 0)}: {e.cover65.scores.join(' · ')}</p>}</article>)
-      : ex.map(e => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
-        <div className="xs-scores">{e.top.map((t, i) => <span key={t.score} className={i === 0 ? 'first' : ''}><b>{t.score}</b><em>{percent(t.p, 0)}</em><small>equa {(1 / t.p).toFixed(1)}</small>{t.it && <small className={'xs-it' + (t.it.odds * t.p - 1 > 0 ? ' val' : '')}>{t.it.book === 'Lottomatica' ? 'Planetwin' : t.it.book} {t.it.odds.toFixed(2)}{t.it.odds * t.p - 1 > 0 ? ' · +' + Math.round((t.it.odds * t.p - 1) * 100) + '%' : ''}</small>}</span>)}</div></article>))}</div>}
+      <p>Quota equa {(1 / m!.p).toFixed(2)}: conviene se sul bookmaker la quota è più alta.</p></article>)}</div>}
+    {tab === 'marcatori' && <>
+      <p className="small-note">Probabilità che il giocatore segni almeno un gol nei 90 minuti (rigori compresi, autogol esclusi). Dove c’è la quota del bookmaker vedi anche il valore; altrimenti la quota equa. In verde le quote che pagano più del dovuto.</p>
+      {!sc.length ? <p className="small-note">Nessun marcatore per il giorno scelto: i dati arrivano con la scansione delle partite.</p>
+        : <div className="sc-list">{sc.map((x, i) => <article key={x.fixtureId + x.id} className={'sc-row' + (x.value !== null && x.value >= 0.03 ? ' val' : '')} onClick={() => onOpenMatch?.(x.fixtureId)}>
+          <span className="sc-n">{i + 1}</span>
+          <div className="sc-who"><strong>{x.name}</strong><small>{x.team} · {x.fixture} · {when(x.kickoff)}</small></div>
+          <div className="sc-p"><b>{percent(x.p, 0)}</b><small>segna</small></div>
+          <div className="sc-q">{x.odds ? <><b>{x.odds.toFixed(2)}</b><small>{x.book}{x.value !== null ? ' · ' + (x.value >= 0 ? '+' : '') + Math.round(x.value * 100) + '%' : ''}</small></> : <><b>{(1 / x.p).toFixed(2)}≈</b><small>quota equa</small></>}</div>
+        </article>)}</div>}
+    </>}
   </>;
 }
 
@@ -116,7 +126,7 @@ function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (
   </article>;
 }
 
-const SECTIONS: [string, string][] = [['tutte', 'Tutte le schedine'], ['raddoppi', '🛡️ Raddoppi'], ['multiple', '📋 Multiple del giorno'], ['fasce', '🎯 3 e 5 squadre'], ['schemi', '🧩 Schemi (puoi sbagliare)'], ['sistemi', '🧮 Sistemi'], ['combo', '⚽ Combo, Multigol, esatti'], ['bombe', '💣 Bombe']];
+const SECTIONS: [string, string][] = [['tutte', 'Tutte le schedine'], ['raddoppi', '🛡️ Raddoppi'], ['multiple', '📋 Multiple del giorno'], ['fasce', '🎯 3 e 5 squadre'], ['schemi', '🧩 Schemi (puoi sbagliare)'], ['sistemi', '🧮 Sistemi'], ['combo', '⚽ Combo, Multigol, Marcatori'], ['bombe', '💣 Bombe']];
 
 export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem, onOpenMatch }: { onOpenMatch?: (id: string) => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
   const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; combo?: ComboData; comboBombs?: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; label: string; p: number; odds: number }[]; p: number; fair: number }[]; days?: { day: string; n: number }[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
@@ -179,7 +189,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
               <BtBadge history={data.history} kinds={k => k === 'sistema-giorno'} />
               <div className="value-list">{data.systems.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
-            {show('combo') && data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} history={data.history} onOpenMatch={onOpenMatch} />}
+            {show('combo') && data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} scorers={(data as any).scorers} history={data.history} onOpenMatch={onOpenMatch} />}
             {show('bombe') && data.bombs && data.bombs.length > 0 && <>
               <h3 className="day-title">💣 Bombe</h3>
               <p className="small-note">Una per ogni giornata di partite: quota da 10 a 100 in base a quante partite ci sono. Per sognare, sempre a puntata minima.</p>

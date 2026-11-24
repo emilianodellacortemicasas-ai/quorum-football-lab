@@ -2,7 +2,7 @@
 // the live app derives the expected goals from the market (lambdasFromMarket) and builds the score matrix
 // from them. Here we do exactly the same with the historical odds of The Odds API taken on the match day
 // (snapshot at 12:00 UTC, before every kickoff), then settle with the real 90-minute results. Pure logic.
-import { MULTIGOL, comboProbs, comboWins, lambdasFromMarket, multigolP, scoreMatrix } from './exact.ts';
+import { needsHT, MULTIGOL, comboProbs, comboWins, lambdasFromMarket, multigolP, scoreMatrix } from './exact.ts';
 import { marketConsensus, matchEvent, type OddsEvent } from './scanner-contract.ts';
 import type { Result } from './model-v2.ts';
 
@@ -87,7 +87,7 @@ export function cupBacktest(results: Result[], snapshots: Map<string, OddsEvent[
       if (line === 2.5) { legs.push({ p: pO, odds: price.over25, win: tot > 2.5 }); legs.push({ p: 1 - pO, odds: price.under25, win: tot < 2.5 }); }
     }
     const pG = P((h, a) => h > 0 && a > 0); mAdd('Goal / No Goal', 'Goal', pG, r.hg > 0 && r.ag > 0); mAdd('Goal / No Goal', 'No Goal', 1 - pG, r.hg === 0 || r.ag === 0);
-    const combos = comboProbs(sc);
+    const combos = comboProbs(sc).filter(c => !needsHT(c.name));
     for (const cb of combos) mAdd('Combo', cb.name, cb.p, comboWins(cb.name, r.hg, r.ag));
     for (const [lo, hi] of MULTIGOL) mAdd('Multigol', 'Multigol ' + lo + '-' + hi, multigolP(sc, lo, hi), tot >= lo && tot <= hi);
     mAdd('Risultato esatto', 'Risultato più probabile', sc[0].p, sc[0].home === r.hg && sc[0].away === r.ag);

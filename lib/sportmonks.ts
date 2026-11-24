@@ -126,7 +126,7 @@ export async function fixtureFinal(id:string):Promise<{status:'final'|'void'|'pe
  if(['FT','AET','FT_PEN'].includes(st)){
   const r=parseResult(f,'x');if(!r)return {status:'pending'};
   const x=parseExtras(f);
-  return {status:'final',final:{hg:r.hg,ag:r.ag,corners:x.corners,yellow:x.yellow,red:x.red,penAwarded:x.penAwarded,penMissed:x.penMissed,scorers:x.scorers?x.scorers.map(s=>s.id):null}};
+  return {status:'final',final:{hg:r.hg,ag:r.ag,corners:x.corners,yellow:x.yellow,red:x.red,penAwarded:x.penAwarded,penMissed:x.penMissed,scorers:x.scorers?x.scorers.map(s=>s.id):null,ht:(()=>{const h1=(f.scores||[]).filter((y:any)=>y.description==='1ST_HALF');const a1=h1.find((y:any)=>y.score?.participant==='home')?.score?.goals,b1=h1.find((y:any)=>y.score?.participant==='away')?.score?.goals;return Number.isInteger(a1)&&Number.isInteger(b1)?[a1,b1] as [number,number]:null;})()}};
  }
  const late=Number.isFinite(f?.starting_at_timestamp)&&Date.now()-f.starting_at_timestamp*1000>3*86400000;
  if(['CANCL','ABAN','AWARDED','WO','DELETED'].includes(st)||(late&&['POSTP','SUSP','INT','TBA','NS'].includes(st)))return {status:'void'};

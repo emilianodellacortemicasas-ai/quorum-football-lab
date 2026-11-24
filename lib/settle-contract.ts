@@ -1,6 +1,6 @@
-import { comboWins } from './exact.ts';
+import { htRange, partTest } from './exact.ts';
 // Settlement rules: final facts of a match → result of a market. Pure.
-export type Final = { hg: number; ag: number; corners: [number, number] | null; yellow: [number, number] | null; red: [number, number] | null; penAwarded: [number, number] | null; penMissed: [number, number] | null; scorers: number[] | null };
+export type Final = { hg: number; ag: number; corners: [number, number] | null; yellow: [number, number] | null; red: [number, number] | null; penAwarded: [number, number] | null; penMissed: [number, number] | null; scorers: number[] | null; ht?: [number, number] | null };
 export type Outcome = 'won' | 'lost' | 'void' | null;
 const ou = (v: number, dir: string, line: number): Outcome => v === line ? 'void' : (dir === 'over' ? v > line : v < line) ? 'won' : 'lost';
 const b = (x: boolean): Outcome => x ? 'won' : 'lost';
@@ -25,7 +25,19 @@ export function outcome(market: string, f: Final): Outcome {
   if (market === 'pen:awarded:yes' || market === 'pen:awarded:no') return f.penAwarded ? b((f.penAwarded[0] + f.penAwarded[1] > 0) === market.endsWith('yes')) : null;
   if (market === 'pen:missed:yes' || market === 'pen:missed:no') return f.penMissed ? b((f.penMissed[0] + f.penMissed[1] > 0) === market.endsWith('yes')) : null;
   // Combo (result + goals), multigol and exact score markets, e.g. 'combo:1X + Under 3,5', 'multigol:1-3'.
-  if (market.startsWith('combo:')) return b(comboWins(market.slice(6), hg, ag));
+  // Custom combos may contain scorers: 'combo:1X + Over 1,5 + scorer=12345'.
+  if (market.startsWith('combo:')) {
+    let all = true;
+    for (const part of market.slice(6).split(' + ')) {
+      const sm = /^scorer=(\d+)$/.exec(part);
+      if (sm) { if (!f.scorers) return null; all = all && f.scorers.includes(Number(sm[1])); continue; }
+      const h = htRange(part);
+      if (h) { if (!f.ht) return null; const g = f.ht[0] + f.ht[1]; all = all && g >= h[0] && g <= h[1]; continue; }
+      const t = partTest(part); if (!t) return null;
+      all = all && t({ home: hg, away: ag });
+    }
+    return b(all);
+  }
   m = /^multigol:(\d+)-(\d+)$/.exec(market);
   if (m) return b(t >= Number(m[1]) && t <= Number(m[2]));
   m = /^scorer:(\d+)$/.exec(market);

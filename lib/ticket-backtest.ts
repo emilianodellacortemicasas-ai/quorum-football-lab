@@ -4,7 +4,7 @@
 import { analyze } from './math.ts';
 import { fitLeague, lambdas, type Result } from './model-v2.ts';
 import { buildTickets, type SystemTicket, type Ticket } from './tickets.ts';
-import { MULTIGOL, comboBombs, comboProbs, comboWins, exactPicks, multigolP, scoreMatrix } from './exact.ts';
+import { needsHT, MULTIGOL, comboBombs, comboProbs, comboWins, exactPicks, multigolP, scoreMatrix } from './exact.ts';
 import type { FdRow } from './football-data-contract.ts';
 
 const WEEK = 7 * 86400000;
@@ -84,12 +84,12 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
     }
     // Combo bombs of each match day (fair prices only: calibration of the probability).
     const ex = exactPicks(rows.map(r0 => ({ ...r0, lambda_home: r0._l.lh, lambda_away: r0._l.la, markets: { ...r0.markets, meta: { rho: r0._l.rho } } })));
-    for (const cb of comboBombs(ex, t - 3600000)) add('bomba-combo', 'Bomba combo', cb.p, cb.fair, cb.legs.length, cb.legs.every(l => { const r1 = res.get(l.fixtureId)!; return comboWins(l.label, r1.hg, r1.ag); }), 0, 1, true);
+    for (const cb of comboBombs(ex.map(e0 => ({ ...e0, combos: e0.combos.filter(c => !needsHT(c.name)) })), t - 3600000)) add('bomba-combo', 'Bomba combo', cb.p, cb.fair, cb.legs.length, cb.legs.every(l => { const r1 = res.get(l.fixtureId)!; return comboWins(l.label, r1.hg, r1.ag); }), 0, 1, true);
     // Exact score and Multigol: calibration only (no historical prices for these markets).
     for (const row of rows) {
       const r = res.get(row.fixture_id)!, l = row._l as { lh: number; la: number; rho: number }, mk = row.markets;
       const sc = scoreMatrix(l.lh, l.la, l.rho, { home: mk.home.pBlend, draw: mk.draw.pBlend, away: mk.away.pBlend, ...(mk.under25 ? { under25: mk.under25.pBlend } : {}) });
-      const cb = comboProbs(sc).filter(c => c.p >= 0.55 && 1 / c.p >= 1.4).sort((x, y) => y.p - x.p)[0];
+      const cb = comboProbs(sc).filter(c => !needsHT(c.name)).filter(c => c.p >= 0.55 && 1 / c.p >= 1.4).sort((x, y) => y.p - x.p)[0];
       if (cb) add('combo-55', 'Combo più probabile', cb.p, 1 / cb.p, 1, comboWins(cb.name, r.hg, r.ag), 0, 1, true);
       add('esatto-top', 'Risultato esatto più probabile', sc[0].p, 1 / sc[0].p, 1, sc[0].home === r.hg && sc[0].away === r.ag, 0, 1, true);
       const tot = r.hg + r.ag, best = MULTIGOL.map(([lo, hi]) => ({ lo, hi, p: multigolP(sc, lo, hi) })).filter(x => x.hi - x.lo <= 2 && x.p >= 0.65).sort((x, y) => y.p - x.p)[0];
@@ -105,7 +105,7 @@ export function ticketBacktest(results: Result[], odds: Map<string | number, FdR
         mAdd('Under / Over', 'Under ' + L, 1 - pO, tot < line, line === 2.5 ? o.u25 ?? undefined : undefined);
       }
       const pG = P((h, a) => h > 0 && a > 0); mAdd('Goal / No Goal', 'Goal', pG, r.hg > 0 && r.ag > 0); mAdd('Goal / No Goal', 'No Goal', 1 - pG, r.hg === 0 || r.ag === 0);
-      for (const c of comboProbs(sc)) mAdd('Combo', c.name, c.p, comboWins(c.name, r.hg, r.ag));
+      for (const c of comboProbs(sc).filter(c => !needsHT(c.name))) mAdd('Combo', c.name, c.p, comboWins(c.name, r.hg, r.ag));
       for (const [lo, hi] of MULTIGOL) mAdd('Multigol', 'Multigol ' + lo + '-' + hi, multigolP(sc, lo, hi), tot >= lo && tot <= hi);
       mAdd('Risultato esatto', 'Risultato più probabile', sc[0].p, sc[0].home === r.hg && sc[0].away === r.ag);
     }

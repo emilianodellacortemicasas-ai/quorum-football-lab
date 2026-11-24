@@ -81,7 +81,7 @@ export async function POST(request:Request) {
         statement=raw.prepare('INSERT INTO bets (id,owner,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,model_version,snapshot,status,pnl_cents,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(crypto.randomUUID(),owner,portfolioId,match.id,match.home+' – '+match.away,match.competition,b.market,marketLabel(b.market),probability,b.odds,b.stakeCents,match.source,MODEL_VERSION,JSON.stringify(match),'pending',0,new Date().toISOString(),portfolioId,revision);
       } else if(body.action==='ticket'){
         // A play chosen by the user (from Costruisci, Schedine or Valore): 1–30 legs on different matches, not started.
-        const leg=z.object({fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(60),label:z.string().min(1).max(80),p:z.number().min(0.001).max(0.999),odds:z.number().min(1.01).max(1000)}).strict();
+        const leg=z.object({fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(120),label:z.string().min(1).max(160),p:z.number().min(0.001).max(0.999),odds:z.number().min(1.01).max(1000)}).strict();
         const t=z.object({legs:z.array(leg).min(1).max(30),stakeCents:z.number().int().min(100).max(100000000),source:z.enum(['builder','value','schedina']),kind:z.string().max(40).optional(),shared:z.boolean().optional()}).parse(body);
         if(new Set(t.legs.map(l=>l.fixtureId)).size!==t.legs.length)return failure('Un solo esito per partita.');
         if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now())))return failure('Una partita è già iniziata: toglila dalla schedina.');
@@ -94,7 +94,7 @@ export async function POST(request:Request) {
       } else if(body.action==='system'){
         // A system from the Laboratorio, like the bookmaker's slip: 1–8 legs, one or more classes (singole, doppie…),
         // each with its own stake per combination. Old format {k, unitCents} is still accepted.
-        const leg=z.object({fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(60),label:z.string().min(1).max(80),p:z.number().min(0.001).max(0.999),odds:z.number().min(1.01).max(1000)}).strict();
+        const leg=z.object({fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(120),label:z.string().min(1).max(160),p:z.number().min(0.001).max(0.999),odds:z.number().min(1.01).max(1000)}).strict();
         const cl=z.object({k:z.number().int().min(1).max(8),unitCents:z.number().int().min(5).max(10000000)});
         const t=z.object({legs:z.array(leg).min(1).max(8),classes:z.array(cl).min(1).max(8).optional(),k:z.number().int().min(1).max(8).optional(),unitCents:z.number().int().min(5).max(10000000).optional(),shared:z.boolean().optional()}).parse(body);
         const classes=t.classes??(t.k&&t.unitCents?[{k:t.k,unitCents:t.unitCents}]:[]);
