@@ -36,6 +36,8 @@ export function performance(recs: CenterRec[]) {
     n, won: closed.filter(r => r.result === 'won').length, expected: closed.reduce((a, r) => a + r.p, 0), pending: recs.filter(r => r.result === null).length,
     units: profit.reduce((a, x) => a + x, 0), yield: n ? y : null, ci: half === null ? null : [y - half, y + half] as [number, number], tProfit,
     clv: clvs.length ? c : null, clvN: clvs.length, clvBeat: clvs.length ? clvs.filter(x => x > 0).length / clvs.length : null, tClv, needed, verdict,
+    // Cumulative units over time (1 unit per bet), for the chart.
+    curve: (() => { let u = 0; return [...closed].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(r => ({ at: r.createdAt, u: (u += r.result === 'won' ? r.odds - 1 : -1) })); })(),
   };
 }
 

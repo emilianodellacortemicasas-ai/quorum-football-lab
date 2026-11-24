@@ -1,16 +1,17 @@
 'use client';
 // Centro Tipster: the professional bettor's dashboard. Data refreshed after every scan (every 3 hours).
 import { useEffect, useState } from 'react';
-import { Activity, BarChart3, Check, Gauge, Info, ListChecks, Radar, RefreshCw, Scale, TrendingDown, X } from 'lucide-react';
+import { Activity, BarChart3, Check, Gauge as GaugeIcon, Info, ListChecks, Radar, RefreshCw, Scale, TrendingDown, X } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay } from '../lib/types';
+import { Core, CountUp, Countdown, Curve, Gauge, MatrixRain, Ticker, Tilt } from './tc-visuals';
 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const hm = (s: string) => new Date(s).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
 const sg = (x: number | null | undefined, d = 1) => x === null || x === undefined ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(d).replace('.', ',') + '%';
 const pp = (x: number) => (x >= 0 ? '+' : '') + (x * 100).toFixed(1).replace('.', ',') + ' pt';
 const cls = (x: number | null | undefined) => x === null || x === undefined ? '' : x >= 0 ? 'pos' : 'neg';
-const TABS: [string, string, any][] = [['opp', 'Opportunità', ListChecks], ['perf', 'Prestazioni', Gauge], ['seg', 'Dove guadagno', BarChart3], ['moves', 'Movimenti', Radar], ['margins', 'Margini', Scale], ['streaks', 'Serie', TrendingDown]];
+const TABS: [string, string, any][] = [['opp', 'Opportunità', ListChecks], ['perf', 'Prestazioni', GaugeIcon], ['seg', 'Dove guadagno', BarChart3], ['moves', 'Movimenti', Radar], ['margins', 'Margini', Scale], ['streaks', 'Serie', TrendingDown]];
 const VERDICT: Record<string, [string, string]> = {
   nessuna: ['Ancora nessun dato', 'Il registro si riempie da solo con le proposte del Tipster.'],
   presto: ['Troppo presto per dirlo', 'Servono almeno 20 giocate misurate col CLV (o 30 chiuse): prima di allora qualsiasi risultato può essere fortuna.'],
@@ -27,13 +28,41 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord }: { e
   useEffect(() => { setD(null); setErr(''); fetch('/api/scanner?view=tipster-center' + (src === 'mie' ? '&source=mie' : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [src]);
   const cap = limitsOn ? stakeBps / 10000 : 0.02;
   const stakeOf = (units: number) => units > 0 ? Math.max(100, Math.floor(equityCents * Math.min(units / 100, cap) / 50) * 50) : 0;
-  return <div className="page tc-page">
-    <div className="page-head"><div><p className="eyebrow">COME RAGIONA UN PROFESSIONISTA</p><h1><Activity className="h1-icon" />Centro Tipster</h1>
-      <p>Ogni 3 ore, con la scansione delle quote, QUORUM rifà il controllo completo: valore, movimenti del mercato, quote fresche, assenze, storico. Ti propone solo le giocate che passano la checklist, con la puntata in unità.</p></div></div>
+  const p = d?.performance, opps = d?.opportunities?.list ?? [], nA = opps.filter((o: any) => o.grade === 'A').length, nB = opps.filter((o: any) => o.grade === 'B').length;
+  const steam = (d?.moves ?? []).filter((m: any) => m.kind === 'steam').length;
+  const bestBook = d?.margins?.books?.length ? d.margins.books.map((b: string) => [b, d.margins.table[0].avg[b]] as [string, number | null]).filter((x: any) => x[1] !== null).sort((a: any, b: any) => a[1] - b[1])[0] : null;
+  const tone = !p || p.clv === null ? 'amber' : p.clv >= 0 ? 'lime' : 'red';
+  const ticker = (d?.moves ?? []).slice(0, 24).map((m: any) => ({ k: m.fixtureId + m.market, tone: m.kind === 'steam' ? 'up' as const : 'down' as const, text: m.fixture + ' · ' + m.label + ' ' + pp(m.dOpen) + (m.it ? ' · ' + m.it.odds.toFixed(2) + ' ' + m.it.book : '') }));
+  return <div className="page tc-page tc-dark">
+    <section className="tcx-hero">
+      <MatrixRain />
+      <i className="tcx-scan" aria-hidden="true" /><i className="tcx-grid" aria-hidden="true" />
+      <div className="tcx-hero-in">
+        <div className="tcx-intro">
+          <p className="tcx-eyebrow"><i className="tcx-live" />QUORUM · LA MENTE DEL TIPSTER</p>
+          <h1>Centro Tipster</h1>
+          <p>Ogni 3 ore QUORUM entra nel mercato: legge {d ? d.opportunities.compared : '…'} quote italiane, segue Pinnacle, scarta le quote vecchie e ti lascia solo quello che un professionista giocherebbe.</p>
+          <div className="tc-src"><button className={src === 'metodo' ? 'on' : ''} onClick={() => setSrc('metodo')}>Metodo QUORUM</button><button className={src === 'mie' ? 'on' : ''} onClick={() => setSrc('mie')}>Le mie giocate</button></div>
+          <Countdown />
+          {d && <small className="tcx-last">Ultimo controllo {d.run?.finished_at ? when(d.run.finished_at) : when(d.at)}</small>}
+        </div>
+        <Core label="CLV medio" value={p ? sg(p.clv) : '…'} sub={p ? (VERDICT[p.verdict] ?? VERDICT.nessuna)[0] : 'Avvio del controllo'} tone={tone} orbit={nA + nB} />
+        <div className="tcx-tiles">
+          <Tilt className="tcx-tile t-lime"><span>Opportunità</span><strong>{d ? <CountUp to={nA + nB} format={v => String(Math.round(v))} /> : '…'}</strong><small>{nA} voto A · {nB} voto B</small></Tilt>
+          <Tilt className={'tcx-tile ' + (p && p.units < 0 ? 't-red' : 't-lime')}><span>Unità {src === 'mie' ? 'tue' : 'metodo'}</span><strong>{p ? <CountUp to={p.units} format={v => (v >= 0 ? '+' : '') + v.toFixed(2).replace('.', ',')} /> : '…'}</strong><small>{p ? p.n + ' chiuse · ' + p.pending + ' in attesa' : ''}</small></Tilt>
+          <Tilt className="tcx-tile t-amber"><span>Steam attivi</span><strong>{d ? <CountUp to={steam} format={v => String(Math.round(v))} /> : '…'}</strong><small>Pinnacle in movimento</small></Tilt>
+          <Tilt className="tcx-tile t-ice"><span>Bookmaker più generoso</span><strong>{bestBook ? percent(bestBook[1] as number, 1) : '—'}</strong><small>{bestBook ? (bestBook[0] === 'Lottomatica' ? 'Lottomatica / Planetwin' : bestBook[0]) + ' · margine 1X2' : 'in attesa delle quote'}</small></Tilt>
+        </div>
+      </div>
+      <Ticker items={ticker} />
+    </section>
+    {p && <div className="tcx-row">
+      <Tilt className="tcx-panel" max={6}><Gauge v={p.tClv === null ? 0 : Math.max(0, Math.min(1, p.tClv / 3))} label="Forza del segnale" value={p.tClv === null ? '—' : p.tClv.toFixed(1).replace('.', ',')} sub="sopra 2 = non è fortuna" /></Tilt>
+      <Tilt className="tcx-panel wide" max={4}><div className="tcx-panel-head"><span>Curva delle unità</span><b className={cls(p.units)}>{(p.units >= 0 ? '+' : '') + p.units.toFixed(2).replace('.', ',')} u</b></div><Curve points={p.curve ?? []} /></Tilt>
+      <Tilt className="tcx-panel" max={6}><Gauge v={p.clvBeat ?? 0} label="Battono la chiusura" value={p.clvBeat === null ? '—' : percent(p.clvBeat, 0)} sub={p.clvN + ' giocate misurate'} /></Tilt>
+    </div>}
     <div className="tc-bar">
-      <div className="tc-src"><button className={src === 'metodo' ? 'on' : ''} onClick={() => setSrc('metodo')}>Metodo QUORUM</button><button className={src === 'mie' ? 'on' : ''} onClick={() => setSrc('mie')}>Le mie giocate</button></div>
-      {d && <small>Ultimo controllo {d.run?.finished_at ? when(d.run.finished_at) : when(d.at)} · il prossimo entro 3 ore</small>}
-      <button className="info-toggle" onClick={() => setHelp(!help)}><Info size={15} />{help ? 'Chiudi' : 'Come si usa'}</button>
+      <button className="info-toggle" onClick={() => setHelp(!help)}><Info size={15} />{help ? 'Chiudi' : 'Come si usa il Centro Tipster'}</button>
     </div>
     {help && <div className="rec-info"><ul>
       <li><b>Opportunità</b>: le giocate del momento con la checklist del tipster. <b>A</b> = passa tutti i controlli, puntata piena; <b>B</b> = un controllo non critico manca, mezza puntata; <b>C</b> = da non giocare (lì per trasparenza).</li>
@@ -63,7 +92,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord }: { e
         </section>}
 
         {tab === 'perf' && (() => { const p = d.performance, v = VERDICT[p.verdict] ?? VERDICT.nessuna; return <section>
-          <div className={'tc-verdict v-' + p.verdict}><Gauge size={22} /><div><strong>{v[0]}</strong><p>{v[1]}{p.needed ? ' Con questo CLV servono ancora circa ' + p.needed + ' giocate per averne la certezza statistica.' : ''}</p></div></div>
+          <div className={'tc-verdict v-' + p.verdict}><GaugeIcon size={22} /><div><strong>{v[0]}</strong><p>{v[1]}{p.needed ? ' Con questo CLV servono ancora circa ' + p.needed + ' giocate per averne la certezza statistica.' : ''}</p></div></div>
           <div className="tc-kpis">
             <div><span>Giocate chiuse</span><b>{p.n}</b><small>{p.pending} in attesa</small></div>
             <div><span>Vinte</span><b>{p.won}</b><small>attese {p.expected.toFixed(1).replace('.', ',')} secondo le probabilità</small></div>
