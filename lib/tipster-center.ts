@@ -86,7 +86,8 @@ export function movements(now: Row[], open: Map<string, { at: string; markets: R
     }
   }
   // Steam first (the most useful: the Italian price may still be the old one), biggest moves first.
-  return out.sort((a, b) => (a.kind === b.kind ? Math.abs(b.dOpen) - Math.abs(a.dOpen) : a.kind === 'steam' ? -1 : 1)).slice(0, 40);
+  const by = (k: string) => out.filter(m => m.kind === k).sort((a, b) => Math.abs(b.dOpen) - Math.abs(a.dOpen));
+  return [...by('steam').slice(0, 30), ...by('drift').slice(0, 12)];
 }
 
 // ---- 4. Bookmaker margins ----
