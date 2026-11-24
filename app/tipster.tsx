@@ -14,21 +14,61 @@ type Data = { compared?: number; matches?: number; near?: Near[]; days?: { day: 
 const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const OURS = ['I1', 'E0', 'SP1', 'D1', 'F1', 'I2', 'E1'];
 
+// Explanation of the record, the CLV and the study behind the method. Figures of the study: lib/league-study-data.ts
+// (football-data.co.uk, 2022/23–2025/26), aggregated on QUORUM's 7 leagues.
+function RecordInfo({ study }: { study: Study[] }) {
+  const ours = study.filter(s => OURS.includes(s.code));
+  const sum = (f: (s: Study) => number) => ours.reduce((a, s) => a + f(s), 0);
+  const nS = sum(s => s.single[0]), roiS = nS ? sum(s => s.single[0] * s.single[1]) / nS : 0;
+  const nH = sum(s => s.shop[0]), roiH = nH ? sum(s => s.shop[0] * s.shop[1]) / nH : 0;
+  const wC = ours.filter(s => s.clv !== null), clv = wC.length ? wC.reduce((a, s) => a + (s.clv as number) * s.single[0], 0) / Math.max(1, wC.reduce((a, s) => a + s.single[0], 0)) : 0;
+  const posC = wC.filter(s => (s.clv as number) > 0).length, matches = sum(s => s.matches);
+  const sg = (x: number, d = 1) => (x >= 0 ? '+' : '') + (x * 100).toFixed(d).replace('.', ',') + '%';
+  return <div className="rec-info">
+    <h4>I due riquadri: Singole e Doppie</h4>
+    <ul>
+      <li><b>Singole</b> = le giocate su <b>un solo evento</b> proposte dal Tipster (es. “Over 2,5” a 2,10 su Lottomatica).</li>
+      <li><b>Doppie</b> = <b>due eventi</b> di partite diverse nella stessa schedina: si vince solo se escono entrambi. La quota si moltiplica (2,00 × 1,90 = 3,80), ma anche il margine del bookmaker: per questo il Tipster si ferma a due.</li>
+      <li>Ogni riquadro conta solo le sue giocate. Ogni proposta viene salvata <b>prima della partita</b>, con la quota di quel momento, e chiusa da sola col risultato vero: niente si può aggiustare dopo.</li>
+    </ul>
+    <h4>Come si calcolano i tre numeri</h4>
+    <ul>
+      <li><b>Vinte</b> = giocate vinte ÷ giocate chiuse (le rimborsate non contano).</li>
+      <li><b>Rendimento</b> = quanto guadagni per ogni euro giocato, puntando 1 € su ogni proposta alla quota registrata. Esempio: 10 giocate, 6 vinte a 2,00 → incassi 12 €, giochi 10 € → <b>+20%</b>.</li>
+      <li><b>CLV</b> (Closing Line Value, “valore sulla quota di chiusura”) = <b>probabilità vera al calcio d’inizio × quota presa − 1</b>. La probabilità vera di chiusura è la quota di Pinnacle senza margine all’ultima scansione prima della partita (se Pinnacle manca, la media del mercato). Esempio: prendi 2,10; al fischio d’inizio Pinnacle dice che l’evento ha il 50% → 0,50 × 2,10 − 1 = <b>+5%</b>. Hai comprato un biglietto che vale 2,00 a 2,10. Per le doppie: le due probabilità di chiusura moltiplicate × quota della doppia − 1. Tra parentesi c’è quante giocate sono già state misurate.</li>
+    </ul>
+    <h4>Perché il CLV conta più del rendimento</h4>
+    <ul>
+      <li>Il rendimento dipende dalla fortuna dei risultati. A quota 2,00, dopo 50 giocate può oscillare di circa <b>±28%</b> anche con un metodo perfettamente neutro; servono centinaia di giocate per capire se è bravura.</li>
+      <li>Il CLV non guarda il risultato: guarda il <b>prezzo</b>. La quota di chiusura di Pinnacle è la stima più precisa che esista (ci scommettono i professionisti con limiti altissimi). Chi la batte con regolarità guadagna nel lungo periodo: è il primo numero che controllano i tipster professionisti e le stesse case di scommesse, che limitano proprio i conti con CLV positivo.</li>
+      <li>Regola pratica: <b>CLV positivo su 50–100 giocate</b> = il metodo trova quote sbagliate davvero. CLV negativo = stai pagando troppo, anche se per ora vinci.</li>
+    </ul>
+    <h4>Perché questa sezione ha valore: il backtest</h4>
+    <ul>
+      <li>Abbiamo rigiocato <b>4 stagioni (2022/23–2025/26)</b> dei nostri 7 campionati, <b>{matches.toLocaleString('it-IT')} partite</b>, con le quote vere di allora (football-data.co.uk). Al posto dei bookmaker italiani (di cui non esiste uno storico pubblico) abbiamo usato Bet365, un bookmaker “morbido” con margine di circa 5,5% sull’1X2, simile o un po’ più basso di quello italiano.</li>
+      <li><b>Bet365 almeno 2% sopra la quota giusta di Pinnacle</b>: {nS} giocate, rendimento <b>{sg(roiS)}</b> e CLV medio <b>{sg(clv)}</b>, positivo in {posC} campionati su {wC.length}. Tradotto: anche un bookmaker “morbido” ogni tanto sbaglia prezzo, e quei prezzi battono la chiusura.</li>
+      <li><b>La quota migliore tra tutti i bookmaker</b>, almeno 3% sopra la giusta: {nH.toLocaleString('it-IT')} giocate, rendimento <b>{sg(roiH)}</b>. È il motivo per cui il Tipster confronta 4 bookmaker italiani e ti dice dove giocare: più bookmaker confronti, più quote sbagliate trovi.</li>
+      <li>Lo stesso studio dice anche dove <b>non</b> giocare: giocando sempre gli esiti più probabili, senza guardare il prezzo, si perde (nel backtest delle coppe −3% a quota mediana). Senza quota sbagliata non c’è vantaggio.</li>
+      <li><b>Onestà</b>: Bet365 non è Lottomatica, il campione delle singole è piccolo e la “quota migliore” storica è ottimistica (non sempre giocabile). Per questo il numero che conta è il <b>registro reale</b> qui sotto, che si riempie da solo giorno dopo giorno. La tabella completa dello studio è più in basso.</li>
+    </ul>
+  </div>;
+}
+
 function RecordCard({ title, r }: { title: string; r?: Rec }) {
   if (!r || (!r.n && !r.pending)) return <article className="tip-rec"><b>{title}</b><p>Ancora nessuna giocata registrata: QUORUM le registra da solo da oggi.</p></article>;
   return <article className="tip-rec">
     <b>{title}</b>
     <div className="tip-rec-nums">
       <div><em>{r.n ? Math.round(r.won / r.n * 100) + '%' : '—'}</em><small>vinte ({r.won}/{r.n})</small></div>
-      <div><em className={r.roi === null ? '' : r.roi >= 0 ? 'pos' : 'neg'}>{r.roi === null ? '—' : (r.roi >= 0 ? '+' : '') + Math.round(r.roi * 100) + '%'}</em><small>rendimento</small></div>
-      <div><em className={r.clv === null ? '' : r.clv >= 0 ? 'pos' : 'neg'}>{r.clv === null ? '—' : (r.clv >= 0 ? '+' : '') + (r.clv * 100).toFixed(1) + '%'}</em><small>CLV ({r.clvN})</small></div>
+      <div><em className={r.roi === null ? '' : r.roi >= 0 ? 'pos' : 'neg'}>{r.roi === null ? '—' : (r.roi >= 0 ? '+' : '') + Math.round(r.roi * 100) + '%'}</em><small>rendimento a 1 € per giocata</small></div>
+      <div><em className={r.clv === null ? '' : r.clv >= 0 ? 'pos' : 'neg'}>{r.clv === null ? '—' : (r.clv >= 0 ? '+' : '') + (r.clv * 100).toFixed(1) + '%'}</em><small>CLV · {r.clvN} misurate</small></div>
     </div>
-    <p>{r.pending} in attesa del risultato. {r.n < 100 ? 'Servono almeno 100 giocate chiuse perché il rendimento dica qualcosa: il CLV è affidabile molto prima.' : ''}</p>
+    <p>{r.pending} in attesa del risultato. {r.n < 100 ? 'Servono almeno 100 giocate chiuse perché il rendimento dica qualcosa: il CLV è affidabile molto prima (50–100).' : ''}</p>
   </article>;
 }
 
 export function TipsterView({ equityCents, onRecord }: { equityCents: number; onRecord?: RecordPlay }) {
-  const [d, setD] = useState<Data | null>(null), [err, setErr] = useState('');
+  const [d, setD] = useState<Data | null>(null), [err, setErr] = useState(''), [info, setInfo] = useState(false);
   const dayF = useDay('tipster');
   useEffect(() => { if (!dayF.ready) return; setD(null); fetch('/api/scanner?view=tipster' + (dayF.day ? '&day=' + dayF.day : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [dayF.ready, dayF.day]);
   const [days, setDays] = useState<{ day: string; n: number }[] | undefined>(undefined);
@@ -49,6 +89,8 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
       : <>
         <h3 className="day-title">📒 Il registro reale del metodo</h3>
         <p className="small-note">Ogni proposta viene registrata con la quota del momento e chiusa col risultato vero. Il <b>CLV</b> dice di quanto la quota presa batte la probabilità vera al calcio d’inizio: è il numero che i professionisti guardano per capire se hanno un vantaggio, perché si stabilizza dopo poche decine di giocate.</p>
+        <button className={'info-toggle' + (info ? ' on' : '')} onClick={() => setInfo(!info)} aria-expanded={info}><Info size={16} />{info ? 'Chiudi la spiegazione' : 'Cos’è il CLV, come si calcolano i numeri e perché il Tipster ha valore'}</button>
+        {info && <RecordInfo study={d.study} />}
         <div className="tip-rec-grid"><RecordCard title="Singole" r={d.record['tipster-singola']} /><RecordCard title="Doppie" r={d.record['tipster-doppia']} /></div>
 
         <h3 className="day-title">🎯 Singole di valore</h3>

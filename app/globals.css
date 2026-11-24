@@ -940,3 +940,8 @@ body{background:#eef3ee}
 .mm-custom .mm-facts{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));column-gap:16px}
 details.mm-sim summary{cursor:pointer;list-style:none}details.mm-sim summary::-webkit-details-marker{display:none}
 details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm-sim[open] summary strong:after{content:' ▴'}
+.info-toggle{display:inline-flex;align-items:center;gap:8px;margin:4px 0 12px;padding:9px 14px;border-radius:999px;background:#eef7e6;border:1px solid #b9d79a;box-shadow:0 3px 0 #cfe3bc;font-weight:800;font-size:13.5px;color:#0f6b46;text-align:left}
+.info-toggle.on{background:#0f6b46;color:#fff;border-color:#0b5236;box-shadow:0 3px 0 #073d27}
+.rec-info{background:#fff;border:1.5px solid #b9d79a;border-radius:16px;padding:16px 18px;margin:0 0 14px;display:grid;gap:6px}
+.rec-info h4{margin:8px 0 2px;font-size:15px;color:#0f3b27}.rec-info h4:first-child{margin-top:0}
+.rec-info ul{margin:0;padding-left:18px;display:grid;gap:6px}.rec-info li{font-size:13.5px;line-height:1.6;color:#2f4a3a}

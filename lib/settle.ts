@@ -245,7 +245,12 @@ export async function tipsterRecord() {
     if (r.result === null || r.result === undefined) { s.pending++; continue; }
     if (r.result === 'void') continue;
     s.n++; if (r.result === 'won') { s.won++; s.profit += r.odds - 1; } else s.profit -= 1;
-    if (legs.length === 1 && Date.parse(legs[0].kickoff) < Date.now()) { const pc = await closeP(legs[0].fixtureId, legs[0].market); if (pc) { s.clv += pc * legs[0].odds - 1; s.clvN++; } }
+    // CLV: true probability at kickoff (Pinnacle without margin, last scan before the match) × price taken − 1.
+    // Doubles: product of the two closing probabilities × price of the double − 1.
+    if (legs.every((l: any) => Date.parse(l.kickoff) < Date.now())) {
+      let pc: number | null = 1; for (const l of legs) { const x = await closeP(l.fixtureId, l.market); if (!x) { pc = null; break; } pc *= x; }
+      if (pc) { s.clv += pc * r.odds - 1; s.clvN++; }
+    }
   }
   return Object.fromEntries(Object.entries(out).map(([k, s]) => [k, { n: s.n, won: s.won, roi: s.n ? s.profit / s.n : null, clv: s.clvN ? s.clv / s.clvN : null, clvN: s.clvN, pending: s.pending, recent: s.recent }]));
 }
