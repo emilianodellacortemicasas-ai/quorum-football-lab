@@ -177,6 +177,8 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     // Save today's tickets and settle finished matches. Failures here never invalidate the scan.
     try { const lp = (await latestPredictions()).matches; await recordTickets(buildTickets(lp)); await recordRows(tipsterTickets(tipsterPicks(lp))); } catch { /* recorded on next scan */ }
     try { await settleAll(); } catch { /* retried on next scan */ }
+    // Centro Tipster: movements, opportunities and checklist recomputed on the new prices.
+    try { await (await import('./tipster-center-job')).refreshCenter(); } catch { /* rebuilt on the next request */ }
     return { id, fixtures: upcoming.length, matched: paired.length, modelled: modelledCount, picks };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Scansione non riuscita.';
