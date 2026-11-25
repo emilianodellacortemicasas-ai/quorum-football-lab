@@ -260,10 +260,14 @@ function ComboMaker({ matches, pick, setPick, onAdd }: { matches: Match[]; pick:
     <p className="small-note">Scegli una partita e almeno due condizioni: esito o doppia chance, Under / Over, Goal / No Goal, Multigol, Under / Over del 1° tempo, fino a due marcatori. QUORUM ti dice se la combo si gioca su Lottomatica / Planetwin365. QUORUM calcola la probabilità che si avverino <b>tutte insieme</b> e la quota equa. Poi scrivi la quota che vedi sul tuo bookmaker e aggiungila alla schedina.</p>
     <label className="cm-match"><span>Partita</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="">Scegli la partita…</option>{list.map(x => <option key={x.fixtureId} value={x.fixtureId}>{x.fixture} · {when(x.kickoff)}</option>)}</select></label>
     {m && <>
+      <div className="cm-quick"><small>Le più giocate, con un tocco:</small>{[['1', 'Over 1,5'], ['1X', 'Over 1,5'], ['X2', 'Over 1,5'], ['12', 'Over 1,5'], ['1', 'Goal'], ['2', 'Over 1,5'], ['1X', 'Under 3,5'], ['X2', 'Under 3,5'], ['1', 'Multigol 2-4'], ['12', 'Over 2,5']].map(([r, g]) => <button key={r + g} type="button" className={res === r && goal === g && !ht ? 'on' : ''} onClick={() => { setRes(r); setGoal(g); setHt(''); }}>{r} + {g}</button>)}</div>
       <div className="cm-grid">
         <label><span>Esito / doppia chance</span>{sel(res, setRes, RESULT_PARTS.map(r => [r, ({ '1': '1 · vince ' + home, X: 'X · pareggio', '2': '2 · vince ' + away, '1X': '1X · ' + home + ' non perde', X2: 'X2 · ' + away + ' non perde', '12': '12 · non finisce pari' } as Record<string, string>)[r]]), 'Nessuno')}</label>
-        <label><span>Gol della partita</span>{sel(goal, setGoal, GOAL_PARTS.map(g => [g, g]), 'Nessuno')}</label>
-        <label><span>Under / Over 1° tempo</span>{sel(ht, setHt, HT_OU_PARTS.map(x => [x, x]), 'Nessuno')}</label>
+        <label><span>Under / Over · Goal · Multigol <em>(partita intera)</em></span><select value={goal} onChange={e => setGoal(e.target.value)}><option value="">Nessuno</option>
+          <optgroup label="Under / Over (90 minuti)">{GOAL_PARTS.filter(g => /^(Over|Under)/.test(g)).map(g => <option key={g} value={g}>{g}</option>)}</optgroup>
+          <optgroup label="Goal / No Goal">{['Goal', 'No Goal'].map(g => <option key={g} value={g}>{g}</option>)}</optgroup>
+          <optgroup label="Multigol (90 minuti)">{GOAL_PARTS.filter(g => g.startsWith('Multigol')).map(g => <option key={g} value={g}>{g}</option>)}</optgroup></select></label>
+        <label><span>Solo 1° tempo <em>(Under / Over primi 45')</em></span>{sel(ht, setHt, HT_OU_PARTS.map(x => [x, x]), 'Nessuno')}</label>
         <label><span>Marcatore</span>{sel(s1, setS1, players.filter(pl => String(pl.id) !== s2).map(pl => [String(pl.id), pl.name + ' (' + (pl.side === 'home' ? home : away) + ') · ' + percent(pl.p, 0)]), players.length ? 'Nessuno' : 'Marcatori non disponibili')}</label>
         {s1 && <label><span>Secondo marcatore</span>{sel(s2, setS2, players.filter(pl => String(pl.id) !== s1).map(pl => [String(pl.id), pl.name + ' (' + (pl.side === 'home' ? home : away) + ') · ' + percent(pl.p, 0)]), 'Nessuno')}</label>}
       </div>
