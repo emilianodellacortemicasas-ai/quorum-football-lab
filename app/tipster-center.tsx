@@ -86,12 +86,33 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord }: { e
           {[...new Set(INFO_ORDER.map(k => INFO[k].group))].map(g => <div key={g} className="tcx-ggroup"><h4>{g}</h4>
             {INFO_ORDER.filter(k => INFO[k].group === g).map(k => <details key={k} className="tcx-gitem"><summary><span className="tcx-i static">i</span>{INFO[k].title}</summary><InfoBody id={k} /></details>)}</div>)}
         </section>}
-        {tab === 'opp' && <section>
+        {tab === 'opp' && (() => {
+          const list = d.opportunities.list, play = list.filter((o: any) => o.grade !== 'C');
+          const failed = (o: any) => o.checks.filter((c: any) => c.ok === false).map((c: any) => c.label.toLowerCase());
+          const GRADE: Record<string, [string, string, string]> = {
+            A: ['GIOCALA', 'Livello A · puntata piena', 'Ha superato tutti i controlli: valore, prezzo dei professionisti, quota fresca, mercato, modello, notizie e storico.'],
+            B: ['GIOCALA CON MEZZA PUNTATA', 'Livello B · metà della puntata', 'Valore e quota sono buoni, ma un controllo non critico non è superato'],
+            C: ['NON GIOCARE', 'Livello C · solo per trasparenza', 'Manca un controllo critico'],
+          };
+          return <section>
           <p className="small-note">Confrontate {d.opportunities.compared} quote italiane su {d.opportunities.matches} partite. Una giocata compare solo se la quota italiana batte la probabilità vera di almeno il 3%; poi passa la checklist.</p>
-          {!d.opportunities.list.length ? <div className="empty compact"><span className="empty-icon"><ListChecks /></span><h3>Nessuna opportunità in questo momento.</h3><p>È normale: un tipster gioca poco. Il prossimo controllo arriva con la scansione tra meno di 3 ore. Intanto guarda la lista “in osservazione” qui sotto.</p></div>
-            : <div className="tc-opps">{d.opportunities.list.map((o: any) => { const k = o.fixtureId + o.market, st = stakeOf(o.units); return <article key={k} className={'tc-opp g-' + o.grade}>
-              <div className="tc-opp-top"><span className={'tc-grade g-' + o.grade}>{o.grade}</span><div><small>{o.competition} · {when(o.kickoff)}</small><strong>{o.fixture}</strong></div><span className="tip-edge">{sg(o.edge)}</span>{I('opp')}</div>
-              <div className="tc-opp-pick"><b>{o.label}</b><span><em>{o.odds.toFixed(2)}</em><small>{o.bookmaker}</small></span><span><em>{o.fair.toFixed(2)}</em><small>quota giusta</small></span><span><em>{o.grade === 'C' ? '—' : o.units.toFixed(1).replace('.', ',') + ' u'}{I('units')}</em><small>{o.grade === 'C' ? 'non giocare' : money(st)}</small></span></div>
+          {play.length > 0 && <div className="tcx-alert"><span className="tcx-alert-dot" /><div><small>{play.length === 1 ? '1 GIOCATA CONSIGLIATA ORA' : play.length + ' GIOCATE CONSIGLIATE ORA'}</small>
+            {play.map((o: any) => <p key={o.fixtureId + o.market}><b className={'lv g-' + o.grade}>{o.grade}</b><span><b>{o.fixture}</b> · {o.label} a <b>{o.odds.toFixed(2)}</b> su {o.bookmaker.split(' / ')[0]} → punta al massimo <b>{money(stakeOf(o.units))}</b></span></p>)}</div></div>}
+          <div className="tcx-legend">
+            <div className="g-A"><b>A</b><span><strong>Giocala, puntata piena.</strong> Tutti i 7 controlli superati.</span></div>
+            <div className="g-B"><b>B</b><span><strong>Giocala con metà puntata.</strong> Valore buono, ma un controllo non critico manca (es. assenza pesante o modello in disaccordo): più incertezza, meno rischio.</span></div>
+            <div className="g-C"><b>C</b><span><strong>Non giocare.</strong> Manca un controllo critico: valore, quota recente o storico negativo.</span></div>
+          </div>
+          {!list.length ? <div className="empty compact"><span className="empty-icon"><ListChecks /></span><h3>Nessuna opportunità in questo momento.</h3><p>È normale: un tipster gioca poco. Il prossimo controllo arriva con la scansione tra meno di 3 ore. Intanto guarda la lista “in osservazione” qui sotto.</p></div>
+            : <div className="tc-opps">{list.map((o: any) => { const k = o.fixtureId + o.market, st = stakeOf(o.units), g = GRADE[o.grade], f = failed(o); return <article key={k} className={'tc-opp g-' + o.grade}>
+              <div className={'tcx-ribbon g-' + o.grade}><b>{o.grade}</b><div><strong>{g[0]}</strong><small>{g[1]}</small></div>{I('opp')}</div>
+              <div className="tc-opp-top"><div><small>{o.competition} · {when(o.kickoff)}</small><strong>{o.fixture}</strong></div><span className="tip-edge" title="Valore: quanto la quota paga più del giusto">valore {sg(o.edge)}</span></div>
+              <div className="tcx-pick"><span className="tcx-esito"><small>Esito da giocare</small><b>{o.label}</b></span>
+                <span><small>Quota</small><b>{o.odds.toFixed(2)}</b><em>{o.bookmaker}</em></span>
+                <span><small>Quota giusta</small><b>{o.fair.toFixed(2)}</b><em>Pinnacle senza margine</em></span></div>
+              <div className={'tcx-stake g-' + o.grade}>{o.grade === 'C' ? <><strong>Non giocare</strong><small>{f.length ? 'Non superato: ' + f.join(', ') + '.' : g[2] + '.'}</small></>
+                : <><div><small>Puntata massima</small><strong>{money(st)}</strong></div><div className="tcx-stake-u"><span>{o.units.toFixed(1).replace('.', ',')} unità {I('units')}</span><small>1 unità = 1% del tuo saldo{o.grade === 'B' ? ' · già dimezzata (livello B)' : ''}</small></div></>}</div>
+              {o.grade === 'B' && f.length > 0 && <p className="tcx-why-b">Perché B: non superato “{f.join('”, “')}”. Tocca il controllo rosso per la spiegazione.</p>}
               <ul className="tc-checks">{o.checks.map((c: any) => <li key={c.id} className={c.ok === true ? 'ok' : c.ok === false ? 'ko' : 'na'} title={c.note} role="button" tabIndex={0} onClick={() => setInfoId(CK[c.id] ?? 'opp')}><i>{c.ok === true ? <Check size={13} /> : c.ok === false ? <X size={13} /> : '?'}</i>{c.label}</li>)}</ul>
               <button className="text-button" onClick={() => setOpen(open === k ? '' : k)}>{open === k ? 'Chiudi i dettagli' : 'Perché? Vedi i dettagli dei controlli'}</button>
               {open === k && <ul className="tc-notes">{o.checks.map((c: any) => <li key={c.id}><b>{c.label}</b>: {c.note}</li>)}</ul>}
@@ -100,7 +121,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord }: { e
           {d.opportunities.watch.length > 0 && <><h3 className="day-title">👀 In osservazione {I('watch')}</h3>
             <p className="small-note">Pinnacle si sta muovendo e la quota italiana è vicina al valore (0–3%). Se il bookmaker italiano non si adegua e Pinnacle continua, diventano opportunità al prossimo controllo.</p>
             <div className="tc-table"><table><thead><tr><th>Partita</th><th>Esito</th><th>Probabilità vera</th><th>Quota italiana</th><th>Valore</th></tr></thead><tbody>{d.opportunities.watch.map((m: any) => <tr key={m.fixtureId + m.market}><td>{m.fixture}<small>{when(m.kickoff)}</small></td><td>{m.label}</td><td>{percent(m.pOpen, 0)} → <b>{percent(m.pNow, 0)}</b></td><td>{m.it ? m.it.odds.toFixed(2) + ' ' + m.it.book : '—'}</td><td className={cls(m.edge)}>{sg(m.edge)}</td></tr>)}</tbody></table></div></>}
-        </section>}
+        </section>; })()}
 
         {tab === 'perf' && (() => { const p = d.performance, v = VERDICT[p.verdict] ?? VERDICT.nessuna; return <section>
           <div className={'tc-verdict v-' + p.verdict}><GaugeIcon size={22} /><div><strong>{v[0]}</strong><p>{v[1]}{p.needed ? ' Con questo CLV servono ancora circa ' + p.needed + ' giocate per averne la certezza statistica.' : ''}</p></div></div>
