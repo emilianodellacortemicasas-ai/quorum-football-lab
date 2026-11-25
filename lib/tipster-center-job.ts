@@ -78,6 +78,6 @@ export async function storedCenter() {
   const row = await db().prepare("SELECT built_at,payload FROM model_state WHERE id='tipster-center'").first<{ built_at: string; payload: string }>().catch(() => null);
   const last = await db().prepare("SELECT finished_at FROM scanner_runs WHERE status='ok' ORDER BY started_at DESC LIMIT 1").first<{ finished_at: string }>().catch(() => null);
   // Rebuilt when a scan is newer or the saved analysis predates a new field (format version).
-  if (row && (!last || row.built_at >= last.finished_at)) { const x = JSON.parse(row.payload); if (x.performance?.curve) return x; }
+  if (row && (!last || row.built_at >= last.finished_at)) { const x = JSON.parse(row.payload); if (x.performance?.curve && x.opportunities?.doubles) return x; }
   return refreshCenter();
 }

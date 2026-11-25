@@ -137,7 +137,7 @@ export function streaks(recs: CenterRec[], paths = 2000) {
 
 // ---- 6. Opportunities with the checklist ----
 export type CheckItem = { id: string; label: string; ok: boolean | null; note: string };
-export type Opportunity = { fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; fair: number; edge: number; pTrue: number; source: string; ageH: number | null; units: number; stakeCents: number; grade: 'A' | 'B' | 'C'; checks: CheckItem[]; move: number | null };
+export type Opportunity = { all: Record<string, number>; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; odds: number; bookmaker: string; fair: number; edge: number; pTrue: number; source: string; ageH: number | null; units: number; stakeCents: number; grade: 'A' | 'B' | 'C'; checks: CheckItem[]; move: number | null };
 export function opportunities(rows: Row[], moves: Move[], seg: ReturnType<typeof segments> | null, opts: { equityCents: number; capBps: number }, t = Date.now()) {
   const picks = tipsterPicks(rows, t), out: Opportunity[] = [], byKey = new Map(moves.map(m => [m.fixtureId + ':' + m.market, m]));
   const segOf = (list: Segment[] | undefined, k: string) => list?.find(s => s.key === k) ?? null;
@@ -161,10 +161,17 @@ export function opportunities(rows: Row[], moves: Move[], seg: ReturnType<typeof
     const kel = Math.max(0, 0.25 * l.edge / (l.odds - 1)) * (grade === 'B' ? 0.5 : grade === 'C' ? 0 : 1);
     const frac = Math.min(kel, opts.capBps / 10000, 0.02), units = Math.round(frac * 100 * 10) / 10;
     const stakeCents = frac > 0 ? Math.max(100, Math.floor(opts.equityCents * frac / 50) * 50) : 0;
-    out.push({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, odds: l.odds, bookmaker: l.bookmaker, fair: 1 / l.pTrue, edge: l.edge, pTrue: l.pTrue, source: l.source, ageH: l.ageH, units, stakeCents, grade, checks, move: mv?.dOpen ?? null });
+    out.push({ all: l.all, fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, odds: l.odds, bookmaker: l.bookmaker, fair: 1 / l.pTrue, edge: l.edge, pTrue: l.pTrue, source: l.source, ageH: l.ageH, units, stakeCents, grade, checks, move: mv?.dOpen ?? null });
   }
   // Watchlist: steam with an Italian price close to value (0–3%): if the Italian book does not move, it may become value.
   const watch = moves.filter(m => m.kind === 'steam' && m.edge !== null && m.edge > -0.01 && m.edge < TIP_MIN_EDGE && !out.some(o => o.fixtureId === m.fixtureId && o.market === m.market)).slice(0, 10);
   const order = { A: 0, B: 1, C: 2 };
-  return { list: out.sort((a, b) => order[a.grade] - order[b.grade] || b.edge - a.edge), watch, compared: picks.compared, matches: picks.matches };
+  // Doubles of the method, only with legs that pass the checklist (A or B): ¼ Kelly capped at 1% (half for a B leg).
+  const ok = new Map(out.filter(o => o.grade !== 'C').map(o => [o.fixtureId + ':' + o.market, o]));
+  const doubles = picks.doubles.filter(x => x.legs.every(l => ok.has(l.fixtureId + ':' + l.market))).map(x => {
+    const legs = x.legs.map(l => ok.get(l.fixtureId + ':' + l.market)!), grade = legs.every(l => l.grade === 'A') ? 'A' : 'B';
+    const kel = Math.max(0, 0.25 * x.edge / (x.odds - 1)) * (grade === 'B' ? 0.5 : 1), frac = Math.min(kel, opts.capBps / 10000, 0.01);
+    return { legs: legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, odds: l.odds, bookmaker: l.bookmaker, pTrue: l.pTrue, grade: l.grade })), odds: x.odds, p: x.p, edge: x.edge, grade, units: Math.round(frac * 1000) / 10 };
+  });
+  return { list: out.sort((a, b) => order[a.grade] - order[b.grade] || b.edge - a.edge), doubles, watch, compared: picks.compared, matches: picks.matches };
 }

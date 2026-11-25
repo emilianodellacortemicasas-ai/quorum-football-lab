@@ -16,7 +16,7 @@ const OURS = ['I1', 'E0', 'SP1', 'D1', 'F1', 'I2', 'E1'];
 
 // Explanation of the record, the CLV and the study behind the method. Figures of the study: lib/league-study-data.ts
 // (football-data.co.uk, 2022/23–2025/26), aggregated on QUORUM's 7 leagues.
-function RecordInfo({ study }: { study: Study[] }) {
+export function RecordInfo({ study }: { study: Study[] }) {
   const ours = study.filter(s => OURS.includes(s.code));
   const sum = (f: (s: Study) => number) => ours.reduce((a, s) => a + f(s), 0);
   const nS = sum(s => s.single[0]), roiS = nS ? sum(s => s.single[0] * s.single[1]) / nS : 0;
@@ -124,15 +124,21 @@ export function TipsterView({ equityCents, onRecord }: { equityCents: number; on
 
         <h3 className="day-title">🔬 Dove i bookmaker sbagliano di più</h3>
         <p className="small-note">Studio su 4 stagioni e oltre 20.000 partite: quante volte un bookmaker “normale” (Bet365, simile ai nostri) ha pagato più della quota giusta di Pinnacle, e con che risultato. <b>CLV</b> positivo = quelle quote erano davvero sbagliate.</p>
+        <StudyTable study={d.study} />
+      </>}
+  </div>;
+}
+
+export function StudyTable({ study }: { study: Study[] }) {
+  return <>
         <div className="standings-card"><table className="standings study">
           <thead><tr><th className="t-team">Campionato</th><th>Occasioni a stagione</th><th className="hide-sm">Con più bookmaker</th><th>CLV</th><th className="hide-sm">Margine</th></tr></thead>
-          <tbody>{[...d.study].sort((a, b) => b.single[0] - a.single[0]).map(s => <tr key={s.code} className={OURS.includes(s.code) ? 'ours' : ''}>
+          <tbody>{[...study].sort((a, b) => b.single[0] - a.single[0]).map(s => <tr key={s.code} className={OURS.includes(s.code) ? 'ours' : ''}>
             <td className="t-team"><span>{s.name}</span>{OURS.includes(s.code) && <em className="ours-tag">in QUORUM</em>}</td>
             <td><b>{Math.round(s.single[0] / 4)}</b></td><td className="hide-sm">{Math.round(s.shop[0] / 4)}</td>
             <td className={s.clv === null ? '' : s.clv > 0.015 ? 'clv-pos' : s.clv < 0 ? 'clv-neg' : ''}>{s.clv === null ? '—' : (s.clv > 0 ? '+' : '') + (s.clv * 100).toFixed(1) + '%'}</td>
             <td className="hide-sm">{(s.margin * 100).toFixed(1)}%</td></tr>)}</tbody>
         </table>
           <p className="legend-zones"><span>Con un solo bookmaker le occasioni sono poche; confrontando più bookmaker diventano 3–5 volte tante. Il rendimento su poche decine di giocate è rumore: per decidere conta il CLV.</span></p></div>
-      </>}
-  </div>;
+  </>;
 }
