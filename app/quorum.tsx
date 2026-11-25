@@ -72,9 +72,10 @@ export default function Quorum(){
   // page with the ones on the server when the app comes back in view (and every 10 minutes) and reload if they changed.
   const [update,setUpdate]=useState(false);
   useEffect(()=>{
-    const mine=()=>[...document.querySelectorAll('script[src]')].map(x=>(x as HTMLScriptElement).getAttribute('src')||'').filter(x=>x.includes('/assets/')).sort().join('|');
-    const base=mine();if(!base)return;
-    const check=async()=>{try{const html=await (await fetch('/?v='+Date.now(),{cache:'no-store'})).text();const srv=[...html.matchAll(/<script[^>]+src="([^"]+\/assets\/[^"]+)"/g)].map(m=>m[1]).sort().join('|');if(srv&&srv!==base){if(document.visibilityState==='hidden')location.reload();else setUpdate(true);}}catch{}};
+    // The entry chunk (…/chunks/index-<hash>.js) changes with every build.
+    const entry=(t:string)=>(/\/_next\/static\/chunks\/index-[A-Za-z0-9_-]+\.js/.exec(t)||[''])[0];
+    const base=entry([...document.querySelectorAll('script[src]')].map(x=>(x as HTMLScriptElement).getAttribute('src')||'').join(' '));if(!base)return;
+    const check=async()=>{try{const html=await (await fetch('/?v='+Date.now(),{cache:'no-store'})).text();const srv=entry(html);if(srv&&srv!==base){if(document.visibilityState==='hidden')location.reload();else setUpdate(true);}}catch{}};
     const vis=()=>{if(document.visibilityState==='visible')check();};
     document.addEventListener('visibilitychange',vis);const t=setInterval(check,10*60000);check();
     return()=>{document.removeEventListener('visibilitychange',vis);clearInterval(t);};
