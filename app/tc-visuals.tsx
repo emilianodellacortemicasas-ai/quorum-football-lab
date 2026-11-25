@@ -70,7 +70,7 @@ export function Gauge({ v, label, value, sub }: { v: number; label: string; valu
 
 // Cumulative units curve with glow.
 export function Curve({ points }: { points: { at: string; u: number }[] }) {
-  if (points.length < 2) return <div className="tcx-curve empty"><small>La curva delle unità parte dalle prime giocate chiuse.</small></div>;
+  if (points.length < 2) return <div className="tcx-curve tcx-nodata"><small>La curva delle unità parte dalle prime giocate chiuse.</small></div>;
   const ys = [0, ...points.map(p => p.u)], min = Math.min(...ys), max = Math.max(...ys), span = max - min || 1, W = 300, H = 90;
   const pt = (u: number, i: number) => [(i / points.length) * W, H - ((u - min) / span) * (H - 10) - 5];
   const path = [[0, pt(0, 0)[1]], ...points.map((p, i) => pt(p.u, i + 1))].map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');

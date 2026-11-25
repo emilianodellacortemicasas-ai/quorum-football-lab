@@ -1041,7 +1041,7 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .tcx-gauge>div{position:absolute;bottom:2px;text-align:center;display:grid}.tcx-gauge span{font-size:11px;color:#9bb3a4}.tcx-gauge strong{font:800 26px/1 Manrope,var(--font);color:#fff!important}.tcx-gauge small{font-size:10px;color:#7f998a}
 .tcx-arc{animation:tcx-draw 1.4s cubic-bezier(.2,.8,.2,1) both;filter:drop-shadow(0 0 6px rgba(182,242,62,.5))}
 @keyframes tcx-draw{from{stroke-dashoffset:251.3}}
-.tcx-curve svg{width:100%;height:120px;display:block}.tcx-curve.empty{display:grid;place-items:center;height:120px}.tcx-curve small{color:#7f998a}
+.tcx-curve svg{width:100%;height:120px;display:block}.tcx-curve.tcx-nodata{display:grid;place-items:center;height:120px}.tcx-curve small{color:#7f998a}
 .tcx-line{stroke-dasharray:1200;animation:tcx-line 2s ease-out both;filter:drop-shadow(0 0 6px currentColor)}
 @keyframes tcx-line{from{stroke-dashoffset:1200}to{stroke-dashoffset:0}}
 /* dark re-skin of the panels below */
@@ -1075,3 +1075,5 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 @media (max-width:1100px){.tcx-hero-in{grid-template-columns:1fr;justify-items:stretch}.tcx-core{order:-1}.tcx-intro h1{font-size:36px}.tcx-row{grid-template-columns:1fr 1fr}.tcx-row .wide{grid-column:1/-1;order:-1}}
 @media (max-width:640px){.tcx-stage{--orb:92px}.tc-dark{padding:10px;border-radius:20px;margin:0 -6px 20px}.tcx-hero-in{padding:18px 14px 12px;gap:16px}.tcx-stage{width:230px;height:230px}.tcx-heart{inset:56px}.tcx-orbit b{margin:-4.5px;width:9px;height:9px}.tcx-intro h1{font-size:32px}.tcx-tile strong{font-size:24px}.tcx-row{grid-template-columns:1fr}.tcx-count strong{font-size:26px}}
 @media (prefers-reduced-motion:reduce){.tcx-grid,.tcx-scan,.tcx-stage .ring,.tcx-orbit,.tcx-heart,.tcx-track,.tcx-live,.tcx-arc,.tcx-line{animation:none!important}}
+.tcx-hero{display:flex;flex-direction:column;min-height:0}.tcx-hero .tcx-ticker{margin-top:auto}
+.tcx-row{align-items:stretch}.tcx-panel{display:flex;flex-direction:column;justify-content:center}
