@@ -33,7 +33,10 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
   // "L'ho giocata": amount and price chosen by the user (prefilled with QUORUM's suggestion).
   const [playAmt, setPlayAmt] = useState<Record<string, string>>({}), [playOdds, setPlayOdds] = useState<Record<string, string>>({}), [saved, setSaved] = useState<Record<string, boolean>>({});
   const euros = (c: number) => (c / 100).toFixed(2).replace('.', ',');
-  const playBox = ({ k, suggested, odds, p, record }: { k: string; suggested: number; odds: number; p: number; record: (stakeCents: number, odds: number) => Promise<boolean> | boolean | void }) => {
+  // Real price seen on the site: saved for everyone, the opportunity is re-graded at once.
+  const [reload, setReload] = useState(0);
+  const sendReport = async (key: string, q: number) => { try { const r = await fetch('/api/scanner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'price-report', key, odds: q }) }); if (r.ok) { notify('Quota aggiornata a ' + q.toFixed(2) + ': livello e valore ricalcolati.'); setReload(x => x + 1); } else notify('Aggiornamento della quota non riuscito.'); } catch { notify('Aggiornamento della quota non riuscito.'); } };
+  const playBox = ({ k, suggested, odds, p, record, report }: { k: string; suggested: number; odds: number; p: number; report?: string; record: (stakeCents: number, odds: number) => Promise<boolean> | boolean | void }) => {
     const amt = playAmt[k] ?? euros(suggested), cents = Math.round(Number(amt.replace(',', '.')) * 100) || 0, oddsTxt = playOdds[k] ?? odds.toFixed(2), q = Number(oddsTxt.replace(',', '.')) || 0;
     const pct = equityCents > 0 ? cents / equityCents : 0, over = limitsOn && cents > Math.max(100, Math.floor(equityCents * stakeBps / 10000));
     return <div className="tcx-play">
@@ -42,13 +45,14 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
         <div className="tcx-play-quick">{[1, 2, 3, 5].map(e => <button key={e} type="button" className={cents === e * 100 ? 'on' : ''} onClick={() => setPlayAmt({ ...playAmt, [k]: euros(e * 100) })}>{e} €</button>)}</div></div>
       {q > 1 && Math.abs(q - odds) >= 0.01 && <p className={'tcx-play-val ' + (p * q - 1 >= 0.03 ? 'ok' : p * q - 1 >= 0 ? 'mid' : 'ko')}>Con la quota {q.toFixed(2)} invece di {odds.toFixed(2)}: valore {(p * q - 1 >= 0 ? '+' : '') + ((p * q - 1) * 100).toFixed(1).replace('.', ',')}%. {p * q - 1 >= 0.03 ? 'Ha ancora valore: puoi giocarla.' : p * q - 1 >= 0 ? 'Valore quasi nullo: il vantaggio è sparito, meglio lasciar perdere.' : 'Senza valore: a questa quota il metodo NON la giocherebbe (quota giusta ' + (1 / p).toFixed(2) + ').'}</p>}
       <p className={'tcx-play-note' + (over ? ' warn' : cents > suggested ? ' hi' : '')}>{cents < 100 ? 'Minimo 1 €.' : percent(pct, 1) + ' del tuo saldo' + (cents > 0 && q > 1 ? ' · se vince incassi ' + money(Math.round(cents * q)) : '') + (over ? ' · oltre la tua regola di capitale (' + percent(stakeBps / 10000, 1) + '): QUORUM non la registra, abbassa l’importo o cambia regola nel Portafoglio.' : cents > suggested ? ' · più della puntata consigliata (' + money(suggested) + ').' : '')}</p>
-      <button className="secondary played-button" disabled={cents < 100 || !(q > 1) || saved[k]} onClick={async () => { const ok = await record(cents, q); if (ok !== false) setSaved({ ...saved, [k]: true }); }}><Check size={15} />{saved[k] ? 'Registrata' : 'L’ho giocata a ' + money(cents) + (q > 1 ? ' · quota ' + q.toFixed(2) : '')}</button>
+      {report && q > 1 && Math.abs(q - odds) >= 0.01 && <button type="button" className="text-button" onClick={() => sendReport(report, q)}>Non l’ho giocata: aggiorna solo la quota a {q.toFixed(2)}</button>}
+      <button className="secondary played-button" disabled={cents < 100 || !(q > 1) || saved[k]} onClick={async () => { const ok = await record(cents, q); if (ok !== false) { setSaved({ ...saved, [k]: true }); if (report && Math.abs(q - odds) >= 0.01) sendReport(report, q); } }}><Check size={15} />{saved[k] ? 'Registrata' : 'L’ho giocata a ' + money(cents) + (q > 1 ? ' · quota ' + q.toFixed(2) : '')}</button>
     </div>;
   };
   const [infoId, setInfoId] = useState<string | null>(null), [why, setWhy] = useState(false);
   const I = (id: string, light = false) => <button type="button" className={'tcx-i' + (light ? ' light' : '')} aria-label={'Informazioni: ' + INFO[id].title} onClick={e => { e.stopPropagation(); setInfoId(id); }}>i</button>;
   const [segTab, setSegTab] = useState('league'), [mSet, setMSet] = useState(0), [open, setOpen] = useState(''), [help, setHelp] = useState(false);
-  useEffect(() => { setD(null); setErr(''); fetch('/api/scanner?view=tipster-center' + (src === 'mie' ? '&source=mie' : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [src]);
+  useEffect(() => { setD(null); setErr(''); fetch('/api/scanner?view=tipster-center' + (src === 'mie' ? '&source=mie' : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [src, reload]);
   const cap = limitsOn ? stakeBps / 10000 : 0.02;
   const stakeOf = (units: number) => units > 0 ? Math.max(100, Math.floor(equityCents * Math.min(units / 100, cap) / 50) * 50) : 0;
   const p = d?.performance, opps = d?.opportunities?.list ?? [], nA = opps.filter((o: any) => o.grade === 'A').length, nB = opps.filter((o: any) => o.grade === 'B').length;
@@ -127,6 +131,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
           {!list.length ? <div className="empty compact"><span className="empty-icon"><ListChecks /></span><h3>Nessuna opportunità in questo momento.</h3><p>È normale: un tipster gioca poco. Il prossimo controllo arriva con la scansione tra meno di 3 ore. Intanto guarda la lista “in osservazione” qui sotto.</p></div>
             : <div className="tc-opps">{list.map((o: any) => { const k = o.fixtureId + o.market, st = stakeOf(o.units), g = GRADE[o.grade], f = failed(o); return <article key={k} className={'tc-opp g-' + o.grade}>
               <div className={'tcx-ribbon g-' + o.grade}><b>{o.grade}</b><div><strong>{g[0]}</strong><small>{g[1]}</small></div>{I('opp')}</div>
+              {o.reported && <p className="tcx-reported">Quota aggiornata alle {hm(o.reported.at)}: {o.reported.odds.toFixed(2)} (QUORUM aveva letto {o.reported.before.toFixed(2)}). Livello e valore ricalcolati.</p>}
               <div className="tc-opp-top"><div><small>{o.competition} · {when(o.kickoff)}</small><strong>{o.fixture}</strong></div><span className="tip-edge" title="Valore: quanto la quota paga più del giusto">valore {sg(o.edge)}</span></div>
               <div className="tcx-pick"><span className="tcx-esito"><small>Esito da giocare</small><b>{o.label}</b></span>
                 <span><small>Quota</small><b>{o.odds.toFixed(2)}</b><em>{o.bookmaker}</em></span>
@@ -138,7 +143,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
               <ul className="tc-checks">{o.checks.map((c: any) => <li key={c.id} className={c.ok === true ? 'ok' : c.ok === false ? 'ko' : 'na'} title={c.note} role="button" tabIndex={0} onClick={() => setInfoId(CK[c.id] ?? 'opp')}><i>{c.ok === true ? <Check size={13} /> : c.ok === false ? <X size={13} /> : '?'}</i>{c.label}</li>)}</ul>
               <button className="text-button" onClick={() => setOpen(open === k ? '' : k)}>{open === k ? 'Chiudi i dettagli' : 'Perché? Vedi i dettagli dei controlli'}</button>
               {open === k && <ul className="tc-notes">{o.checks.map((c: any) => <li key={c.id}><b>{c.label}</b>: {c.note}</li>)}</ul>}
-              {onRecord && o.grade !== 'C' && playBox({ k, suggested: st, odds: o.odds, p: o.pTrue, record: (c, q) => onRecord([{ fixtureId: o.fixtureId, fixture: o.fixture, competition: o.competition, kickoff: o.kickoff, market: o.market, label: o.label, p: o.pTrue, odds: q }], c, 'value', 'tipster-centro') })}
+              {onRecord && o.grade !== 'C' && playBox({ k, suggested: st, odds: o.odds, p: o.pTrue, report: o.fixtureId + ':' + o.market, record: (c, q) => onRecord([{ fixtureId: o.fixtureId, fixture: o.fixture, competition: o.competition, kickoff: o.kickoff, market: o.market, label: o.label, p: o.pTrue, odds: q }], c, 'value', 'tipster-centro') })}
             </article>; })}</div>}
           {(d.opportunities.doubles ?? []).length > 0 && <><h3 className="day-title">🎯 Doppie del metodo</h3>
             <p className="small-note">Due giocate di partite diverse che hanno superato la checklist, nella stessa schedina. Si vince solo se escono entrambe; la puntata è più bassa (massimo 1% del saldo) perché il rischio è più alto.</p>

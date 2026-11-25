@@ -175,3 +175,22 @@ export function opportunities(rows: Row[], moves: Move[], seg: ReturnType<typeof
   });
   return { list: out.sort((a, b) => order[a.grade] - order[b.grade] || b.edge - a.edge), doubles, watch, compared: picks.compared, matches: picks.matches };
 }
+
+// Prices reported by users when they register a bet ("I played it at 2.60"): newer than the scan, they replace the
+// Italian price of that market and the opportunity is re-graded (a stale price must not stay grade A).
+export type PriceReport = { odds: number; at: string; book?: string };
+export function applyReports<T extends { list: any[] }>(opp: T, reports: Record<string, PriceReport>, t = Date.now()): T {
+  const list = opp.list.map(o => {
+    const r = reports[o.fixtureId + ':' + o.market]; if (!r || !(r.odds > 1)) return o;
+    const readAt = o.ageH === null ? 0 : t - o.ageH * 3600000; if (Date.parse(r.at) <= readAt || Math.abs(r.odds - o.odds) < 0.01) return o;
+    const edge = o.pTrue * r.odds - 1, hhmm = new Date(r.at).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
+    const checks = o.checks.map((c: CheckItem) => c.id === 'value' ? { ...c, ok: edge >= TIP_MIN_EDGE, note: 'Quota aggiornata da un utente alle ' + hhmm + ': ' + r.odds.toFixed(2) + ' (prima ' + o.odds.toFixed(2) + '). Quota giusta ' + (1 / o.pTrue).toFixed(2) + ': ' + (edge >= 0 ? '+' : '') + (edge * 100).toFixed(1) + '%.' }
+      : c.id === 'fresh' ? { ...c, ok: true, note: 'Quota segnalata alle ' + hhmm + ' da chi l’ha appena giocata.' } : c);
+    const fails = checks.filter((c: CheckItem) => c.ok === false).map((c: CheckItem) => c.id), critical = fails.some((f: string) => ['value', 'fresh', 'history'].includes(f));
+    const grade = critical ? 'C' : fails.length === 0 ? 'A' : fails.length === 1 ? 'B' : 'C';
+    const kel = Math.max(0, 0.25 * edge / (r.odds - 1)) * (grade === 'B' ? 0.5 : grade === 'C' ? 0 : 1);
+    return { ...o, odds: r.odds, edge, grade, checks, units: Math.round(Math.min(kel, 0.02) * 1000) / 10, reported: { odds: r.odds, at: r.at, before: o.odds } };
+  });
+  const order: Record<string, number> = { A: 0, B: 1, C: 2 };
+  return { ...opp, list: list.sort((a, b) => order[a.grade] - order[b.grade] || b.edge - a.edge) };
+}

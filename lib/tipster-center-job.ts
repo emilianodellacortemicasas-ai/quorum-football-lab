@@ -2,7 +2,7 @@
 // the earlier scans, then runs the pure analysis of tipster-center.ts. Refreshed after every scan (every 3 hours).
 import { env } from 'cloudflare:workers';
 import { latestPredictions } from './scanner';
-import { margins, movements, opportunities, performance, segments, streaks, type CenterRec } from './tipster-center';
+import { applyReports, margins, movements, opportunities, performance, segments, streaks, type CenterRec, type PriceReport } from './tipster-center';
 
 const db = () => env.DB!;
 const pair: Record<string, [string, string]> = { homeDraw: ['home', 'draw'], drawAway: ['draw', 'away'], homeAway: ['home', 'away'] };
@@ -80,4 +80,22 @@ export async function storedCenter() {
   // Rebuilt when a scan is newer or the saved analysis predates a new field (format version).
   if (row && (!last || row.built_at >= last.finished_at)) { const x = JSON.parse(row.payload); if (x.performance?.curve && x.opportunities?.doubles) return x; }
   return refreshCenter();
+}
+
+// Prices reported by users (kept 3 days).
+export async function priceReports(): Promise<Record<string, PriceReport>> {
+  const row = await db().prepare("SELECT payload FROM model_state WHERE id='it-reports'").first<{ payload: string }>().catch(() => null);
+  return row ? JSON.parse(row.payload) : {};
+}
+export async function reportPrice(key: string, odds: number) {
+  if (!/^sm-\d{1,12}:[A-Za-z0-9]{2,20}$/.test(key) || !(odds > 1 && odds < 1000)) throw new Error('Segnalazione non valida.');
+  const all = await priceReports(), now = Date.now();
+  for (const [k, v] of Object.entries(all)) if (now - Date.parse(v.at) > 3 * 86400000) delete all[k];
+  all[key] = { odds: Math.round(odds * 100) / 100, at: new Date().toISOString() };
+  await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('it-reports',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(new Date().toISOString(), JSON.stringify(all)).run();
+  return true;
+}
+export async function centerWithReports(source: 'metodo' | 'mie', owner?: string) {
+  const c = source === 'mie' && owner ? await buildCenter('mie', owner) : await storedCenter();
+  return { ...c, opportunities: applyReports(c.opportunities, await priceReports()) };
 }
