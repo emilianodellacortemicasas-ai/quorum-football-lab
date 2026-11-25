@@ -156,11 +156,54 @@ export function ResultsView({ onGo, refreshKey, onShare, onRemove, onEdit, onRec
 }
 
 // "Le mie giocate e le condivise": only plays still to be settled (mine and shared). Finished ones go to Risultati.
-export function PlaysView({ onGo, refreshKey, onShare, onRemove, onEdit, onRecord, onRecordSystem, onLab }: { onEdit?: (id: string, portfolioId: string, stakeCents: number, legOdds: number[]) => Promise<boolean>; onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean>; onRecord?: RecordPlay; onRecordSystem?: RecordSystem; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void }) {
+export function PlaysView({ onGo, refreshKey, onShare, onRemove, onEdit, onRecord, onRecordSystem, onLab, onLate }: { onLate?: (legs: any[], stakeCents: number) => Promise<boolean>; onEdit?: (id: string, portfolioId: string, stakeCents: number, legOdds: number[]) => Promise<boolean>; onGo?: (v: string) => void; refreshKey?: number; onShare?: (id: string, portfolioId: string, shared: boolean) => Promise<boolean>; onRemove?: (id: string, portfolioId: string) => Promise<boolean>; onRecord?: RecordPlay; onRecordSystem?: RecordSystem; onLab?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void }) {
   const [t, setT] = useState(0), bump = <A extends any[]>(f?: (...a: A) => Promise<boolean>) => f ? async (...a: A) => { const ok = await f(...a); if (ok) setT(x => x + 1); return ok; } : undefined;
   return <>
     <div className="page-heading"><div><p className="eyebrow">IL TUO GIOCO</p><h1>Le mie giocate e le condivise<span>.</span></h1><p>Le giocate ancora da chiudere: le tue e quelle condivise dagli altri utenti. Appena finiscono le partite QUORUM le chiude e le trovi in Risultati.</p></div>{onGo && <button className="secondary" onClick={() => onGo('results')}>Vai ai risultati</button>}</div>
+    {onLate && <LatePlay onSave={async (legs, c) => { const ok = await onLate(legs, c); if (ok) setT(x => x + 1); return ok; }} />}
     <MyPlays mode="open" onGo={onGo} refreshKey={(refreshKey ?? 0) + t * 1000} onShare={bump(onShare)} onRemove={bump(onRemove)} onEdit={bump(onEdit)} />
     <SharedPlays mode="open" onGo={onGo} onLab={onLab} refreshKey={(refreshKey ?? 0) + t * 1000} onRecord={bump(onRecord)} onRecordSystem={bump(onRecordSystem)} />
   </>;
+}
+
+// "Registra una giocata già fatta": a bet placed on the bookmaker (also on matches already started, up to 150 minutes
+// after kickoff). Probabilities are taken by the server from QUORUM's last scan before each match.
+const ROME = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+const RES: [string, string][] = [['1', '1'], ['X', 'X'], ['2', '2'], ['1X', '1X'], ['X2', 'X2'], ['12', '12']];
+const GOALS = ['Over 0,5', 'Over 1,5', 'Over 2,5', 'Over 3,5', 'Under 1,5', 'Under 2,5', 'Under 3,5', 'Under 4,5', 'Goal', 'No Goal', 'Multigol 1-2', 'Multigol 1-3', 'Multigol 1-4', 'Multigol 2-3', 'Multigol 2-4', 'Multigol 2-5', 'Multigol 3-5', 'Multigol 0-2'];
+const HT = ['Over 0,5 1° tempo', 'Over 1,5 1° tempo', 'Under 0,5 1° tempo', 'Under 1,5 1° tempo'];
+const SIMPLE: Record<string, string> = { '1': 'home', 'X': 'draw', '2': 'away', '1X': 'homeDraw', 'X2': 'drawAway', '12': 'homeAway', 'Over 0,5': 'over05', 'Over 1,5': 'over15', 'Over 2,5': 'over25', 'Over 3,5': 'over35', 'Under 1,5': 'under15', 'Under 2,5': 'under25', 'Under 3,5': 'under35', 'Under 4,5': 'under45', 'Goal': 'btts', 'No Goal': 'noGoal' };
+function LatePlay({ onSave }: { onSave: (legs: any[], stakeCents: number) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false), [fx, setFx] = useState<any[] | null>(null), [fid, setFid] = useState(''), [r, setR] = useState(''), [g, setG] = useState(''), [h, setH] = useState(''), [odds, setOdds] = useState('');
+  const [legs, setLegs] = useState<any[]>([]), [stake, setStake] = useState('2'), [busy, setBusy] = useState(false), [err, setErr] = useState('');
+  useEffect(() => { if (!open || fx) return; const now = Date.now(); Promise.all([ROME(new Date(now - 3 * 3600000)), ROME(new Date(now)), ROME(new Date(now + 86400000))].filter((d, i, a) => a.indexOf(d) === i).map(d => fetch('/api/fixtures?date=' + d, { cache: 'no-store' }).then(x => x.json()).then((x: any) => x.matches || []).catch(() => [])))
+    .then(all => setFx(all.flat().filter((m: any) => Date.parse(m.kickoff) > Date.now() - 150 * 60000 && !['FT', 'AET', 'FT_PEN'].includes(m.state)).sort((a: any, b: any) => a.kickoff.localeCompare(b.kickoff)))); }, [open, fx]);
+  const m = fx?.find(x => x.id === fid), parts = [r, g, h].filter(Boolean), q = Number(odds.replace(',', '.'));
+  const market = parts.length === 1 && SIMPLE[parts[0]] ? SIMPLE[parts[0]] : parts.length === 1 && parts[0].startsWith('Multigol ') ? 'multigol:' + parts[0].slice(9) : 'combo:' + parts.join(' + ');
+  const label = parts.length > 1 ? 'Combo: ' + parts.join(' + ') : parts[0];
+  const add = () => { if (!m || !parts.length || !(q > 1)) return; setLegs([...legs.filter(l => l.fixtureId !== m.id), { fixtureId: m.id, fixture: m.home + ' – ' + m.away, competition: m.competition, kickoff: m.kickoff, market, label, p: 0.5, odds: Math.round(q * 100) / 100 }]); setFid(''); setR(''); setG(''); setH(''); setOdds(''); };
+  const tot = legs.reduce((a, l) => a * l.odds, 1), cents = Math.round(Number(stake.replace(',', '.')) * 100) || 0;
+  const hm = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  if (!open) return <button className="lime-button late-open" onClick={() => setOpen(true)}><ListPlus size={16} />Registra una giocata già fatta</button>;
+  return <section className="reliability late-play">
+    <div className="rel-head"><strong>Registra una giocata già fatta</strong><span>Per una schedina giocata sul bookmaker che non hai registrato prima: anche su partite già iniziate, fino a 2 ore e mezza dal calcio d’inizio. Scrivi le quote che hai preso; le probabilità le prende QUORUM dalla sua ultima analisi prima della partita.</span></div>
+    {!fx ? <p className="small-note">Carico le partite…</p> : <>
+      <div className="late-grid">
+        <label className="wide"><span>Partita</span><select value={fid} onChange={e => setFid(e.target.value)}><option value="">Scegli la partita…</option>{fx.map(x => <option key={x.id} value={x.id}>{x.home} – {x.away} · {hm(x.kickoff)}{Date.parse(x.kickoff) <= Date.now() ? ' · iniziata' : ''}</option>)}</select></label>
+        <label><span>Esito / doppia chance</span><select value={r} onChange={e => setR(e.target.value)}><option value="">Nessuno</option>{RES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <label><span>Gol (partita intera)</span><select value={g} onChange={e => setG(e.target.value)}><option value="">Nessuno</option>{GOALS.map(x => <option key={x}>{x}</option>)}</select></label>
+        <label><span>Solo 1° tempo</span><select value={h} onChange={e => setH(e.target.value)}><option value="">Nessuno</option>{HT.map(x => <option key={x}>{x}</option>)}</select></label>
+        <label><span>Quota presa</span><input inputMode="decimal" value={odds} onChange={e => setOdds(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="es. 1,35" /></label>
+      </div>
+      {parts.length > 0 && <p className="small-note">Esito: <b>{label}</b></p>}
+      <button className="secondary" disabled={!m || !parts.length || !(q > 1)} onClick={add}>Aggiungi alla giocata</button>
+      {legs.length > 0 && <>
+        <ul className="late-legs">{legs.map(l => <li key={l.fixtureId}><span>{l.fixture}<small>{hm(l.kickoff)}</small></span><b>{l.label}</b><i>{l.odds.toFixed(2)}</i><button onClick={() => setLegs(legs.filter(x => x !== l))} aria-label="Togli"><Trash2 size={14} /></button></li>)}</ul>
+        <div className="late-foot"><span>Quota totale <b>{tot.toFixed(2)}</b></span><label>Importo giocato (€)<input inputMode="decimal" value={stake} onChange={e => setStake(e.target.value.replace(/[^0-9.,]/g, ''))} /></label><span>Vincita potenziale <b>{money(Math.round(cents * tot))}</b></span></div>
+        {err && <p className="small-note warn">{err}</p>}
+        <button className="lime-button" disabled={busy || cents < 100} onClick={async () => { setBusy(true); setErr(''); const ok = await onSave(legs, cents); setBusy(false); if (ok) { setLegs([]); setOpen(false); } else setErr('Registrazione non riuscita: guarda il messaggio in basso.'); }}><Check size={16} />Registra la giocata ({money(cents)})</button>
+      </>}
+    </>}
+    <button className="text-button" onClick={() => setOpen(false)}>Chiudi</button>
+  </section>;
 }

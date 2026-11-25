@@ -88,7 +88,7 @@ export async function POST(request:Request) {
         // The probability of each started leg comes from QUORUM's last scan before kickoff, never from the client.
         if(t.late){
           if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now()-150*60000)))return failure('Registrazione tardiva possibile solo entro 2 ore e mezza dall’inizio.');
-          for(const l of t.legs){if(Date.parse(l.kickoff)>Date.now())continue;const pq=await closingP(l.fixtureId,l.kickoff,l.market);if(pq===null)return failure('Per '+l.fixture+' QUORUM non ha la stima prima dell’inizio: non posso registrarla.');l.p=pq;}
+          for(const l of t.legs){const pq=await closingP(l.fixtureId,l.kickoff,l.market);if(pq===null)return failure('Per '+l.fixture+' QUORUM non ha la stima prima dell’inizio: non posso registrarla.');l.p=pq;}
         }else if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now())))return failure('Una partita è già iniziata: toglila dalla schedina.');
         const existing=await db.select().from(bets).where(and(eq(bets.owner,owner),eq(bets.portfolioId,portfolioId)));
         const risk=riskCheck(p as Portfolio,existing as Bet[],t.stakeCents);if(!risk.allowed)return failure(risk.reasons.join(' '));
@@ -174,6 +174,8 @@ async function closingP(fixtureId:string,kickoff:string,market:string):Promise<n
   const sc=scoreMatrix(lh,la,mk.meta?.rho??0,{home:b[0]!,draw:b[1]!,away:b[2]!,...(u!==null?{under25:u}:{})});
   let x:number|null=null;
   if(market.startsWith('combo:'))x=customComboP(sc,market.slice(6).split(' + ').filter(q=>!q.startsWith('scorer=')));
-  else{const m=/^multigol:(\d+)-(\d+)$/.exec(market);if(m)x=multigolP(sc,Number(m[1]),Number(m[2]));}
+  else{const m=/^multigol:(\d+)-(\d+)$/.exec(market);if(m)x=multigolP(sc,Number(m[1]),Number(m[2]));
+    const REV:Record<string,string>={home:'1',draw:'X',away:'2',homeDraw:'1X',drawAway:'X2',homeAway:'12',btts:'Goal',noGoal:'No Goal'},ou=/^(over|under)(\d)(\d)$/.exec(market);
+    const part=REV[market]??(ou?(ou[1]==='over'?'Over ':'Under ')+ou[2]+','+ou[3]:null);if(x===null&&part)x=customComboP(sc,[part]);}
   return x===null?null:Math.min(0.999,Math.max(0.001,x));
 }
