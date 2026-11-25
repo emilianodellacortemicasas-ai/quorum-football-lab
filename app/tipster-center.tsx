@@ -1,6 +1,7 @@
 'use client';
 // Centro Tipster: the professional bettor's dashboard. Data refreshed after every scan (every 3 hours).
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Activity, BarChart3, Check, Gauge as GaugeIcon, Info, ListChecks, Radar, RefreshCw, Scale, TrendingDown, X } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay } from '../lib/types';
@@ -149,16 +150,16 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord }: { e
           <p className="small-note">Il confronto rigioca 2.000 volte le stesse giocate con le stesse probabilità. Esempio: con giocate al 50%, su 100 giocate una serie di 6–7 perse di fila capita quasi sempre. Non è un segnale: è matematica. Raddoppiare dopo una serie negativa è il modo più rapido per bruciare il conto.</p>
         </section>; })()}
       </>}
-    {infoId && INFO[infoId] && <div className="tcx-modal" role="dialog" aria-modal="true" onClick={() => setInfoId(null)}><div className="tcx-sheet" onClick={e => e.stopPropagation()}>
+    {infoId && INFO[infoId] && typeof document !== 'undefined' && createPortal(<div className="tcx-modal" role="dialog" aria-modal="true" onClick={() => setInfoId(null)}><div className="tcx-sheet" onClick={e => e.stopPropagation()}>
       <div className="tcx-sheet-head"><span className="tcx-i static">i</span><div><small>{INFO[infoId].group}</small><h3>{INFO[infoId].title}</h3></div><button onClick={() => setInfoId(null)} aria-label="Chiudi"><X size={18} /></button></div>
       <InfoBody id={infoId} />
       <button className="text-button" onClick={() => { setInfoId(null); setTab('guide'); }}>Apri la guida completa del pannello</button>
-    </div></div>}
-    {why && <div className="tcx-modal" role="dialog" aria-modal="true" onClick={() => setWhy(false)}><div className="tcx-sheet" onClick={e => e.stopPropagation()}>
+    </div></div>, document.body)}
+    {why && typeof document !== 'undefined' && createPortal(<div className="tcx-modal" role="dialog" aria-modal="true" onClick={() => setWhy(false)}><div className="tcx-sheet" onClick={e => e.stopPropagation()}>
       <div className="tcx-sheet-head"><span className="tcx-i static">i</span><div><small>Centro Tipster</small><h3>{WHY.title}</h3></div><button onClick={() => setWhy(false)} aria-label="Chiudi"><X size={18} /></button></div>
       {WHY.text.map((t, i) => <p key={i} className="tcx-why-p">{t}</p>)}
       <button className="text-button" onClick={() => { setWhy(false); setTab('guide'); }}>Leggi la spiegazione di ogni voce</button>
-    </div></div>}
+    </div></div>, document.body)}
   </div>;
 }
 const CK: Record<string, string> = { value: 'ckValue', sharp: 'ckSharp', fresh: 'ckFresh', move: 'ckMove', model: 'ckModel', news: 'ckNews', history: 'ckHistory' };
