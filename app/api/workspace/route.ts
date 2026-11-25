@@ -82,13 +82,18 @@ export async function POST(request:Request) {
       } else if(body.action==='ticket'){
         // A play chosen by the user (from Costruisci, Schedine or Valore): 1–30 legs on different matches, not started.
         const leg=z.object({fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(120),label:z.string().min(1).max(160),p:z.number().min(0.001).max(0.999),odds:z.number().min(1.01).max(1000)}).strict();
-        const t=z.object({legs:z.array(leg).min(1).max(30),stakeCents:z.number().int().min(100).max(100000000),source:z.enum(['builder','value','schedina']),kind:z.string().max(40).optional(),shared:z.boolean().optional()}).parse(body);
+        const t=z.object({legs:z.array(leg).min(1).max(30),stakeCents:z.number().int().min(100).max(100000000),source:z.enum(['builder','value','schedina']),kind:z.string().max(40).optional(),shared:z.boolean().optional(),late:z.boolean().optional()}).parse(body);
         if(new Set(t.legs.map(l=>l.fixtureId)).size!==t.legs.length)return failure('Un solo esito per partita.');
-        if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now())))return failure('Una partita è già iniziata: toglila dalla schedina.');
+        // Late registration: a bet placed before kickoff and saved afterwards (within 150 minutes of the start).
+        // The probability of each started leg comes from QUORUM's last scan before kickoff, never from the client.
+        if(t.late){
+          if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now()-150*60000)))return failure('Registrazione tardiva possibile solo entro 2 ore e mezza dall’inizio.');
+          for(const l of t.legs){if(Date.parse(l.kickoff)>Date.now())continue;const pq=await closingP(l.fixtureId,l.kickoff,l.market);if(pq===null)return failure('Per '+l.fixture+' QUORUM non ha la stima prima dell’inizio: non posso registrarla.');l.p=pq;}
+        }else if(t.legs.some(l=>!(Date.parse(l.kickoff)>Date.now())))return failure('Una partita è già iniziata: toglila dalla schedina.');
         const existing=await db.select().from(bets).where(and(eq(bets.owner,owner),eq(bets.portfolioId,portfolioId)));
         const risk=riskCheck(p as Portfolio,existing as Bet[],t.stakeCents);if(!risk.allowed)return failure(risk.reasons.join(' '));
         const odds=Math.round(t.legs.reduce((s,l)=>s*l.odds,1)*1000)/1000,prob=t.legs.reduce((s,l)=>s*l.p,1),one=t.legs.length===1?t.legs[0]:null;
-        const source='mine:'+t.source+(t.kind?':'+t.kind:''),now=new Date().toISOString(),authorName=(p as any).name||'Utente';
+        const source='mine:'+t.source+(t.kind?':'+t.kind:'')+(t.late?':tardiva':''),now=new Date().toISOString(),authorName=(p as any).name||'Utente';
         statement=raw.prepare('INSERT INTO bets (id,owner,portfolio_id,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,source,model_version,snapshot,status,pnl_cents,created_at,shared,author) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?')
           .bind(crypto.randomUUID(),owner,portfolioId,one?one.fixtureId:'multi:'+crypto.randomUUID(),one?one.fixture:'Multipla · '+t.legs.length+' eventi',one?one.competition:'Multipla',one?one.market:'multi',one?one.label:t.legs.map(l=>l.label).join(' + ').slice(0,200),prob,odds,t.stakeCents,source,'quorum-v2.1',JSON.stringify({legs:t.legs,kickoff:t.legs.map(l=>l.kickoff).sort()[0]}),'pending',0,now,t.shared?1:0,authorName,portfolioId,revision);
       } else if(body.action==='system'){
@@ -156,4 +161,19 @@ export async function POST(request:Request) {
     if(e instanceof z.ZodError)return failure('Controlla importi e campi inseriti.');
     return failure(e instanceof Error&&/dati|piano|Partita|partite|modello|Fornitore|Competizione/i.test(e.message)?e.message:'Salvataggio non riuscito. Nessuna conferma ricevuta.',503);
   }
+}
+
+// Probability of a market from QUORUM's last scan before kickoff (combo markets from the score matrix).
+import { scoreMatrix, customComboP, multigolP } from '../../../lib/exact';
+async function closingP(fixtureId:string,kickoff:string,market:string):Promise<number|null>{
+  const row=await env.DB!.prepare('SELECT markets,lambda_home,lambda_away FROM scanner_matches WHERE fixture_id=? AND created_at<=? ORDER BY created_at DESC LIMIT 1').bind(fixtureId,kickoff).first<any>().catch(()=>null);
+  if(!row)return null;const mk=JSON.parse(row.markets),pb=(k:string)=>Number.isFinite(mk[k]?.pBlend)?mk[k].pBlend:null;
+  if(pb(market)!==null)return Math.min(0.999,Math.max(0.001,pb(market)!));
+  const b=[pb('home'),pb('draw'),pb('away')];if(b.some(x=>x===null))return null;
+  const lh=Number.isFinite(row.lambda_home)?row.lambda_home:1.4,la=Number.isFinite(row.lambda_away)?row.lambda_away:1.1,u=pb('under25');
+  const sc=scoreMatrix(lh,la,mk.meta?.rho??0,{home:b[0]!,draw:b[1]!,away:b[2]!,...(u!==null?{under25:u}:{})});
+  let x:number|null=null;
+  if(market.startsWith('combo:'))x=customComboP(sc,market.slice(6).split(' + ').filter(q=>!q.startsWith('scorer=')));
+  else{const m=/^multigol:(\d+)-(\d+)$/.exec(market);if(m)x=multigolP(sc,Number(m[1]),Number(m[2]));}
+  return x===null?null:Math.min(0.999,Math.max(0.001,x));
 }
