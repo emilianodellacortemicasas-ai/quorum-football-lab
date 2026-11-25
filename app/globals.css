@@ -1159,3 +1159,5 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .sc-row{grid-template-columns:30px minmax(0,1fr) 64px 38px 92px}
 .sc-play{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--lime,#d1ef9e);color:#193222;border:0;box-shadow:0 3px 0 #9fc06b}
 @media (max-width:640px){.sc-row{grid-template-columns:24px minmax(0,1fr) 50px 34px 74px}}
+.sys-amount{flex-wrap:wrap}.sys-amount .secondary.on{background:#1f5c3f;color:#fff;border-color:#1f5c3f}
+.sys-amount-note{margin:4px 0 10px}
