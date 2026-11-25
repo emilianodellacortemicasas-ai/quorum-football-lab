@@ -34,7 +34,12 @@ export const HT_MULTIGOL: [number, number][] = [[0, 1], [1, 2], [1, 3], [2, 3], 
 export const HT_PARTS = HT_MULTIGOL.map(([a, b]) => 'Multigol 1° tempo ' + a + '-' + b);
 // Half-time goals: each goal of the match falls in the first half with probability HT_SHARE (≈ 45% in the top leagues).
 export const HT_SHARE = 0.45;
-export const htRange = (part: string): [number, number] | null => { const m = /^Multigol 1° tempo (\d+)-(\d+)$/.exec(part); return m ? [Number(m[1]), Number(m[2])] : null; };
+export const htRange = (part: string): [number, number] | null => {
+  let m = /^Multigol 1° tempo (\d+)-(\d+)$/.exec(part); if (m) return [Number(m[1]), Number(m[2])];
+  m = /^(Over|Under) (\d+),5 1° tempo$/.exec(part); if (m) { const l = Number(m[2]); return m[1] === 'Over' ? [l + 1, 99] : [0, l]; }
+  return null;
+};
+export const HT_OU_PARTS = ['Over 0,5 1° tempo', 'Over 1,5 1° tempo', 'Under 0,5 1° tempo', 'Under 1,5 1° tempo'];
 const binom = (n: number, k: number) => { let c = 1; for (let i = 1; i <= k; i++) c = c * (n - k + i) / i; return c; };
 // Probability that a part happens given the final score (0/1, or binomial for half-time parts).
 export function partProb(part: string, s: { home: number; away: number }): number | null {
@@ -57,7 +62,24 @@ export function partTest(part: string): ((s: { home: number; away: number }) => 
   return null;
 }
 // Ready-made combos: every result / double chance with every goals part, plus Goal + Over 2,5 and No Goal + Under 2,5.
-export const COMBOS: [string, string][] = RESULT_PARTS.flatMap(r => [...GOAL_PARTS, ...TEAM_MG_PARTS, ...HT_PARTS].map(g => [r, g] as [string, string]));
+// Ready-made combos: only the families the Italian books (Lottomatica / Planetwin365) list as Combo markets:
+// 1X2 + Under/Over · 1X2 + Goal/No Goal · 1X2 + Multigol · Doppia chance + Under/Over · Doppia chance + Goal/No Goal
+// · Doppia chance + Under/Over 1° tempo · Over 2,5 + Goal/No Goal.
+const OU_PARTS = ['Over 1,5', 'Over 2,5', 'Over 3,5', 'Under 1,5', 'Under 2,5', 'Under 3,5', 'Under 4,5'];
+const MG_PARTS = MULTIGOL.map(([a, b]) => 'Multigol ' + a + '-' + b);
+export const COMBOS: [string, string][] = [
+  ...['1', 'X', '2'].flatMap(r => [...OU_PARTS, 'Goal', 'No Goal', ...MG_PARTS].map(g => [r, g] as [string, string])),
+  ...['1X', 'X2', '12'].flatMap(r => [...OU_PARTS, 'Goal', 'No Goal', ...HT_OU_PARTS].map(g => [r, g] as [string, string])),
+];
+// Can a custom combo be played on Lottomatica / Planetwin365? 'combo' = ready Combo market; 'super' = only with the
+// Super Combo bet builder (main matches: result, goals, Goal/No Goal, scorers); null = not offered.
+export function comboAvailability(parts: string[], scorers = 0): 'combo' | 'super' | null {
+  const ps = [...parts].sort((a, b) => (R[a] ? 0 : 1) - (R[b] ? 0 : 1)), name = ps.join(' + ');
+  if (!scorers && ps.length === 2 && (COMBOS.some(([r, g]) => r + ' + ' + g === name) || goalCombos.some(([n]) => n === name || n.split(' + ').reverse().join(' + ') === name))) return 'combo';
+  const superOk = (p: string) => ['1', 'X', '2'].includes(p) || /^(Over|Under) \d,5$/.test(p) || p === 'Goal' || p === 'No Goal';
+  if (ps.every(superOk) && ps.filter(p => R[p]).length <= 1 && ps.filter(p => /^(Over|Under)/.test(p)).length <= 1 && ps.filter(p => /Goal/.test(p)).length <= 1) return 'super';
+  return null;
+}
 export const goalCombos: [string, (s: Sc) => boolean][] = [['Goal + Over 2,5', s => s.home > 0 && s.away > 0 && s.home + s.away >= 3], ['No Goal + Under 2,5', s => (s.home === 0 || s.away === 0) && s.home + s.away <= 2]];
 export function comboProbs(sc: Sc[]) {
   const out: { name: string; p: number }[] = [];

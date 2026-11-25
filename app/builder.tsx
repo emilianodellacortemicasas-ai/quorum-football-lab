@@ -8,7 +8,7 @@ import { analyzeMatch, marketLabel, money, percent } from '../lib/math';
 import { ticketReliability } from '../lib/calibration';
 import type { RecordPlay, Selection } from '../lib/types';
 import { Count, Ring } from './motion';
-import { exactPicks, MULTIGOL, multigolP, scoreMatrix, comboSlot, customComboP, scorerShare, RESULT_PARTS, GOAL_PARTS, TEAM_MULTIGOL, HT_PARTS } from '../lib/exact';
+import { exactPicks, MULTIGOL, multigolP, scoreMatrix, comboSlot, customComboP, scorerShare, RESULT_PARTS, GOAL_PARTS, HT_OU_PARTS, comboAvailability } from '../lib/exact';
 
 export type Opt = { fair?: boolean; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
 export type Player = { id: number; name: string; side: 'home' | 'away'; p: number };
@@ -242,32 +242,28 @@ export function LabPicker({ onAdd, taken }: { onAdd: (s: Selection) => void; tak
 function ComboMaker({ matches, pick, setPick, onAdd }: { matches: Match[]; pick: string; setPick: (id: string) => void; onAdd: (o: Opt) => void }) {
   const list = matches.filter(m => m.sc && Date.parse(m.kickoff) > Date.now()).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   const m = list.find(x => x.fixtureId === pick) ?? null;
-  const [res, setRes] = useState(''), [goal, setGoal] = useState(''), [team, setTeam] = useState(''), [tmg, setTmg] = useState(''), [ht, setHt] = useState(''), [s1, setS1] = useState(''), [s2, setS2] = useState(''), [odds, setOdds] = useState('');
-  useEffect(() => { setRes(''); setGoal(''); setTeam(''); setTmg(''); setHt(''); setS1(''); setS2(''); setOdds(''); }, [pick]);
+  const [res, setRes] = useState(''), [goal, setGoal] = useState(''), [ht, setHt] = useState(''), [s1, setS1] = useState(''), [s2, setS2] = useState(''), [odds, setOdds] = useState('');
+  useEffect(() => { setRes(''); setGoal(''); setHt(''); setS1(''); setS2(''); setOdds(''); }, [pick]);
   const [home, away] = m ? m.fixture.split(' – ') : ['Casa', 'Ospite'];
-  const teamParts = [['Casa Over 0,5', home + ' segna'], ['Casa Over 1,5', home + ' segna 2+ gol'], ['Casa Under 1,5', home + ' segna al massimo 1'], ['Ospite Over 0,5', away + ' segna'], ['Ospite Over 1,5', away + ' segna 2+ gol'], ['Ospite Under 1,5', away + ' segna al massimo 1']];
-  const tmgParts: [string, string][] = (['casa', 'ospite'] as const).flatMap(t => TEAM_MULTIGOL.map(([a, b]) => ['Multigol ' + t + ' ' + a + '-' + b, 'Multigol ' + (t === 'casa' ? home : away) + ' ' + a + '-' + b] as [string, string]));
   const players = (m?.players ?? []).slice().sort((a, b) => b.p - a.p);
   const chosen = [s1, s2].filter(Boolean).map(id => players.find(p => String(p.id) === id)).filter(Boolean) as Player[];
-  const parts = [res, goal, team, tmg, ht].filter(Boolean);
+  const parts = [res, goal, ht].filter(Boolean), avail = comboAvailability(parts, chosen.length);
   const n = parts.length + chosen.length;
   const p = m?.sc && n >= 2 ? customComboP(m.sc, parts, chosen.map(pl => ({ side: pl.side, share: scorerShare(pl.p, pl.side === 'home' ? m.lh ?? 1.3 : m.la ?? 1.1) }))) : null;
   const typed = Number(odds.replace(',', '.')), fair = p ? 1 / p : 0;
-  const label = [res, goal, team ? teamParts.find(t => t[0] === team)![1] : '', tmg ? tmgParts.find(t => t[0] === tmg)![1] : '', ht, ...chosen.map(pl => 'segna ' + pl.name)].filter(Boolean).join(' + ');
+  const label = [res, goal, ht, ...chosen.map(pl => 'segna ' + pl.name)].filter(Boolean).join(' + ');
   const add = () => { if (!m || !p) return; const o = typed > 1 ? typed : Math.round(fair * 100) / 100;
     onAdd({ fixtureId: m.fixtureId, fixture: m.fixture, competition: m.competition, kickoff: m.kickoff, market: 'combo:' + [...parts, ...chosen.map(pl => 'scorer=' + pl.id)].join(' + '), label: 'Combo: ' + label, group: 'Combo', p, odds: o, bookmaker: typed > 1 ? 'la tua quota' : 'quota equa', italian: false, fair: !(typed > 1), se: Math.sqrt(p * (1 - p) / 40), value: p * o - 1 }); };
   const sel = (v: string, set: (x: string) => void, opts: [string, string][], none: string) => <select value={v} onChange={e => set(e.target.value)}><option value="">{none}</option>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>;
   return <section className="panel combo-maker" id="combo-maker">
     <h3>🧩 Costruisci la tua combo</h3>
-    <p className="small-note">Scegli una partita e almeno due condizioni: esito o doppia chance, Under / Over, Goal / No Goal, Multigol (partita, casa, ospite o 1° tempo), gol di una squadra, fino a due marcatori. QUORUM calcola la probabilità che si avverino <b>tutte insieme</b> e la quota equa. Poi scrivi la quota che vedi sul tuo bookmaker e aggiungila alla schedina.</p>
+    <p className="small-note">Scegli una partita e almeno due condizioni: esito o doppia chance, Under / Over, Goal / No Goal, Multigol, Under / Over del 1° tempo, fino a due marcatori. QUORUM ti dice se la combo si gioca su Lottomatica / Planetwin365. QUORUM calcola la probabilità che si avverino <b>tutte insieme</b> e la quota equa. Poi scrivi la quota che vedi sul tuo bookmaker e aggiungila alla schedina.</p>
     <label className="cm-match"><span>Partita</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="">Scegli la partita…</option>{list.map(x => <option key={x.fixtureId} value={x.fixtureId}>{x.fixture} · {when(x.kickoff)}</option>)}</select></label>
     {m && <>
       <div className="cm-grid">
         <label><span>Esito / doppia chance</span>{sel(res, setRes, RESULT_PARTS.map(r => [r, ({ '1': '1 · vince ' + home, X: 'X · pareggio', '2': '2 · vince ' + away, '1X': '1X · ' + home + ' non perde', X2: 'X2 · ' + away + ' non perde', '12': '12 · non finisce pari' } as Record<string, string>)[r]]), 'Nessuno')}</label>
         <label><span>Gol della partita</span>{sel(goal, setGoal, GOAL_PARTS.map(g => [g, g]), 'Nessuno')}</label>
-        <label><span>Gol di una squadra</span>{sel(team, setTeam, teamParts as [string, string][], 'Nessuno')}</label>
-        <label><span>Multigol casa / ospite</span>{sel(tmg, setTmg, tmgParts, 'Nessuno')}</label>
-        <label><span>Multigol 1° tempo</span>{sel(ht, setHt, HT_PARTS.map(x => [x, x]), 'Nessuno')}</label>
+        <label><span>Under / Over 1° tempo</span>{sel(ht, setHt, HT_OU_PARTS.map(x => [x, x]), 'Nessuno')}</label>
         <label><span>Marcatore</span>{sel(s1, setS1, players.filter(pl => String(pl.id) !== s2).map(pl => [String(pl.id), pl.name + ' (' + (pl.side === 'home' ? home : away) + ') · ' + percent(pl.p, 0)]), players.length ? 'Nessuno' : 'Marcatori non disponibili')}</label>
         {s1 && <label><span>Secondo marcatore</span>{sel(s2, setS2, players.filter(pl => String(pl.id) !== s1).map(pl => [String(pl.id), pl.name + ' (' + (pl.side === 'home' ? home : away) + ') · ' + percent(pl.p, 0)]), 'Nessuno')}</label>}
       </div>
@@ -276,7 +272,8 @@ function ComboMaker({ matches, pick, setPick, onAdd }: { matches: Match[]; pick:
         <div className="cm-nums"><div><em>{percent(p, p < 0.1 ? 1 : 0)}</em><small>probabilità</small></div><div><em>{fair.toFixed(2)}</em><small>quota equa</small></div>
           <label><small>Quota del tuo bookmaker</small><input inputMode="decimal" value={odds} onChange={e => setOdds(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder={fair.toFixed(2)} /></label></div>
         {typed > 1 && <p className={'cm-verdict ' + (typed * p - 1 >= 0 ? 'ok' : 'ko')}>{typed * p - 1 >= 0 ? 'Valore +' + Math.round((typed * p - 1) * 100) + '%: la quota paga più del rischio.' : 'Valore ' + Math.round((typed * p - 1) * 100) + '%: la quota paga meno di quanto dovrebbe.'}</p>}
-        <button className="lime-button" onClick={add}><Plus size={16} />Aggiungi alla schedina</button>
+        <p className={'cm-avail ' + (avail ?? 'no')}>{avail === 'combo' ? '✅ Si gioca come Combo su Lottomatica / Planetwin365 (sezione Combo della partita).' : avail === 'super' ? '🧩 Si gioca solo con la Super Combo di Lottomatica / Planetwin365, disponibile sulle partite principali.' : '❌ Questa combinazione non è offerta da Lottomatica / Planetwin365. Le combo giocabili: esito + Under/Over, Goal/No Goal o Multigol; doppia chance + Under/Over, Goal/No Goal o Under/Over 1° tempo; con i marcatori, la Super Combo (esito, Under/Over, Goal/No Goal).'}</p>
+        <button className="lime-button" onClick={add} disabled={!avail}><Plus size={16} />Aggiungi alla schedina</button>
         {ht && <p className="small-note">Multigol 1° tempo: gol segnati nei primi 45 minuti più recupero (circa il 45% dei gol di una partita arriva nel primo tempo).</p>}
         {chosen.length > 0 && <p className="small-note">Marcatori: rigori compresi, autogol esclusi. La probabilità del marcatore tiene conto dei gol che la sua squadra fa in quel risultato.</p>}
       </div>}

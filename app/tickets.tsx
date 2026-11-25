@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Check, Copy, FlaskConical, Info, RefreshCw, Ticket as TicketIcon } from 'lucide-react';
+import { Check, Copy, FlaskConical, Info, Play, RefreshCw, Ticket as TicketIcon } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import type { RecordPlay, Selection } from '../lib/types';
 import type { SystemTicket, Ticket } from '../lib/tickets';
@@ -29,7 +29,17 @@ function BtBadge({ history, kinds }: { history?: Hist; kinds: (k: string) => boo
   return <div className="bt-badge"><span>Backtest {history?.weeks ? history.weeks + ' settimane' : ''}</span><b>{won} vinte su {n}</b><small>({Math.round(won / n * 100)}% · previsto {Math.round(exp * 100)}%)</small>{roi !== null && <em className={roi >= 0 ? 'pos' : 'neg'}>Rendimento {roi >= 0 ? '+' : ''}{Math.round(roi * 100)}%</em>}</div>;
 }
 
-function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core', onRecord }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void; cal?: Cal; track?: Track; history?: Hist; role?: 'core' | 'min'; onRecord?: RecordPlay }) {
+// Legs for "Gioca questa schedina": they go into Costruisci schedina, where odds and stake can be edited and saved.
+export type PlayLeg = { fixtureId: string; fixture: string; competition?: string; kickoff: string; market: string; label: string; p: number; odds?: number | null; italian?: boolean; bookmaker?: string };
+export const toSlip = (l: PlayLeg) => { const fair = !(l.odds && l.odds > 1); const odds = fair ? Math.round(100 / l.p) / 100 : l.odds!; return { fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition || '', kickoff: l.kickoff, market: l.market, label: l.label, group: '', p: l.p, odds, bookmaker: fair ? 'quota equa' : l.bookmaker || 'Lottomatica / Planetwin365', italian: !!l.italian && !fair, fair, se: Math.sqrt(l.p * (1 - l.p) / 40), value: l.p * odds - 1 }; };
+function PlayButtons({ legs, onPlay, onLab }: { legs: PlayLeg[]; onPlay?: (legs: PlayLeg[]) => void; onLab?: (s: Selection[]) => void }) {
+  if (legs.some(l => Date.parse(l.kickoff) <= Date.now())) return <p className="small-note">Partita già iniziata: non più giocabile.</p>;
+  return <div className="play-row" onClick={e => e.stopPropagation()}>
+    {onPlay && <button className="lime-button play-btn" onClick={() => onPlay(legs)}><Play size={15} />Gioca questa schedina</button>}
+    {onLab && <button className="text-button" onClick={() => onLab(legs.map(l => { const x = toSlip(l); return { fixtureId: x.fixtureId, fixture: x.fixture, market: x.market, label: x.label, p: x.p, odds: x.odds, competition: x.competition, kickoff: x.kickoff }; }))}><FlaskConical size={15} />Laboratorio</button>}
+  </div>;
+}
+function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core', onRecord, onPlay }: { t: Ticket; equityCents: number; onLab: (s: Selection[]) => void; cal?: Cal; track?: Track; history?: Hist; role?: 'core' | 'min'; onRecord?: RecordPlay; onPlay?: (legs: PlayLeg[]) => void }) {
   const h = history?.byKind.find(x => x.kind === btKind(t.kind));
   const kindBase = t.kind.replace(/-\d+$/, ''), real = track?.filter(x => x.kind === t.kind || x.kind.replace(/-\d+$/, '') === kindBase).reduce((a, x) => ({ n: a.n + x.n, won: a.won + x.won, exp: a.exp + (x.expectedHit ?? 0) * x.n }), { n: 0, won: 0, exp: 0 });
   const raw = Math.floor(equityCents * t.kelly / 100) * 100, stake = role === 'min' ? 100 : t.kelly > 0 ? Math.max(100, raw) : 0, started = (t as any).started;
@@ -45,14 +55,15 @@ function TicketCard({ t, equityCents, onLab, cal, track, history, role = 'core',
     <div className="value-pick"><strong>Quota totale</strong><span className="odds"><Count value={t.odds} format={v => v.toFixed(2)} /></span><small>{t.italian ? 'su Lottomatica / Planetwin365' : 'quote migliori (anche estere)'}</small></div>
     <p className={'stake-line ' + (role === 'min' ? 'min' : stake > 0 ? 'go' : 'skip')}>{started ? 'Già iniziata: non più giocabile, la vedi per seguirne l’esito.' : role === 'min' ? 'Puntata minima: ' + money(stake) + '. Giocata da sogno, non serve a far crescere il capitale.' : stake > 0 ? 'Puntata consigliata: ' + money(stake) + ' (' + percent(Math.max(t.kelly, 200 / Math.max(equityCents, 1))) + ' del capitale).' : 'Oggi la quota non ripaga il rischio: per far crescere il capitale meglio saltarla.'}</p>
     <p className="small-note">{t.italian ? 'Tutte le quote sono di Lottomatica / Planetwin365.' : 'Quote: ' + [...new Set(t.legs.map(l => l.bookmaker))].join(', ') + (t.legs.some(l => !l.italian) ? ' (alcuni esiti non sono quotati da Lottomatica / Planetwin365).' : '.')} Gioca solo se la quota sul tuo conto è uguale o più alta.</p>
-    {onRecord && !(t as any).started && <button className="secondary played-button" onClick={() => onRecord(t.legs, stake || 200, 'schedina', t.kind)}><Check size={15} />L’ho giocata ({money(stake || 200)})</button>}
+    {onPlay && !(t as any).started && <button className="lime-button play-btn" onClick={() => onPlay(t.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds, italian: l.italian, bookmaker: l.bookmaker })))}><Play size={15} />Gioca questa schedina</button>}
+    {onRecord && !(t as any).started && <button className="secondary played-button" onClick={() => onRecord(t.legs, stake || 100, 'schedina', t.kind)}><Check size={15} />L’ho già giocata così · registra ({money(stake || 100)})</button>}
     <button className="text-button" onClick={() => onLab(t.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds, competition: l.competition, kickoff: l.kickoff })))}><FlaskConical size={15} />Analizza nel Laboratorio</button>
   </article>;
 }
 
 type ScorerPick = { fixtureId: string; fixture: string; competition: string; kickoff: string; id: number; name: string; team: string; p: number; odds: number | null; book: string | null; italian: boolean; value: number | null };
 const SLOT_INFO: Record<string, string> = { '1X': 'Casa non perde', 'X2': 'Ospite non perde', '12': 'Non finisce pari', '1': 'Vince la squadra di casa', 'X': 'Pareggio', '2': 'Vince l’ospite', 'Gol': 'Solo gol (Goal + Over, No Goal + Under)' };
-function ExactSection({ list, combo, scorers, history, onOpenMatch }: { list: ExactPick[]; combo?: ComboData; scorers?: ScorerPick[]; history?: Hist; onOpenMatch?: (id: string) => void }) {
+function ExactSection({ list, combo, scorers, history, onOpenMatch, onPlay, onLab }: { list: ExactPick[]; combo?: ComboData; scorers?: ScorerPick[]; history?: Hist; onOpenMatch?: (id: string) => void; onPlay?: (legs: PlayLeg[]) => void; onLab?: (s: Selection[]) => void }) {
   const [open, setOpen] = useState<string | null>(null), [help, setHelp] = useState(false);
   const [tab, setTab] = useState<'multigol' | 'marcatori' | 'combo'>('combo'), [slot, setSlot] = useState('tutte');
   const detail = (id: string, only?: string) => { const e = list.find(x => x.fixtureId === id); if (!e) return null; const cs = e.combos.filter(c => !only || only === 'tutte' || c.name.split(' + ')[0] === only || (only === 'Gol' && !['1', 'X', '2', '1X', 'X2', '12'].includes(c.name.split(' + ')[0]))).slice(0, 14);
@@ -83,10 +94,12 @@ function ExactSection({ list, combo, scorers, history, onOpenMatch }: { list: Ex
       {slot === 'tutte' && combo.tickets.length > 0 && <div className="xs-grid">{combo.tickets.map(t => <article key={t.kind + t.legs.map(l => l.fixtureId).join()} className="xs-card combo-ticket"><small>Schedina pronta</small><strong>{t.title}</strong>
         {t.legs.map(l => <div key={l.fixtureId} className="tip-leg clickable" onClick={() => onOpenMatch?.(l.fixtureId)}><span>{l.fixture}<small>{when(l.kickoff)} · apri la partita</small></span><b>{l.combo}</b></div>)}
         <div className="xs-main"><span className="xs-pick">Quota equa {t.fair.toFixed(2)}</span><b className={t.p >= 0.4 ? 'hi' : ''}>{percent(t.p, 0)}</b></div>
-        <p>Conviene solo se sul bookmaker la quota totale è più alta di {t.fair.toFixed(2)}.</p></article>)}</div>}
+        <p>Conviene solo se sul bookmaker la quota totale è più alta di {t.fair.toFixed(2)}.</p>
+        <PlayButtons legs={t.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, kickoff: l.kickoff, market: 'combo:' + l.combo, label: l.combo, p: l.p }))} onPlay={onPlay} onLab={onLab} /></article>)}</div>}
       <div className="xs-grid">{items.map((c, i) => <article key={c.fixtureId + c.combo} className={'xs-card clickable' + (open === c.fixtureId ? ' open' : '')} onClick={() => setOpen(open === c.fixtureId ? null : c.fixtureId)}><small><span className="slot-n">#{i + 1}</span> {c.competition} · {when(c.kickoff)}</small><strong>{c.fixture}</strong>
         <div className="xs-main"><span className="xs-pick">{c.combo}</span><b className={c.p >= 0.65 ? 'hi' : ''}>{percent(c.p, 0)}</b></div>
         <p>Quota equa {(1 / c.p).toFixed(2)}.{c.others.length ? ' Alternative: ' + c.others.map(o => o.name + ' ' + percent(o.p, 0)).join(' · ') : ''}</p>
+        <PlayButtons legs={[{ fixtureId: c.fixtureId, fixture: c.fixture, competition: c.competition, kickoff: c.kickoff, market: 'combo:' + c.combo, label: c.combo, p: c.p }]} onPlay={onPlay} onLab={onLab} />
         <span className="cd-more">{open === c.fixtureId ? 'Chiudi ▲' : 'Tocca per tutte le combo ▼'}</span>
         {open === c.fixtureId && detail(c.fixtureId, slot)}</article>)}</div>
       {!items.length && <p className="small-note">Nessuna combo in questo slot per il giorno scelto.</p>}
@@ -94,7 +107,8 @@ function ExactSection({ list, combo, scorers, history, onOpenMatch }: { list: Ex
     {tab === 'multigol' && hMg && hMg.n >= 20 && <div className="bt-badge"><span>Backtest</span><b>{hMg.won} presi su {hMg.n}</b><small>({Math.round(hMg.hit * 100)}% · previsto {Math.round(hMg.expected * 100)}%)</small></div>}
     {tab === 'multigol' && <div className="xs-grid">{mg.map(({ e, m }) => <article key={e.fixtureId} className="xs-card"><small>{e.competition} · {when(e.kickoff)}</small><strong>{e.fixture}</strong>
       <div className="xs-main"><span className="xs-pick">Multigol {m!.range}</span><b className={m!.p >= 0.7 ? 'hi' : ''}>{percent(m!.p, 0)}</b></div>
-      <p>Quota equa {(1 / m!.p).toFixed(2)}: conviene se sul bookmaker la quota è più alta.</p></article>)}</div>}
+      <p>Quota equa {(1 / m!.p).toFixed(2)}: conviene se sul bookmaker la quota è più alta.</p>
+      <PlayButtons legs={[{ fixtureId: e.fixtureId, fixture: e.fixture, competition: e.competition, kickoff: e.kickoff, market: 'multigol:' + m!.range, label: 'Multigol ' + m!.range, p: m!.p }]} onPlay={onPlay} onLab={onLab} /></article>)}</div>}
     {tab === 'marcatori' && <>
       <p className="small-note">Probabilità che il giocatore segni almeno un gol nei 90 minuti (rigori compresi, autogol esclusi). Dove c’è la quota del bookmaker vedi anche il valore; altrimenti la quota equa. In verde le quote che pagano più del dovuto.</p>
       {!sc.length ? <p className="small-note">Nessun marcatore per il giorno scelto: i dati arrivano con la scansione delle partite.</p>
@@ -102,6 +116,7 @@ function ExactSection({ list, combo, scorers, history, onOpenMatch }: { list: Ex
           <span className="sc-n">{i + 1}</span>
           <div className="sc-who"><strong>{x.name}</strong><small>{x.team} · {x.fixture} · {when(x.kickoff)}</small></div>
           <div className="sc-p"><b>{percent(x.p, 0)}</b><small>segna</small></div>
+          {onPlay && Date.parse(x.kickoff) > Date.now() && <button className="sc-play" title="Gioca questa giocata" aria-label="Gioca questa giocata" onClick={ev => { ev.stopPropagation(); onPlay([{ fixtureId: x.fixtureId, fixture: x.fixture, competition: x.competition, kickoff: x.kickoff, market: 'scorer:' + x.id, label: 'Marcatore: ' + x.name, p: x.p, odds: x.odds, italian: x.italian, bookmaker: x.book ?? undefined }]); }}><Play size={14} /></button>}
           <div className="sc-q">{x.odds ? <><b>{x.odds.toFixed(2)}</b><small>{x.book}{x.value !== null ? ' · ' + (x.value >= 0 ? '+' : '') + Math.round(x.value * 100) + '%' : ''}</small></> : <><b>{(1 / x.p).toFixed(2)}≈</b><small>quota equa</small></>}</div>
         </article>)}</div>}
     </>}
@@ -128,9 +143,11 @@ function SystemCard({ x, onLab, onRecord, notify }: { x: SystemTicket; onLab?: (
 
 const SECTIONS: [string, string][] = [['tutte', 'Tutte le schedine'], ['raddoppi', '🛡️ Raddoppi'], ['multiple', '📋 Multiple del giorno'], ['fasce', '🎯 3 e 5 squadre'], ['schemi', '🧩 Schemi (puoi sbagliare)'], ['sistemi', '🧮 Sistemi'], ['combo', '⚽ Combo, Multigol, Marcatori'], ['bombe', '💣 Bombe']];
 
-export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem, onOpenMatch }: { onOpenMatch?: (id: string) => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
+export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem, onRecordSystem, onOpenMatch, onBuilder }: { onBuilder?: () => void; onOpenMatch?: (id: string) => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay; onLabSystem?: (s: Selection[], classes: { k: number; unitCents: number }[]) => void; onRecordSystem?: (legs: any[], classes: { k: number; unitCents: number }[]) => Promise<boolean> }) {
   const [data, setData] = useState<{ run: any; singles: Ticket[]; tickets: Ticket[]; bomb: Ticket | null; probable?: Ticket[]; sure?: Ticket[]; banded?: Ticket[]; systems?: SystemTicket[]; bombs?: Ticket[]; multiples?: Ticket[]; schemes?: SystemTicket[]; exact?: ExactPick[]; combo?: ComboData; comboBombs?: { kind: string; title: string; legs: { fixtureId: string; fixture: string; kickoff: string; label: string; p: number; odds: number }[]; p: number; fair: number }[]; days?: { day: string; n: number }[]; calibration?: Cal; track?: Track; history?: Hist } | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [scanning, setScanning] = useState(false);
   const dayF = useDay('tickets');
+  // Gioca questa schedina: legs into Costruisci schedina (odds and stake editable, then 'Registra la giocata').
+  const play = (legs: PlayLeg[]) => { try { localStorage.setItem('quorum-slip-v1', JSON.stringify(legs.map(toSlip))); } catch { } notify('Schedina caricata in Costruisci: controlla le quote del tuo conto, scegli la puntata e registrala.'); onBuilder?.(); };
   const [sec, setSecS] = useState('tutte');
   useEffect(() => { try { const v = localStorage.getItem('quorum-sec'); if (v) setSecS(v); } catch {} }, []);
   const setSec = (v: string) => { setSecS(v); try { localStorage.setItem('quorum-sec', v); } catch {} };
@@ -156,7 +173,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
       : !data?.run ? <div className="empty"><span className="empty-icon"><TicketIcon /></span><h3>Nessun dato ancora.</h3><p>Premi “Aggiorna ora”.</p></div>
       : <>
         {(() => {
-          const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} onRecord={onRecord} />;
+          const card = (t: Ticket, role: 'core' | 'min' = 'core') => <TicketCard key={t.kind + t.legs.map(l => l.fixtureId + l.market).join()} t={t} equityCents={equityCents} onLab={onLab} cal={data.calibration} track={data.track} history={data.history} role={role} onRecord={onRecord} onPlay={play} />;
           const bands = ['80', '70', '60'].map(b => ({ b, label: b === '80' ? '80–90%' : b === '70' ? '70–80%' : '60–70%', list: (data.banded || []).filter(t => t.kind.endsWith('-' + b)) })).filter(x => x.list.length);
           return <>
             {show('raddoppi') && data.sure && data.sure.length > 0 && <>
@@ -189,7 +206,7 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
               <BtBadge history={data.history} kinds={k => k === 'sistema-giorno'} />
               <div className="value-list">{data.systems.map(x => <SystemCard key={x.kind} x={x} onLab={onLabSystem} onRecord={onRecordSystem} notify={notify} />)}</div>
             </>}
-            {show('combo') && data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} scorers={(data as any).scorers} history={data.history} onOpenMatch={onOpenMatch} />}
+            {show('combo') && data.exact && data.exact.length > 0 && <ExactSection list={data.exact} combo={data.combo} scorers={(data as any).scorers} history={data.history} onOpenMatch={onOpenMatch} onPlay={play} onLab={onLab} />}
             {show('bombe') && data.bombs && data.bombs.length > 0 && <>
               <h3 className="day-title">💣 Bombe</h3>
               <p className="small-note">Una per ogni giornata di partite: quota da 10 a 100 in base a quante partite ci sono. Per sognare, sempre a puntata minima.</p>
@@ -201,7 +218,8 @@ export function TicketsView({ equityCents, onLab, notify, onRecord, onLabSystem,
                 <div className="xs-grid">{data.comboBombs.map(b => <article key={b.kind} className="xs-card combo-ticket bomb-combo"><small>Bomba combo · puntata minima</small><strong>{b.title.replace('Bomba combo di ', '')}</strong>
                   {b.legs.map(l => <div key={l.fixtureId} className="tip-leg clickable" onClick={() => onOpenMatch?.(l.fixtureId)}><span>{l.fixture}<small>{when(l.kickoff)} · {percent(l.p, 0)} · equa {l.odds.toFixed(2)}</small></span><b>{l.label}</b></div>)}
                   <div className="xs-main"><span className="xs-pick">Quota equa {b.fair.toFixed(1)}</span><b>{percent(b.p, 1)}</b></div>
-                  <p>Vince circa 1 volta su {Math.round(1 / b.p)}. Conviene solo se su Planetwin la quota totale supera {b.fair.toFixed(1)}.</p></article>)}</div>
+                  <p>Vince circa 1 volta su {Math.round(1 / b.p)}. Conviene solo se su Planetwin la quota totale supera {b.fair.toFixed(1)}.</p>
+                  <PlayButtons legs={b.legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, kickoff: l.kickoff, market: 'combo:' + l.label, label: l.label, p: l.p }))} onPlay={play} onLab={onLab} /></article>)}</div>
               </>}
             </>}
             {!data.sure?.length && !bands.length && !data.systems?.length && !data.bombs?.length && !data.multiples?.length && !data.schemes?.length && <p className="small-note">Nessuna schedina rispetta i criteri con le partite dei prossimi giorni.</p>}

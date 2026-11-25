@@ -31,13 +31,20 @@ test('expected goals from market odds reproduce the market', () => {
   assert.ok(Math.abs(k.home - 0.5) < 0.03 && Math.abs(k.over25 - 0.52) < 0.03);
 });
 
-import { customComboP, partProb, scorerShare } from '../lib/exact.ts';
+import { customComboP, partProb, scorerShare, comboAvailability } from '../lib/exact.ts';
 import { outcome } from '../lib/settle-contract.ts';
 test('double chance, team and half-time Multigol combos', () => {
   const sc = scoreMatrix(1.6, 1.1, 0);
   const c = Object.fromEntries(comboProbs(sc).map(x => [x.name, x.p]));
-  assert.ok(c['1X + Multigol 1-3'] > 0 && c['1X + Multigol 1-3'] < c['1X + Multigol 1-4']);
-  assert.ok(c['X2 + Multigol ospite 1-2'] > 0 && c['1X + Multigol 1° tempo 0-1'] > 0);
+  // only the combos offered by Lottomatica / Planetwin365
+  assert.ok(c['1 + Multigol 1-3'] > 0 && c['1 + Multigol 1-3'] < c['1 + Multigol 1-4']);
+  assert.ok(c['X2 + Over 1,5 1° tempo'] > 0 && c['1X + Over 1,5'] > 0);
+  assert.equal(c['X2 + Multigol 1° tempo 0-2'], undefined); assert.equal(c['1X + Multigol 1-3'], undefined);
+  assert.equal(comboAvailability(['X2', 'Over 1,5 1° tempo']), 'combo');
+  assert.equal(comboAvailability(['Over 2,5', '1']), 'combo');
+  assert.equal(comboAvailability(['1', 'Over 2,5', 'Goal'], 1), 'super');
+  assert.equal(comboAvailability(['X2', 'Multigol 1° tempo 0-2']), null);
+  assert.ok(comboWins('X2 + Over 1,5 1° tempo', 1, 1, [1, 1]) && !comboWins('X2 + Over 1,5 1° tempo', 1, 1, [1, 0]));
   assert.ok(comboWins('1X + Multigol casa 1-2', 2, 2) && !comboWins('1X + Multigol casa 1-2', 3, 0));
   assert.ok(comboWins('12 + Multigol 1° tempo 1-2', 2, 1, [1, 0]) && !comboWins('12 + Multigol 1° tempo 1-2', 2, 1, null));
   // half-time part: binomial over the goals of the final score, sums to 1 over complementary ranges
