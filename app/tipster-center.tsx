@@ -30,6 +30,20 @@ const VERDICT: Record<string, [string, string]> = {
 type Center = any;
 export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notify, onOpen, initialTab }: { equityCents: number; stakeBps: number; limitsOn: boolean; onRecord?: RecordPlay; notify: (m: string) => void; onOpen: (id: string) => void; initialTab?: string }) {
   const [src, setSrc] = useState<'metodo' | 'mie'>('metodo'), [tab, setTab] = useState(initialTab || 'opp'), [d, setD] = useState<Center | null>(null), [err, setErr] = useState('');
+  // "L'ho giocata": amount and price chosen by the user (prefilled with QUORUM's suggestion).
+  const [playAmt, setPlayAmt] = useState<Record<string, string>>({}), [playOdds, setPlayOdds] = useState<Record<string, string>>({}), [saved, setSaved] = useState<Record<string, boolean>>({});
+  const euros = (c: number) => (c / 100).toFixed(2).replace('.', ',');
+  const playBox = ({ k, suggested, odds, record }: { k: string; suggested: number; odds: number; record: (stakeCents: number, odds: number) => Promise<boolean> | boolean | void }) => {
+    const amt = playAmt[k] ?? euros(suggested), cents = Math.round(Number(amt.replace(',', '.')) * 100) || 0, oddsTxt = playOdds[k] ?? odds.toFixed(2), q = Number(oddsTxt.replace(',', '.')) || 0;
+    const pct = equityCents > 0 ? cents / equityCents : 0, over = limitsOn && cents > Math.max(100, Math.floor(equityCents * stakeBps / 10000));
+    return <div className="tcx-play">
+      <div className="tcx-play-in"><label><small>Quanto hai giocato</small><span><input inputMode="decimal" value={amt} onChange={e => setPlayAmt({ ...playAmt, [k]: e.target.value.replace(/[^0-9.,]/g, '') })} /><b>€</b></span></label>
+        <label><small>Quota presa</small><span><input inputMode="decimal" value={oddsTxt} onChange={e => setPlayOdds({ ...playOdds, [k]: e.target.value.replace(/[^0-9.,]/g, '') })} /></span></label>
+        <div className="tcx-play-quick">{[1, 2, 3, 5].map(e => <button key={e} type="button" className={cents === e * 100 ? 'on' : ''} onClick={() => setPlayAmt({ ...playAmt, [k]: euros(e * 100) })}>{e} €</button>)}</div></div>
+      <p className={'tcx-play-note' + (over ? ' warn' : cents > suggested ? ' hi' : '')}>{cents < 100 ? 'Minimo 1 €.' : percent(pct, 1) + ' del tuo saldo' + (cents > 0 && q > 1 ? ' · se vince incassi ' + money(Math.round(cents * q)) : '') + (over ? ' · oltre la tua regola di capitale (' + percent(stakeBps / 10000, 1) + '): QUORUM non la registra, abbassa l’importo o cambia regola nel Portafoglio.' : cents > suggested ? ' · più della puntata consigliata (' + money(suggested) + ').' : '')}</p>
+      <button className="secondary played-button" disabled={cents < 100 || !(q > 1) || saved[k]} onClick={async () => { const ok = await record(cents, q); if (ok !== false) setSaved({ ...saved, [k]: true }); }}><Check size={15} />{saved[k] ? 'Registrata' : 'L’ho giocata a ' + money(cents) + (q > 1 ? ' · quota ' + q.toFixed(2) : '')}</button>
+    </div>;
+  };
   const [infoId, setInfoId] = useState<string | null>(null), [why, setWhy] = useState(false);
   const I = (id: string, light = false) => <button type="button" className={'tcx-i' + (light ? ' light' : '')} aria-label={'Informazioni: ' + INFO[id].title} onClick={e => { e.stopPropagation(); setInfoId(id); }}>i</button>;
   const [segTab, setSegTab] = useState('league'), [mSet, setMSet] = useState(0), [open, setOpen] = useState(''), [help, setHelp] = useState(false);
@@ -123,7 +137,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
               <ul className="tc-checks">{o.checks.map((c: any) => <li key={c.id} className={c.ok === true ? 'ok' : c.ok === false ? 'ko' : 'na'} title={c.note} role="button" tabIndex={0} onClick={() => setInfoId(CK[c.id] ?? 'opp')}><i>{c.ok === true ? <Check size={13} /> : c.ok === false ? <X size={13} /> : '?'}</i>{c.label}</li>)}</ul>
               <button className="text-button" onClick={() => setOpen(open === k ? '' : k)}>{open === k ? 'Chiudi i dettagli' : 'Perché? Vedi i dettagli dei controlli'}</button>
               {open === k && <ul className="tc-notes">{o.checks.map((c: any) => <li key={c.id}><b>{c.label}</b>: {c.note}</li>)}</ul>}
-              {onRecord && o.grade !== 'C' && <button className="secondary played-button" onClick={() => onRecord([{ fixtureId: o.fixtureId, fixture: o.fixture, competition: o.competition, kickoff: o.kickoff, market: o.market, label: o.label, p: o.pTrue, odds: o.odds }], st, 'value', 'tipster-centro')}><Check size={15} />L’ho giocata ({money(st)})</button>}
+              {onRecord && o.grade !== 'C' && playBox({ k, suggested: st, odds: o.odds, record: (c, q) => onRecord([{ fixtureId: o.fixtureId, fixture: o.fixture, competition: o.competition, kickoff: o.kickoff, market: o.market, label: o.label, p: o.pTrue, odds: q }], c, 'value', 'tipster-centro') })}
             </article>; })}</div>}
           {(d.opportunities.doubles ?? []).length > 0 && <><h3 className="day-title">🎯 Doppie del metodo</h3>
             <p className="small-note">Due giocate di partite diverse che hanno superato la checklist, nella stessa schedina. Si vince solo se escono entrambe; la puntata è più bassa (massimo 1% del saldo) perché il rischio è più alto.</p>
@@ -131,7 +145,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
               <div className={'tcx-ribbon g-' + x.grade}><b>{x.grade}</b><div><strong>{x.grade === 'A' ? 'GIOCALA' : 'GIOCALA CON MEZZA PUNTATA'}</strong><small>Doppia · livello {x.grade}</small></div></div>
               {x.legs.map((l: any) => <div key={l.fixtureId} className="tcx-dleg"><div><small>{l.competition} · {when(l.kickoff)}</small><strong>{l.fixture}</strong></div><span><b>{l.label}</b><em>{l.odds.toFixed(2)} · {l.bookmaker.split(' / ')[0]}</em></span></div>)}
               <div className={'tcx-stake g-' + x.grade}><div><small>Quota totale · valore {sg(x.edge)}</small><strong>{x.odds.toFixed(2)}</strong></div><div className="tcx-stake-u"><small>Puntata massima</small><span>{money(st)} · {x.units.toFixed(1).replace('.', ',')} unità</span></div></div>
-              {onRecord && <button className="secondary played-button" onClick={() => onRecord(x.legs.map((l: any) => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, p: l.pTrue, odds: l.odds })), st, 'value', 'tipster-centro-doppia')}><Check size={15} />L’ho giocata ({money(st)})</button>}
+              {onRecord && playBox({ k: 'd:' + x.legs.map((l: any) => l.fixtureId + l.market).join(), suggested: st, odds: x.odds, record: (c, q) => onRecord(x.legs.map((l: any, i: number) => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition, kickoff: l.kickoff, market: l.market, label: l.label, p: l.pTrue, odds: i === 0 ? Math.round(l.odds * q / x.odds * 1000) / 1000 : l.odds })), c, 'value', 'tipster-centro-doppia') })}
             </article>; })}</div></>}
           {d.opportunities.watch.length > 0 && <><h3 className="day-title">👀 In osservazione {I('watch')}</h3>
             <p className="small-note">Pinnacle si sta muovendo e la quota italiana è vicina al valore (0–3%). Se il bookmaker italiano non si adegua e Pinnacle continua, diventano opportunità al prossimo controllo.</p>
