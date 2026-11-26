@@ -48,7 +48,7 @@ export function coverPlan(legs: CoverLeg[], stake: number, find: (fixtureId: str
 // P(lose all) = P(main fails) × P(cover fails). With a cover that has value the expected result even goes up.
 export type CoverCand = CoverOpt & { fixture: string; kickoff: string; competition?: string; tag?: string };
 export type CoverTicket = { legs: CoverCand[]; p: number; odds: number; stake: number; pLoseAll: number; ev: number; value: number;
-  bothWin: number; mainOnly: number; coverOnly: number; bothLose: number; kind: 'sicura' | 'valore' | 'equilibrata' };
+  bothWin: number; mainOnly: number; coverOnly: number; bothLose: number; kind: 'sicura' | 'valore' | 'economica' };
 
 export function coverTickets(main: CoverLeg[], stake: number, cands: CoverCand[], maxRatio = 4): { none: CoverPlan['none']; options: CoverTicket[]; target: number } {
   const O = main.reduce((s, l) => s * l.odds, 1), Pm = main.reduce((s, l) => s * l.p, 1);
@@ -68,12 +68,13 @@ export function coverTickets(main: CoverLeg[], stake: number, cands: CoverCand[]
       bothWin: win + back - stake - c, mainOnly: win - stake - c, coverOnly: back - stake - c, bothLose: -stake - c });
   }
   if (!out.length) return { none, options: [], target: 0.3 };
-  const pick = (k: CoverTicket['kind'], f: (a: Omit<CoverTicket, 'kind'>, b: Omit<CoverTicket, 'kind'>) => number, ok: (x: Omit<CoverTicket, 'kind'>) => boolean = () => true) => {
-    const x = out.filter(ok).sort(f)[0]; return x ? { ...x, kind: k } : null; };
-  const safe = pick('sicura', (a, b) => a.pLoseAll - b.pLoseAll || a.stake - b.stake);
-  const value = pick('valore', (a, b) => b.value - a.value || a.pLoseAll - b.pLoseAll, x => x.value >= 0.03);
-  const mid = pick('equilibrata', (a, b) => (a.pLoseAll + (none.ev - a.ev) / Math.max(1, stake) * 0.1) - (b.pLoseAll + (none.ev - b.ev) / Math.max(1, stake) * 0.1), x => x.value > -0.06);
+  // Three different proposals: the one with the most value, the safest, and the cheapest that still cuts the risk a lot.
+  const keyOf = (x: { legs: CoverCand[] }) => x.legs.map(l => l.fixtureId + l.market).join();
   const seen = new Set<string>(), options: CoverTicket[] = [];
-  for (const o of [value, safe, mid]) { if (!o) continue; const k = o.legs.map(l => l.fixtureId + l.market).join(); if (!seen.has(k)) { seen.add(k); options.push(o); } }
+  const pick = (k: CoverTicket['kind'], f: (a: Omit<CoverTicket, 'kind'>, b: Omit<CoverTicket, 'kind'>) => number, ok: (x: Omit<CoverTicket, 'kind'>) => boolean = () => true) => {
+    const x = out.filter(y => !seen.has(keyOf(y)) && ok(y)).sort(f)[0]; if (x) { seen.add(keyOf(x)); options.push({ ...x, kind: k }); } };
+  pick('valore', (a, b) => b.value - a.value || a.pLoseAll - b.pLoseAll, x => x.value >= 0.03);
+  pick('sicura', (a, b) => a.pLoseAll - b.pLoseAll || a.stake - b.stake);
+  pick('economica', (a, b) => a.stake - b.stake || a.pLoseAll - b.pLoseAll, x => x.pLoseAll <= (1 - Pm) * 0.65 && x.value > -0.05);
   return { none, options, target: 0.3 };
 }

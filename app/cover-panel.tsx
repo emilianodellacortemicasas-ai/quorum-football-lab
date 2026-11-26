@@ -76,7 +76,7 @@ export function candidatesFrom(matches: Match[] | null): CoverCand[] {
 const KIND: Record<CoverTicket['kind'], [string, string]> = {
   valore: ['Con valore', 'La quota paga più di quanto vale: la copertura alza anche il risultato medio.'],
   sicura: ['La più sicura', 'La probabilità di perdere tutto più bassa possibile.'],
-  equilibrata: ['Equilibrata', 'Buon taglio del rischio con un costo medio contenuto.'],
+  economica: ['La più economica', 'Puntata più bassa che taglia comunque molto il rischio, come una X2 a quota alta.'],
 };
 const when2 = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 // Main cover: a separate ticket on other matches that gives back the money of both tickets if it wins.
