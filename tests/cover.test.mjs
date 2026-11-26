@@ -43,7 +43,7 @@ test('cover with a separate ticket: the Roma X2 example and the target under 30%
   assert.ok(r.none.pLoseAll > 0.89);
   const roma = r.options.find(o => o.legs.length === 1 && o.legs[0].fixtureId === 'r');
   assert.ok(roma, 'the value pick is proposed'); assert.equal(roma.kind, 'valore');
-  assert.equal(roma.stake, 200);                      // 3 € / (2,60 − 1) = 1,875 → 2,00 €
+  assert.equal(roma.stake, 190);                      // 3 € / (2,60 − 1) = 1,875 → 1,90 €
   assert.ok(roma.coverOnly >= 0);                     // main lost, cover won: 5,20 − 5 = +0,20 €
   assert.ok(roma.ev > r.none.ev);                     // a cover with value raises the expected result
   const safe = r.options.find(o => o.kind === 'sicura');

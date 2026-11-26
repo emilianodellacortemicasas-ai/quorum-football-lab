@@ -1254,3 +1254,4 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .cover-target{font-size:13px;padding:3px 8px;border-radius:20px;background:rgba(224,160,48,.15)}.cover-target.ok{background:rgba(47,163,111,.15);color:#1e6b49}
 .cover-opt ul{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:14px}.cover-opt li em{display:block;font-style:normal;font-size:12px;opacity:.7}
 .cover-nums{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px}.cover-more summary{cursor:pointer;font-size:14px;font-weight:600}
+.cover-cap{margin:0;padding:8px 10px;border-radius:8px;background:rgba(224,160,48,.15);font-size:13px}

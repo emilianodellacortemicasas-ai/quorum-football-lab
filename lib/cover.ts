@@ -13,7 +13,7 @@ export function opposite(market: string): string | null {
   return ou ? (ou[1] === 'over' ? 'under' : 'over') + ou[2] : null;
 }
 
-const half = (cents: number) => Math.ceil(cents / 50) * 50; // stakes in steps of 0,50 €
+const half = (cents: number) => Math.ceil(Math.round(cents * 1000) / 1000 / 10) * 10; // stakes rounded up to 0,10 €
 
 export type CoverPlan = {
   none: { pWin: number; pLoseAll: number; ev: number; win: number };

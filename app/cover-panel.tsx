@@ -40,7 +40,7 @@ export function CoverHint({ legs, stake, find, cands, onOpen }: { legs: CoverLeg
 }
 
 // Standalone section "Copertura": the slip prepared in Costruisci (or in Valore di oggi), the stake, the cover.
-export function CoverView({ notify, onRecord, onBuilder, onToday }: { notify: (m: string) => void; onRecord?: RecordPlay; onBuilder: () => void; onToday: () => void }) {
+export function CoverView({ notify, onRecord, onBuilder, onToday, cap }: { notify: (m: string) => void; onRecord?: RecordPlay; onBuilder: () => void; onToday: () => void; cap?: number | null }) {
   const [matches, setMatches] = useState<Match[] | null>(null);
   const [slip] = useState<Opt[]>(() => { try { return (JSON.parse(localStorage.getItem('quorum-slip-v1') || '[]') as Opt[]).filter(x => Date.parse(x.kickoff) > Date.now()); } catch { return []; } });
   const [stakeText, setStakeText] = useState(() => { try { const v = Number(localStorage.getItem('quorum-slip-stake')); return v >= 100 ? (v / 100).toFixed(2).replace('.', ',') : '2,00'; } catch { return '2,00'; } });
@@ -58,8 +58,8 @@ export function CoverView({ notify, onRecord, onBuilder, onToday }: { notify: (m
         <div className="slip-total"><span>Quota totale</span><strong>{odds.toFixed(2)}</strong></div>
         <label className="slip-stake">Puntata della schedina (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value.replace(/[^0-9.,]/g, ''))} /></label>
         <button className="text-button" onClick={onBuilder}>Modifica la schedina in Costruisci</button></div>
-      <div>{matches ? <CoverPanel legs={slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }))} stake={stake} find={find} cands={candidatesFrom(matches)}
-        onRecord={onRecord ? async (legs, st) => { const ok = await onRecord(legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition ?? '', kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds })), st, 'builder', 'copertura'); notify(ok ? 'Copertura registrata come giocata separata.' : 'Copertura non registrata.'); return ok; } : undefined} /> : <p>Calcolo della copertura…</p>}</div>
+      <div>{matches ? <CoverPanel legs={slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }))} stake={stake} find={find} cands={candidatesFrom(matches)} cap={cap}
+        onRecord={onRecord ? async (legs, st) => { const ok = await onRecord(legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition ?? '', kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds })), st, 'builder', 'copertura'); if (ok) notify('Copertura registrata come giocata separata.'); return ok; } : undefined} /> : <p>Calcolo della copertura…</p>}</div>
     </div>}
   </section>;
 }
@@ -82,7 +82,7 @@ const KIND: Record<CoverTicket['kind'], [string, string]> = {
 };
 const when2 = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 // Main cover: a separate ticket on other matches that gives back the money of both tickets if it wins.
-export function CoverPanel({ legs, stake, cands, find, onRecord }: { legs: CoverLeg[]; stake: number; cands: CoverCand[]; find: (f: string, m: string) => CoverOpt | null; onRecord?: (legs: CoverCand[], stake: number) => Promise<boolean> }) {
+export function CoverPanel({ legs, stake, cands, find, onRecord, cap }: { legs: CoverLeg[]; stake: number; cands: CoverCand[]; find: (f: string, m: string) => CoverOpt | null; onRecord?: (legs: CoverCand[], stake: number) => Promise<boolean>; cap?: number | null }) {
   const [done, setDone] = useState<Record<string, boolean>>({}), [busy, setBusy] = useState('');
   const r = coverTickets(legs, stake, cands);
   const sign = (v: number) => (v > 0 ? '+' : '') + money(v);
@@ -102,7 +102,8 @@ export function CoverPanel({ legs, stake, cands, find, onRecord }: { legs: Cover
           <tr><td>Perdono tutte e due</td><td>{sign(o.bothLose)}</td></tr>
           <tr><td>Risultato medio atteso</td><td>{sign(r.none.ev)} → {sign(o.ev)}</td></tr>
         </tbody></table>
-        {onRecord && <button className="primary" disabled={!!busy || done[key] || o.stake < 100} onClick={async () => { setBusy(key); const okk = await onRecord(o.legs, o.stake); setBusy(''); if (okk) setDone(d => ({ ...d, [key]: true })); }}>{done[key] ? 'Copertura registrata' : 'Registra questa copertura (' + money(o.stake) + ')'}</button>}
+        {cap && o.stake > cap ? <p className="cover-cap">Oltre la tua regola di capitale: massimo {money(cap)} a giocata. Abbassa la puntata della schedina o cambia regola nel Portafoglio.</p> : null}
+        {onRecord && <button className="primary" disabled={!!busy || done[key] || o.stake < 100 || (!!cap && o.stake > cap)} onClick={async () => { setBusy(key); const okk = await onRecord(o.legs, o.stake); setBusy(''); if (okk) setDone(d => ({ ...d, [key]: true })); }}>{done[key] ? 'Copertura registrata' : 'Registra questa copertura (' + money(o.stake) + ')'}</button>}
       </article>; })}</div>
     <details className="cover-more"><summary>Oppure: giocata opposta all'evento più a rischio</summary><OppositeCover legs={legs} stake={stake} find={find} /></details>
     <p className="small-note">Le probabilità sono stime di QUORUM. Si può perdere lo stesso: la copertura riduce il rischio, non lo elimina. Controlla le quote sul tuo conto prima di giocare.</p>
