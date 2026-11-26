@@ -1,4 +1,5 @@
 'use client';
+import { LiveButton } from './live-quotes';
 // "Costruisci la tua schedina": every match of the week, market by market, with the playable price
 // (Lottomatica / Planetwin365 when available), the most probable outcomes and the value ones highlighted.
 // The user builds a free ticket of any size; QUORUM measures it (reliability, value, stake, potential win).
@@ -117,6 +118,23 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
   useEffect(() => { try { setShare(localStorage.getItem('quorum-share') === '1'); } catch { } }, []);
   const toggleShare = (v: boolean) => { setShare(v); try { localStorage.setItem('quorum-share', v ? '1' : '0'); } catch { } };
   const [matches, setMatches] = useState<Match[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [liveBusy, setLiveBusy] = useState(false), [liveAt, setLiveAt] = useState<string | null>(null);
+  // "Quote adesso" for the whole slip: one request per match (all Italian bookmakers), Lottomatica/Planet price applied to
+  // each leg the feed quotes. Combos are not in the Italian feed: they keep their price and are flagged to check on the site.
+  async function refreshSlip() {
+    setLiveBusy(true); const got: Record<string, any> = {}; let err = '';
+    for (const id of [...new Set(slip.map(l => l.fixtureId))]) {
+      try { const r = await fetch('/api/scanner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'it-refresh', fixtureId: id }) }); const x: any = await r.json(); if (!r.ok) { err = x.error; break; } got[id] = x; } catch { err = 'Aggiornamento non riuscito.'; break; }
+    }
+    let up = 0, moved = 0; const missing: string[] = [];
+    const next = slip.map(l => { const q = got[l.fixtureId]?.quotes?.[l.market] as Record<string, number> | undefined; if (!got[l.fixtureId]) return l;
+      if (!q) { missing.push(l.label); return l; }
+      const odds = q.Lottomatica ?? Math.max(...Object.values(q)); up++; if (Math.abs(odds - l.odds) >= 0.01) moved++;
+      return { ...l, odds, value: l.p * odds - 1, fair: false, italian: true, bookmaker: q.Lottomatica ? 'Lottomatica / Planet' : Object.entries(q).sort((a, b) => b[1] - a[1])[0][0] }; });
+    setSlip(next); setLiveBusy(false);
+    const last = Object.values(got).at(-1); if (last) setLiveAt(last.at);
+    notify((up ? up + (up === 1 ? ' quota aggiornata' : ' quote aggiornate') + (moved ? ', ' + moved + ' cambiate' : ', nessuna cambiata') + '. ' : '') + (missing.length ? 'Non quotate dal feed italiano (controllale sul sito): ' + missing.join(', ') + '. ' : '') + (err ? err + ' ' : '') + (last ? 'Ti restano ' + last.left + ' aggiornamenti oggi.' : ''));
+  }
   const [slip, setSlip] = useState<Opt[]>([]), [league, setLeague] = useState('Tutte'), [q, setQ] = useState(''), [sort, setSort] = useState<'time' | 'prob'>('time');
   const [comboFor, setComboFor] = useState(''), [open, setOpen] = useState<Record<string, any>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem(SLIP_KEY) || '[]'); if (Array.isArray(s)) setSlip(s.filter((x: Opt) => Date.parse(x.kickoff) > Date.now())); } catch { } }, []);
@@ -199,6 +217,7 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
       <div className="slip-head"><h3>La tua schedina</h3><span>{slip.length} {slip.length === 1 ? 'evento' : 'eventi'}</span>{slip.length > 0 && <button className="icon-button" onClick={() => { setSlip([]); setStakeText(''); }} title="Svuota"><Trash2 size={16} /></button>}</div>
       {!slip.length ? <p className="small-note"><Plus size={14} /> Tocca una quota per aggiungerla. Un solo esito per partita.</p> : <>
         <ul className="slip-legs">{slip.map(l => <li key={l.fixtureId}><div><strong>{l.label}</strong><small>{l.fixture} · {when(l.kickoff)}</small></div><label className={'slip-odds' + (l.fair ? ' fair' : '')} title="Scrivi la quota che hai giocato"><small>{l.fair ? 'quota equa: scrivi la tua' : 'quota giocata'}</small><input key={l.market + l.odds} inputMode="decimal" defaultValue={l.odds.toFixed(2)} onFocus={e => e.target.select()} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={e => { const v = Number(e.target.value.replace(',', '.')); if (v > 1 && v < 1000 && Math.abs(v - l.odds) > 1e-9) setSlip(slip.map(x => x.fixtureId === l.fixtureId && x.market === l.market ? { ...x, odds: v, value: x.p * v - 1, fair: false, bookmaker: 'quota inserita' } : x)); else e.target.value = l.odds.toFixed(2); }} /></label><button onClick={() => toggle(l)} title="Togli"><X size={14} /></button></li>)}</ul>
+        {(() => { const n = new Set(slip.map(l => l.fixtureId)).size; return <div className="slip-live"><LiveButton fixtureId="slip" busy={liveBusy ? 'slip' : ''} at={liveAt ?? undefined} onClick={refreshSlip} /><small>{liveAt ? 'Quote lette alle ' + new Date(liveAt).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) + '.' : 'Legge adesso Lottomatica/Planet per ' + (n === 1 ? 'questa partita' : 'queste ' + n + ' partite') + ': ' + n + (n === 1 ? ' aggiornamento' : ' aggiornamenti') + ' su 5 al giorno (gratis se già lette da meno di 15 minuti).'}</small></div>; })()}
         <div className="slip-total"><span>Quota totale</span><strong><Count value={odds} duration={500} format={v => v >= 1000 ? Math.round(v).toLocaleString('it-IT') : v.toFixed(2)} /></strong></div>
         {rel && <div className={'reliability r-' + verdict.replace(' ', '-')}><div><Ring p={rel.p} size={54} /><span>Affidabilità misurata</span><strong><Count value={rel.p} duration={500} format={pc} /></strong><em>{verdict} · {oneIn}</em></div>
           <small>Intervallo probabile {pc(rel.low)}–{pc(rel.high)}. Valore {ev >= 0 ? '+' : ''}{percent(ev, 0)}: {ev > 0 ? 'la quota paga più del rischio.' : 'la quota paga meno del rischio.'}</small></div>}
