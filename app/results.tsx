@@ -96,11 +96,13 @@ function SharedPlays({ mode = 'open', onGo, refreshKey, onRecord, onRecordSystem
     setBusy(false);
     if (ok) setPlaying('');
   }
-  const list = d.plays.filter((x: any) => who === 'Tutti' || x.author === who);
+  // In "Le mie giocate e le condivise" your own plays are already in the list above: here only the other users'.
+  const plays = mode === 'open' ? d.plays.filter((x: any) => !x.mine) : d.plays, authors = mode === 'open' ? d.authors.filter((a: any) => !a.mine) : d.authors;
+  const list = plays.filter((x: any) => who === 'Tutti' || x.author === who);
   return <section className="reliability shared-plays">
-    <div className="rel-head"><strong><Users size={16} /> {mode === 'open' ? 'Le condivise in corso' : 'Le condivise terminate'}</strong><span>{mode === 'closed' ? 'L’esito delle giocate condivise da te e dagli altri utenti. ' : ''}Le giocate che gli utenti di QUORUM hanno scelto di condividere, con il loro esito. Puoi copiarle nella tua schedina o giocarle anche tu con un tocco. Le tue le condividi da “Le tue giocate”.</span></div>
-    {!d.plays.length ? <p className="small-note">Ancora nessuna giocata condivisa. Quando registri una schedina spunta “Condividi con gli altri utenti”, oppure tocca “Condividi” su una giocata qui sopra.</p> : <>
-      <div className="author-row">{d.authors.map((a: any) => <button key={a.author} className={'author-card' + (who === a.author ? ' on' : '')} onClick={() => setWho(who === a.author ? 'Tutti' : a.author)}><b>{a.author}{a.mine ? ' (tu)' : ''}</b><span className={a.pnlCents >= 0 ? 'pos' : 'neg'}>{a.n ? euro(a.pnlCents) : '—'}</span><small>{a.n ? a.won + ' vinte su ' + a.n + ' · ROI ' + (a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)) : 'nessuna chiusa'}{a.open ? ' · ' + a.open + ' in corso' : ''}</small></button>)}</div>
+    <div className="rel-head"><strong><Users size={16} /> {mode === 'open' ? 'Condivise dagli altri, in corso' : 'Le condivise terminate'}</strong><span>{mode === 'closed' ? 'L’esito delle giocate condivise da te e dagli altri utenti. ' : ''}Le giocate che gli utenti di QUORUM hanno scelto di condividere, con il loro esito. Puoi copiarle nella tua schedina o giocarle anche tu con un tocco. Le tue le condividi da “Le tue giocate”.</span></div>
+    {!plays.length ? <p className="small-note">Ancora nessuna giocata condivisa. Quando registri una schedina spunta “Condividi con gli altri utenti”, oppure tocca “Condividi” su una giocata qui sopra.</p> : <>
+      <div className="author-row">{authors.map((a: any) => <button key={a.author} className={'author-card' + (who === a.author ? ' on' : '')} onClick={() => setWho(who === a.author ? 'Tutti' : a.author)}><b>{a.author}{a.mine ? ' (tu)' : ''}</b><span className={a.pnlCents >= 0 ? 'pos' : 'neg'}>{a.n ? euro(a.pnlCents) : '—'}</span><small>{a.n ? a.won + ' vinte su ' + a.n + ' · ROI ' + (a.roi === null ? '—' : (a.roi >= 0 ? '+' : '') + percent(a.roi)) : 'nessuna chiusa'}{a.open ? ' · ' + a.open + ' in corso' : ''}</small></button>)}</div>
       {mode === 'closed' && <ArchiveTabs items={list} tab={stab} setTab={setStab} closed />}
       {!list.some((x: any) => x.status === stab) && <p className="small-note">{mode === 'open' ? 'Nessuna giocata condivisa in corso.' : 'Nessuna giocata in questo elenco.'}</p>}
       <div className="my-list">{list.filter((x: any) => x.status === stab).slice(0, 40).map((x: any) => <article key={x.id} className={'my-play st-' + x.status}>
