@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Activity, BarChart3, Check, Gauge as GaugeIcon, Info, ListChecks, Radar, RefreshCw, Scale, TrendingDown, X } from 'lucide-react';
 import { money, percent } from '../lib/math';
 import { GoalBox } from './goal-box';
+import { LiveButton, useLiveQuotes } from './live-quotes';
 import type { RecordPlay } from '../lib/types';
 import { Core, CountUp, Countdown, Curve, Gauge, MatrixRain, Ticker, Tilt } from './tc-visuals';
 import { INFO, INFO_ORDER, WHY } from './tc-info';
@@ -36,6 +37,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
   const euros = (c: number) => (c / 100).toFixed(2).replace('.', ',');
   // Real price seen on the site: saved for everyone, the opportunity is re-graded at once.
   const [reload, setReload] = useState(0);
+  const live = useLiveQuotes(notify);
   const sendReport = async (key: string, q: number) => { try { const r = await fetch('/api/scanner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'price-report', key, odds: q }) }); if (r.ok) { notify('Quota aggiornata a ' + q.toFixed(2) + ': livello e valore ricalcolati.'); setReload(x => x + 1); } else notify('Aggiornamento della quota non riuscito.'); } catch { notify('Aggiornamento della quota non riuscito.'); } };
   const playBox = ({ k, suggested, odds, p, record, report }: { k: string; suggested: number; odds: number; p: number; report?: string; record: (stakeCents: number, odds: number) => Promise<boolean> | boolean | void }) => {
     const amt = playAmt[k] ?? euros(suggested), cents = Math.round(Number(amt.replace(',', '.')) * 100) || 0, oddsTxt = playOdds[k] ?? odds.toFixed(2), q = Number(oddsTxt.replace(',', '.')) || 0;
@@ -133,7 +135,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
           {!list.length ? <div className="empty compact"><span className="empty-icon"><ListChecks /></span><h3>Nessuna opportunità in questo momento.</h3><p>È normale: un tipster gioca poco. Il prossimo controllo arriva con la scansione tra meno di 3 ore. Intanto guarda la lista “in osservazione” qui sotto.</p></div>
             : <div className="tc-opps">{list.map((o: any) => { const k = o.fixtureId + o.market, st = stakeOf(o.units), g = GRADE[o.grade], f = failed(o); return <article key={k} className={'tc-opp g-' + o.grade}>
               <div className={'tcx-ribbon g-' + o.grade}><b>{o.grade}</b><div><strong>{g[0]}</strong><small>{g[1]}</small></div>{I('opp')}</div>
-              {o.reported && <p className="tcx-reported">{o.reported.auto ? 'Ricontrollata in automatico su Lottomatica/Planet' : 'Quota aggiornata'} alle {hm(o.reported.at)}: {o.reported.odds.toFixed(2)} (QUORUM aveva letto {o.reported.before.toFixed(2)}). Livello e valore ricalcolati.</p>}
+              {o.reported && <p className="tcx-reported">{o.reported.onDemand ? 'Quote lette su richiesta' : o.reported.auto ? 'Ricontrollata in automatico su Lottomatica/Planet' : 'Quota aggiornata'} alle {hm(o.reported.at)}: {o.reported.odds.toFixed(2)} (QUORUM aveva letto {o.reported.before.toFixed(2)}). Livello e valore ricalcolati.</p>}
               <div className="tc-opp-top"><div><small>{o.competition} · {when(o.kickoff)}</small><strong>{o.fixture}</strong></div><span className="tip-edge" title="Valore: quanto la quota paga più del giusto">valore {sg(o.edge)}</span></div>
               <div className="tcx-pick"><span className="tcx-esito"><small>Esito da giocare</small><b>{o.label}</b></span>
                 <span><small>Quota</small><b>{o.odds.toFixed(2)}</b><em>{o.bookmaker}</em></span>
@@ -145,6 +147,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
               <ul className="tc-checks">{o.checks.map((c: any) => <li key={c.id} className={c.ok === true ? 'ok' : c.ok === false ? 'ko' : 'na'} title={c.note} role="button" tabIndex={0} onClick={() => setInfoId(CK[c.id] ?? 'opp')}><i>{c.ok === true ? <Check size={13} /> : c.ok === false ? <X size={13} /> : '?'}</i>{c.label}</li>)}</ul>
               <button className="text-button" onClick={() => setOpen(open === k ? '' : k)}>{open === k ? 'Chiudi i dettagli' : 'Perché? Vedi i dettagli dei controlli'}</button>
               {open === k && <ul className="tc-notes">{o.checks.map((c: any) => <li key={c.id}><b>{c.label}</b>: {c.note}</li>)}</ul>}
+              <LiveButton fixtureId={o.fixtureId} busy={live.busy} at={o.reported?.onDemand ? o.reported.at : undefined} onClick={async () => { if (await live.refresh(o.fixtureId)) setReload(x => x + 1); }} />
               {onRecord && o.grade !== 'C' && playBox({ k, suggested: st, odds: o.odds, p: o.pTrue, report: o.fixtureId + ':' + o.market, record: (c, q) => onRecord([{ fixtureId: o.fixtureId, fixture: o.fixture, competition: o.competition, kickoff: o.kickoff, market: o.market, label: o.label, p: o.pTrue, odds: q }], c, 'value', 'tipster-centro') })}
             </article>; })}</div>}
           {(d.opportunities.doubles ?? []).length > 0 && <><h3 className="day-title">🎯 Doppie del metodo</h3>

@@ -262,3 +262,4 @@ export async function checkFixture(fid: string, opts: { maxToday: number }): Pro
 export async function lastCheckAt(fid: string): Promise<string | null> {
   const c = (await targetedStore())[fid]; return c ? Object.values(c.at)[0] ?? null : null;
 }
+export async function storedCheck(fid: string): Promise<Check | null> { return (await targetedStore())[fid] ?? null; }

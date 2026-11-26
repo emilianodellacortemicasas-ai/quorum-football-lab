@@ -185,14 +185,14 @@ export function applyReports<T extends { list: any[] }>(opp: T, reports: Record<
   const list = opp.list.map(o => {
     const r = reports[o.fixtureId + ':' + o.market]; if (!r || !(r.odds > 1)) return o;
     const readAt = o.ageH === null ? 0 : t - o.ageH * 3600000; if (Date.parse(r.at) <= readAt || Math.abs(r.odds - o.odds) < 0.01) return o;
-    const auto = r.book?.startsWith('auto:') ? r.book.slice(5) : null;
+    const am = /^(auto|agg):(.+)$/.exec(r.book ?? ''), auto = am ? am[2] : null, onDemand = am?.[1] === 'agg';
     const edge = o.pTrue * r.odds - 1, hhmm = new Date(r.at).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
-    const checks = o.checks.map((c: CheckItem) => c.id === 'value' ? { ...c, ok: edge >= TIP_MIN_EDGE, note: (auto ? 'Ricontrollata in automatico su ' + auto + ' alle ' : 'Quota aggiornata da un utente alle ') + hhmm + ': ' + r.odds.toFixed(2) + ' (prima ' + o.odds.toFixed(2) + '). Quota giusta ' + (1 / o.pTrue).toFixed(2) + ': ' + (edge >= 0 ? '+' : '') + (edge * 100).toFixed(1) + '%.' }
+    const checks = o.checks.map((c: CheckItem) => c.id === 'value' ? { ...c, ok: edge >= TIP_MIN_EDGE, note: (auto ? (onDemand ? 'Aggiornata ora su richiesta: ' : 'Ricontrollata in automatico: ') + auto + ' alle ' : 'Quota aggiornata da un utente alle ') + hhmm + ': ' + r.odds.toFixed(2) + ' (prima ' + o.odds.toFixed(2) + '). Quota giusta ' + (1 / o.pTrue).toFixed(2) + ': ' + (edge >= 0 ? '+' : '') + (edge * 100).toFixed(1) + '%.' }
       : c.id === 'fresh' ? { ...c, ok: true, note: auto ? 'Quota riletta alle ' + hhmm + ', poco prima della partita.' : 'Quota segnalata alle ' + hhmm + ' da chi l’ha appena giocata.' } : c);
     const fails = checks.filter((c: CheckItem) => c.ok === false).map((c: CheckItem) => c.id), critical = fails.some((f: string) => ['value', 'fresh', 'history'].includes(f));
     const grade = critical ? 'C' : fails.length === 0 ? 'A' : fails.length === 1 ? 'B' : 'C';
     const kel = Math.max(0, 0.25 * edge / (r.odds - 1)) * (grade === 'B' ? 0.5 : grade === 'C' ? 0 : 1);
-    return { ...o, odds: r.odds, edge, grade, checks, units: Math.round(Math.min(kel, 0.02) * 1000) / 10, reported: { odds: r.odds, at: r.at, before: o.odds, auto: !!auto } };
+    return { ...o, odds: r.odds, edge, grade, checks, units: Math.round(Math.min(kel, 0.02) * 1000) / 10, reported: { odds: r.odds, at: r.at, before: o.odds, auto: !!auto, onDemand } };
   });
   const order: Record<string, number> = { A: 0, B: 1, C: 2 };
   return { ...opp, list: list.sort((a, b) => order[a.grade] - order[b.grade] || b.edge - a.edge) };

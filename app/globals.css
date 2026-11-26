@@ -1219,3 +1219,6 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .launch-item span{display:grid}.launch-item small{opacity:.75;font-size:13px}.launch-item em{font-size:12px;opacity:.6;font-style:normal}.launch-item.done b{color:#256b51}.launch-dot{min-width:16px}
 .launch-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end}.launch-form label{display:grid;gap:5px;font-size:14px;font-weight:600}.launch-form input{border:1px solid #d5dfd7;border-radius:9px;padding:10px;font-size:15px}
 @media(max-width:700px){.launch-form{grid-template-columns:1fr}}
+.live-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid currentColor;background:none;cursor:pointer;opacity:.85;margin:6px 0}
+.live-btn:disabled{opacity:.5;cursor:default}.live-btn .spin{animation:livespin 1s linear infinite}@keyframes livespin{to{transform:rotate(360deg)}}
+.value-it.fresh{outline:1px dashed #256b51;outline-offset:2px}

@@ -2,7 +2,7 @@
 // the earlier scans, then runs the pure analysis of tipster-center.ts. Refreshed after every scan (every 3 hours).
 import { env } from 'cloudflare:workers';
 import { latestPredictions } from './scanner';
-import { checkFixture, italianOdds, lastCheckAt, matchItalian, oddsPlan } from './italian-odds';
+import { checkFixture, italianOdds, lastCheckAt, matchItalian, oddsPlan, storedCheck, usage } from './italian-odds';
 import { applyReports, margins, movements, opportunities, performance, segments, streaks, type CenterRec, type PriceReport } from './tipster-center';
 
 const db = () => env.DB!;
@@ -108,7 +108,10 @@ export async function autoCheckPrices(t = Date.now()) {
   const c = await storedCenter();
   const opp = applyReports(c.opportunities, await priceReports());
   // Free plan: 3 checks a day, 1–3.5 h before kickoff. Paid plan: up to 100 a day, every A/B within 12 h, every 2 h.
-  const plan = await oddsPlan(), perDay = plan.paid ? 100 : AUTO_PER_DAY, maxH = plan.paid ? 12 : 3.5, minH = plan.paid ? 0.5 : 1, gapH = plan.paid ? 2 : 6;
+  const plan = await oddsPlan();
+  // Free plan: no automatic checks — the requests are kept for the users' own "Quote adesso" button.
+  if (!plan.paid) return { checked: 0 };
+  const perDay = 100, maxH = plan.paid ? 12 : 3.5, minH = plan.paid ? 0.5 : 1, gapH = plan.paid ? 2 : 6;
   const due = opp.list.filter((o: any) => o.grade !== 'C' && Date.parse(o.kickoff) - t > minH * 3600000 && Date.parse(o.kickoff) - t < maxH * 3600000);
   if (!due.length) return { checked: 0 };
   const it = await italianOdds().catch(() => null); if (!it) return { checked: 0 };
@@ -146,4 +149,46 @@ export async function centerWithReports(source: 'metodo' | 'mie', owner?: string
   const oddsUsage = await import('./italian-odds').then(m => m.usage()).catch(() => null);
   const { salesGoal } = await import('./tipster-center');
   return { ...c, oddsUsage, goal: c.performance ? salesGoal(c.performance) : null, opportunities: applyReports(c.opportunities, await priceReports()) };
+}
+
+// ---- On-demand refresh ("Quote adesso"): one request reads every Italian bookmaker for that match, right now. ----
+// A check less than 15 minutes old is reused at no cost. Each user has a small daily allowance so the free plan
+// (250 requests a month for everyone) lasts the whole month.
+export const REFRESH_PER_DAY = { user: 5, owner: 20 }, REUSE_MIN = 15;
+async function userCounts(): Promise<{ day: string; n: Record<string, number> }> {
+  const d = new Date().toISOString().slice(0, 10);
+  const row = await db().prepare("SELECT payload FROM model_state WHERE id='oddspapi:users'").first<{ payload: string }>().catch(() => null);
+  const u = row ? JSON.parse(row.payload) : null;
+  return u?.day === d ? u : { day: d, n: {} };
+}
+export async function refreshMatch(fixtureId: string, user: string, owner: boolean, t = Date.now()) {
+  if (!/^sm-\d{1,12}$/.test(fixtureId)) throw new Error('Partita non valida.');
+  const row = await db().prepare("SELECT fixture_id,fixture,competition,kickoff,markets FROM scanner_matches WHERE fixture_id=? ORDER BY created_at DESC LIMIT 1").bind(fixtureId).first<any>();
+  if (!row) throw new Error('Partita non trovata.');
+  if (Date.parse(row.kickoff) < t - 5 * 60000) throw new Error('La partita è già iniziata.');
+  const [home, away] = String(row.fixture).split(' – ');
+  const it = await italianOdds(); const fx = it ? matchItalian({ home, away, kickoff: row.kickoff, competition: row.competition }, it) : null;
+  if (!fx?.id) throw new Error('Questa partita non è quotata dai bookmaker italiani collegati.');
+  const last = await lastCheckAt(fx.id), cap = owner ? REFRESH_PER_DAY.owner : REFRESH_PER_DAY.user;
+  const counts = await userCounts(); let chk = null, reused = false;
+  if (last && t - Date.parse(last) < REUSE_MIN * 60000) { chk = await storedCheck(fx.id); reused = true; }
+  if (!chk) {
+    if ((counts.n[user] ?? 0) >= cap) throw new Error('Hai usato i ' + cap + ' aggiornamenti di oggi. Domani se ne aggiungono altri.');
+    chk = await checkFixture(fx.id, { maxToday: 999 });
+    if (!chk) throw new Error('Aggiornamenti del mese esauriti per il piano gratuito: le quote si aggiornano comunque due volte al giorno.');
+    counts.n[user] = (counts.n[user] ?? 0) + 1;
+    await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('oddspapi:users',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(new Date(t).toISOString(), JSON.stringify(counts)).run();
+  }
+  // The fresh prices become price reports: every Centro proposal on this match is re-graded at once.
+  const mk = JSON.parse(row.markets), reports = await priceReports(), at = Object.values(chk.at)[0] ?? new Date(t).toISOString(), quotes: Record<string, Record<string, number>> = {};
+  for (const [k, q] of Object.entries(chk.quotes)) {
+    const p = sharpOf(mk, k), book = q.Lottomatica ? 'Lottomatica' : Object.keys(q)[0], odds = q[book]?.odds;
+    if (!(odds > 1)) continue;
+    if (p !== null) { const edge = p * odds - 1; if (edge > 0.25 || edge < -0.4) continue; }
+    quotes[k] = Object.fromEntries(Object.entries(q).filter(([b]) => b !== 'Planetwin365').map(([b, v]) => [b, v.odds]));
+    if (!reused) reports[fixtureId + ':' + k] = { odds: Math.round(odds * 100) / 100, at, book: 'agg:' + book };
+  }
+  if (!reused) await saveReports(reports);
+  const u = await usage();
+  return { fixture: row.fixture, at, reused, quotes, left: Math.max(0, cap - (counts.n[user] ?? 0)), month: { used: u.n, limit: (await oddsPlan()).limit } };
 }

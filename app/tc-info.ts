@@ -13,7 +13,7 @@ export const WHY = {
 
 export const INFO: Record<string, InfoItem> = {
   ready: { group: 'Prestazioni', title: 'Pronto per le quote in tempo reale?',
-    come: 'Tre controlli: almeno 100 singole del metodo chiuse, CLV medio sopra +1% e almeno 1.500 € giocati da te negli ultimi 30 giorni. Oggi le quote italiane arrivano dal piano gratuito (250 richieste al mese): Lottomatica/Planet ogni 12 ore, gli altri ogni 5 giorni, più un ricontrollo automatico 1–3,5 ore prima delle partite proposte (massimo 3 al giorno).',
+    come: 'Tre controlli: almeno 100 singole del metodo chiuse, CLV medio sopra +1% e almeno 1.500 € giocati da te negli ultimi 30 giorni. Oggi le quote italiane arrivano dal piano gratuito (250 richieste al mese): Lottomatica/Planet ogni 12 ore, gli altri ogni 5 giorni, più il tasto “Quote adesso” su ogni partita (5 aggiornamenti al giorno a testa).',
     obiettivo: 'Dirti quando un abbonamento a quote in tempo reale (circa 45 € al mese) si ripaga davvero, invece di diventare un costo fisso che svuota il capitale.',
     leggere: 'Ogni controllo è verde quando è superato. La barra sotto mostra quante richieste del mese sono già state usate.',
     interpretare: 'Con 1.500 € al mese giocati e un rendimento del 3% guadagni circa 45 €: è il pareggio dell’abbonamento. Sotto quella soglia pagheresti i dati più di quanto rendono.',
