@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { GoalBox } from '../goal-box';
 
 // Owner-only launch panel: checklist, business data, Stripe prices, sales switch.
 export default function Launch() {
@@ -27,6 +28,7 @@ export default function Launch() {
     <p className="small-note">Finché la vendita è spenta tutti gli utenti hanno accesso completo, come oggi. Accesa: chi non è abbonato passa al piano Base e spariscono dalle risposte i link alle schedine dei bookmaker.</p>
     {msg && <p className="connection-success">{msg}</p>}{err && <p className="connection-error">{err}</p>}
 
+    {s.goal && <><h2>Obiettivo del metodo</h2><GoalBox g={s.goal} /></>}
     <h2>Lista di lancio</h2>
     {groups.map(g => <section key={g} className="launch-group"><h3>{g}</h3>{s.items.filter((i: any) => i.group === g).map((i: any) =>
       <label key={i.id} className={'launch-item' + (s.checklist[i.id] ? ' done' : '')}><input type="checkbox" checked={!!s.checklist[i.id]} disabled={busy} onChange={e => send({ action: 'check', id: i.id, done: e.target.checked })} />
@@ -45,6 +47,12 @@ export default function Launch() {
     <form className="launch-form" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); send({ action: 'prices', ...Object.fromEntries(f) }, 'Prezzi collegati.'); }}>
       {field('pro_m', 'Pro mensile', p.pro_m ?? '', 'price_…')}{field('pro_y', 'Pro annuale', p.pro_y ?? '', 'price_…')}{field('tipster_m', 'Tipster mensile', p.tipster_m ?? '', 'price_…')}{field('tipster_y', 'Tipster annuale', p.tipster_y ?? '', 'price_…')}
       <button className="primary" disabled={busy}>Collega prezzi</button></form>
+    <h2>Quote italiane in tempo reale</h2>
+    <p className="small-note">Accendilo solo dopo aver attivato il piano a pagamento di OddsPapi. Con l’interruttore acceso Lottomatica/Planet si aggiornano ogni ora, gli altri ogni 6 ore, e il ricontrollo prima delle partite sale fino a 100 al giorno su tutte le proposte A/B delle 12 ore successive.</p>
+    <form className="launch-form" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); send({ action: 'odds-plan', paid: f.get('paid') === 'on', limit: Number(f.get('limit')) }, 'Piano quote aggiornato.'); }}>
+      <label className="launch-item"><input type="checkbox" name="paid" defaultChecked={!!s.oddsPlan?.paid} /><span><b>Piano a pagamento attivo</b></span></label>
+      <label>Richieste al mese del piano<input name="limit" type="number" defaultValue={s.oddsPlan?.limit ?? 250} min={250} /></label>
+      <button className="primary" disabled={busy}>Salva</button></form>
     <p><a href="/prezzi">Anteprima pagina Piani</a> · <a href="/termini">Termini</a> · <a href="/privacy">Privacy</a> · <a href="/gioco-responsabile">Gioco responsabile</a></p>
   </main>;
 }

@@ -47,7 +47,9 @@ function segment(recs: CenterRec[], keyOf: (r: CenterRec) => string | null): Seg
   const g = new Map<string, CenterRec[]>();
   for (const r of recs) { const k = keyOf(r); if (k) (g.get(k) ?? g.set(k, []).get(k)!).push(r); }
   return [...g.entries()].map(([key, rs]) => {
-    const p = performance(rs), flag = p.clvN >= 10 && p.clv !== null ? (p.clv >= 0.02 ? 'spingi' : p.clv < 0 ? 'taglia' : null) : null;
+    // Pruning, tipster style: a segment is cut only when the evidence is enough to rule out bad luck —
+    // at least 30 measured bets with CLV below −1%, or 60 with CLV below zero. Pushed from 20 bets at ≥ +2%.
+    const p = performance(rs), flag = p.clv === null ? null : p.clvN >= 20 && p.clv >= 0.02 ? 'spingi' : (p.clvN >= 30 && p.clv < -0.01) || (p.clvN >= 60 && p.clv < 0) ? 'taglia' : null;
     return { key, n: p.n, won: p.won, expected: p.expected, yield: p.yield, clv: p.clv, clvN: p.clvN, flag } as Segment;
   }).sort((a, b) => (b.clvN + b.n) - (a.clvN + a.n));
 }
@@ -144,7 +146,7 @@ export function opportunities(rows: Row[], moves: Move[], seg: ReturnType<typeof
   for (const l of picks.singles) {
     const r = rows.find(x => x.fixture_id === l.fixtureId)!, mv = byKey.get(l.fixtureId + ':' + l.market) ?? null;
     const adj = r?.markets?.meta?.adjust, heavy = !!adj && (adj.home?.factor < 0.85 || adj.away?.factor < 0.85);
-    const sl = segOf(seg?.league, l.competition), sm = segOf(seg?.market, marketFamily(l.market)), bad = [sl, sm].find(s => s?.flag === 'taglia');
+    const sl = segOf(seg?.league, l.competition), sm = segOf(seg?.market, marketFamily(l.market)), sb = segOf(seg?.band, oddsBand(l.odds)), bad = [sl, sm, sb].find(s => s?.flag === 'taglia');
     const fresh = l.ageH === null ? null : l.ageH <= (/Lottomatica|Planetwin/.test(l.bookmaker) ? 6 : 24);
     const checks: CheckItem[] = [
       { id: 'value', label: 'Valore ≥ ' + Math.round(TIP_MIN_EDGE * 100) + '%', ok: l.edge >= TIP_MIN_EDGE, note: 'Quota ' + l.odds.toFixed(2) + ' contro quota giusta ' + (1 / l.pTrue).toFixed(2) + ': +' + (l.edge * 100).toFixed(1) + '%.' },
@@ -194,4 +196,21 @@ export function applyReports<T extends { list: any[] }>(opp: T, reports: Record<
   });
   const order: Record<string, number> = { A: 0, B: 1, C: 2 };
   return { ...opp, list: list.sort((a, b) => order[a.grade] - order[b.grade] || b.edge - a.edge) };
+}
+
+// ---- Sales goal: the method goes on sale only when it has a measured edge. ----
+export const SALES_GOAL = { singles: 300, clv: 0.02, t: 2, checkpoint: { date: '2027-01-31', singles: 150, clv: 0.01 }, deadline: '2027-03-31', extension: '2027-06-30' };
+export function salesGoal(p: { n: number; clv: number | null; clvN: number; tClv: number | null; tProfit?: number | null; units?: number }, t = Date.now()) {
+  const g = SALES_GOAL;
+  const checks = [
+    { id: 'n', label: 'Singole chiuse nel registro', value: p.n, target: g.singles, ok: p.n >= g.singles },
+    { id: 'clv', label: 'CLV medio', value: p.clv ?? 0, target: g.clv, ok: p.clvN >= g.singles * 0.8 && (p.clv ?? 0) >= g.clv },
+    { id: 't', label: 'Vantaggio statisticamente certo (CLV a 2 errori standard da zero)', value: p.tClv ?? 0, target: g.t, ok: (p.tClv ?? 0) >= g.t },
+    { id: 'units', label: 'Risultato in unità non negativo', value: p.units ?? 0, target: 0, ok: (p.units ?? 0) >= 0 },
+  ];
+  const daysLeft = Math.ceil((Date.parse(g.deadline + 'T23:59:59Z') - t) / 86400000);
+  const reached = checks.every(c => c.ok);
+  const phase = reached ? 'raggiunto' : t > Date.parse(g.extension + 'T23:59:59Z') ? 'fallito' : t > Date.parse(g.deadline + 'T23:59:59Z') ? 'proroga' : t > Date.parse(g.checkpoint.date + 'T23:59:59Z') ? 'seconda-fase' : 'prima-fase';
+  const checkpointOk = p.n >= g.checkpoint.singles && (p.clv ?? 0) >= g.checkpoint.clv;
+  return { ...g, checks, reached, phase, daysLeft, checkpointOk };
 }

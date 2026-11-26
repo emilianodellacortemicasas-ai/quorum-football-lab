@@ -54,8 +54,14 @@ export async function launchStatus() {
     { id: 'prices', label: 'Prezzi Pro e Tipster creati su Stripe e collegati', ok: !!(c.prices.pro_m && c.prices.pro_y && c.prices.tipster_m && c.prices.tipster_y) },
     { id: 'business', label: 'Dati dell’impresa compilati (appaiono in termini, privacy e ricevute)', ok: !!(b && b.name && /^\d{11}$/.test(b.vat) && b.address && b.email && b.pec) },
   ];
+  // The method's measured edge is a launch requirement like the paperwork.
+  const { storedCenter } = await import('./tipster-center-job'); const { salesGoal } = await import('./tipster-center');
+  const center: any = await storedCenter().catch(() => null);
+  const goal = center?.performance ? salesGoal(center.performance) : null;
+  tech.unshift({ id: 'edge', label: 'Obiettivo del metodo: 300 singole, CLV ≥ +2%, vantaggio statisticamente certo', ok: !!goal?.reached });
   const missing = [...CHECKLIST.filter(i => i.required && !c.checklist[i.id]).map(i => i.label), ...tech.filter(t => !t.ok).map(t => t.label)];
-  return { ...c, items: CHECKLIST, tech, missing, ready: missing.length === 0 };
+  const oddsPlan = await import('./italian-odds').then(m => m.oddsPlan()).catch(() => null);
+  return { ...c, items: CHECKLIST, tech, missing, goal, oddsPlan, ready: missing.length === 0 };
 }
 export async function updateLaunch(body: any) {
   const c = await commerce();
@@ -65,6 +71,8 @@ export async function updateLaunch(body: any) {
     c.business = { name: s(body.name), vat: s(body.vat, 11).replace(/\D/g, ''), address: s(body.address), email: s(body.email, 120), pec: s(body.pec, 120), court: s(body.court, 120) };
   } else if (body.action === 'prices') {
     for (const k of ['pro_m', 'pro_y', 'tipster_m', 'tipster_y'] as const) { const v = String(body[k] ?? '').trim(); if (!v) delete c.prices[k]; else if (/^price_[A-Za-z0-9]{8,64}$/.test(v)) c.prices[k] = v; else throw new Error('ID prezzo non valido: ' + k + ' (deve iniziare con price_).'); }
+  } else if (body.action === 'odds-plan') {
+    const { setOddsPlan } = await import('./italian-odds'); await setOddsPlan(!!body.paid, Number(body.limit)); return launchStatus();
   } else if (body.action === 'enable') {
     if (body.on) { const st = await launchStatus(); if (!st.ready) throw new Error('Mancano ancora: ' + st.missing.join(' · ')); c.enabled = true; c.enabledAt = new Date().toISOString(); }
     else c.enabled = false;

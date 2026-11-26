@@ -25,6 +25,19 @@ const norm = (s: unknown) => String(s ?? '').toLowerCase().normalize('NFD').repl
 
 // Monthly request counter (UTC month): every call to OddsPapi is counted, targeted checks stop well before the plan limit.
 export const PLAN_LIMIT = 250, TARGETED_CEILING = 238;
+// Paid plan switch (set from /lancio once the owner has subscribed): monthly limit and faster refreshes.
+export type OddsPlan = { paid: boolean; limit: number };
+export async function oddsPlan(): Promise<OddsPlan> {
+  const row = await db().prepare("SELECT payload FROM model_state WHERE id='oddspapi:plan'").first<{ payload: string }>().catch(() => null);
+  const p = row ? JSON.parse(row.payload) : null;
+  return p?.paid ? { paid: true, limit: Math.max(PLAN_LIMIT, Number(p.limit) || PLAN_LIMIT) } : { paid: false, limit: PLAN_LIMIT };
+}
+export async function setOddsPlan(paid: boolean, limit: number) {
+  const v: OddsPlan = { paid: !!paid, limit: Math.min(10_000_000, Math.max(PLAN_LIMIT, Math.round(limit) || PLAN_LIMIT)) };
+  await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('oddspapi:plan',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(new Date().toISOString(), JSON.stringify(v)).run();
+  return v;
+}
+const ceiling = (p: OddsPlan) => p.paid ? Math.floor(p.limit * 0.95) : TARGETED_CEILING;
 const month = () => new Date().toISOString().slice(0, 7);
 export async function usage(): Promise<{ month: string; n: number; targeted: number; day: string; today: number }> {
   const row = await db().prepare("SELECT payload FROM model_state WHERE id='oddspapi:usage'").first<{ payload: string }>().catch(() => null);
@@ -91,7 +104,7 @@ async function meta(key: string): Promise<Meta> {
 export type ItalianFixture = { id?: string; home: string; away: string; start: string; comp: string; quotes: Record<string, Record<string, { odds: number; link: string | null }>>; at?: Record<string, string> };
 export async function italianOdds(): Promise<ItalianFixture[] | null> {
   const key = await credentialValue('oddspapi'); if (!key) return null;
-  const m = await meta(key);
+  const m = await meta(key), plan = await oddsPlan();
   const ids = Object.entries(m.tournaments); if (!ids.length) return [];
   const compOf = (tid: number) => ids.find(([, v]) => v === tid)?.[0] ?? '';
   // The API accepts at most 5 tournaments per call: main leagues and minor leagues in two calls per bookmaker.
@@ -105,7 +118,7 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
     for (const [g, tids] of groups) {
       if (!tids.length) continue;
       try {
-        const rows = await cached<any[]>('oddspapi:' + b.key + ':' + g, b.age * 3600000, async () => {
+        const rows = await cached<any[]>('oddspapi:' + b.key + ':' + g, (plan.paid ? (b.key === 'lottomatica' ? 1 : 6) : b.age) * 3600000, async () => {
           await new Promise(r => setTimeout(r, 1100));
           return list(await api('odds-by-tournaments?bookmaker=' + encodeURIComponent(slug) + '&tournamentIds=' + tids.join(',') + '&oddsFormat=decimal', key!)).map(f => ({ fixtureId: f.fixtureId, participant1Name: f.participant1Name, participant2Name: f.participant2Name, participant1Id: f.participant1Id, participant2Id: f.participant2Id, startTime: f.startTime, tournamentId: f.tournamentId, board: f.bookmakerOdds?.[slug] ?? null }));
         });
@@ -226,7 +239,7 @@ function parseBoard(board: any, label: string, quotes: ItalianFixture['quotes'])
 // Returns the Italian quotes of one match read right now, or null if the budget is spent / the call fails.
 export async function checkFixture(fid: string, opts: { maxToday: number }): Promise<Check | null> {
   const key = await credentialValue('oddspapi'); if (!key) return null;
-  const u = await usage(); if (u.n >= TARGETED_CEILING || u.today >= opts.maxToday) return null;
+  const u = await usage(); if (u.n >= ceiling(await oddsPlan()) || u.today >= opts.maxToday) return null;
   const m = await meta(key);
   let raw: any;
   try { raw = await api('odds?fixtureId=' + encodeURIComponent(fid) + '&oddsFormat=decimal', key, true); } catch { return null; }

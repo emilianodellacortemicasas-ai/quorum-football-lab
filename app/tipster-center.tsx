@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, BarChart3, Check, Gauge as GaugeIcon, Info, ListChecks, Radar, RefreshCw, Scale, TrendingDown, X } from 'lucide-react';
 import { money, percent } from '../lib/math';
+import { GoalBox } from './goal-box';
 import type { RecordPlay } from '../lib/types';
 import { Core, CountUp, Countdown, Curve, Gauge, MatrixRain, Ticker, Tilt } from './tc-visuals';
 import { INFO, INFO_ORDER, WHY } from './tc-info';
@@ -161,6 +162,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
 
         {tab === 'perf' && (() => { const p = d.performance, v = VERDICT[p.verdict] ?? VERDICT.nessuna; return <section>
           <div className={'tc-verdict v-' + p.verdict}><GaugeIcon size={22} /><div><strong>{v[0]}</strong><p>{v[1]}{p.needed ? ' Con questo CLV servono ancora circa ' + p.needed + ' giocate per averne la certezza statistica.' : ''}</p></div></div>
+          {d.goal && <GoalBox g={d.goal} />}
           {(() => { const u = d.oddsUsage, checks = [{ ok: p.n >= 100, t: 'Singole del metodo chiuse', v: p.n + ' / 100' }, { ok: p.clvN >= 20 && p.clv >= 0.01, t: 'CLV medio sopra +1%', v: (p.clv >= 0 ? '+' : '') + (p.clv * 100).toFixed(1).replace('.', ',') + '%' }, { ok: monthStakeCents >= 150000, t: 'Giocato da te negli ultimi 30 giorni', v: money(monthStakeCents) + ' / 1.500 €' }], all = checks.every(c => c.ok);
             return <div className={'tcx-ready' + (all ? ' on' : '')}><div className="tcx-ready-h"><strong>{all ? 'Pronto: le quote in tempo reale si ripagano' : 'Quote in tempo reale: non ancora'}</strong>{I('ready')}</div>
               <ul>{checks.map(c => <li key={c.t} className={c.ok ? 'ok' : ''}><span>{c.ok ? '✓' : '○'}</span>{c.t}<b>{c.v}</b></li>)}</ul>

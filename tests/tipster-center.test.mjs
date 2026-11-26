@@ -15,8 +15,11 @@ test('performance: yield, CLV and verdict', () => {
   assert.equal(performance(rs.slice(0, 5)).verdict, 'presto');
 });
 test('segments flag leagues to cut and to push', () => {
-  const rs = [...Array.from({ length: 12 }, (_, i) => rec(2 * i + 1, 'won', 2.0, 0.55)), ...Array.from({ length: 12 }, (_, i) => rec(2 * i, 'lost', 2.0, 0.45))];
+  const rs = [...Array.from({ length: 30 }, (_, i) => rec(2 * i + 1, 'won', 2.0, 0.55)), ...Array.from({ length: 30 }, (_, i) => rec(2 * i, 'lost', 2.0, 0.45))];
   const s = segments(rs);
+  // Too few bets: no verdict, whatever the CLV (12 per league is noise).
+  const few = segments(rs.filter((_, i) => i % 30 < 12));
+  assert.equal(few.league.find(x => x.key === 'Serie B').flag, null);
   assert.equal(s.league.find(x => x.key === 'Serie A').flag, 'spingi');
   assert.equal(s.league.find(x => x.key === 'Serie B').flag, 'taglia');
   assert.equal(oddsBand(2.0), '1,90–2,29');
@@ -43,4 +46,14 @@ test('margins per bookmaker', () => {
   const m = margins([row('sm-1', 0.5, 2.0), row('sm-2', 0.5, 2.0)]);
   assert.deepEqual(m.books, ['Sisal', 'Snai']);
   const snai = m.table[0].avg.Snai; assert.ok(Math.abs(snai - (1 / 2 + 1 / 3.4 + 1 / 4 - 1)) < 1e-9);
+});
+test('sales goal: the method is on sale only with a measured edge', async () => {
+  const { salesGoal } = await import('../lib/tipster-center.ts');
+  const t = Date.parse('2026-12-01T12:00:00Z');
+  const no = salesGoal({ n: 120, clv: 0.025, clvN: 110, tClv: 1.4, units: 3 }, t);
+  assert.equal(no.reached, false); assert.equal(no.phase, 'prima-fase');
+  const yes = salesGoal({ n: 310, clv: 0.021, clvN: 300, tClv: 2.3, units: 12 }, t);
+  assert.equal(yes.reached, true); assert.equal(yes.phase, 'raggiunto');
+  assert.equal(salesGoal({ n: 310, clv: 0.021, clvN: 300, tClv: 2.3, units: -1 }, t).reached, false);
+  assert.equal(salesGoal({ n: 200, clv: 0.01, clvN: 190, tClv: 1, units: 0 }, Date.parse('2027-04-10T00:00:00Z')).phase, 'proroga');
 });

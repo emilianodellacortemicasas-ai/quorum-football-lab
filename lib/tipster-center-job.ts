@@ -2,7 +2,7 @@
 // the earlier scans, then runs the pure analysis of tipster-center.ts. Refreshed after every scan (every 3 hours).
 import { env } from 'cloudflare:workers';
 import { latestPredictions } from './scanner';
-import { checkFixture, italianOdds, lastCheckAt, matchItalian } from './italian-odds';
+import { checkFixture, italianOdds, lastCheckAt, matchItalian, oddsPlan } from './italian-odds';
 import { applyReports, margins, movements, opportunities, performance, segments, streaks, type CenterRec, type PriceReport } from './tipster-center';
 
 const db = () => env.DB!;
@@ -107,7 +107,9 @@ export const AUTO_PER_DAY = 3;
 export async function autoCheckPrices(t = Date.now()) {
   const c = await storedCenter();
   const opp = applyReports(c.opportunities, await priceReports());
-  const due = opp.list.filter((o: any) => o.grade !== 'C' && Date.parse(o.kickoff) - t > 3600000 && Date.parse(o.kickoff) - t < 3.5 * 3600000);
+  // Free plan: 3 checks a day, 1–3.5 h before kickoff. Paid plan: up to 100 a day, every A/B within 12 h, every 2 h.
+  const plan = await oddsPlan(), perDay = plan.paid ? 100 : AUTO_PER_DAY, maxH = plan.paid ? 12 : 3.5, minH = plan.paid ? 0.5 : 1, gapH = plan.paid ? 2 : 6;
+  const due = opp.list.filter((o: any) => o.grade !== 'C' && Date.parse(o.kickoff) - t > minH * 3600000 && Date.parse(o.kickoff) - t < maxH * 3600000);
   if (!due.length) return { checked: 0 };
   const it = await italianOdds().catch(() => null); if (!it) return { checked: 0 };
   const reports = await priceReports(); let checked = 0;
@@ -116,8 +118,8 @@ export async function autoCheckPrices(t = Date.now()) {
     const [home, away] = String(o.fixture).split(' – ');
     const fx = matchItalian({ home, away, kickoff: o.kickoff, competition: o.competition }, it);
     if (!fx?.id || seen.has(fx.id)) continue; seen.add(fx.id);
-    const last = await lastCheckAt(fx.id); if (last && t - Date.parse(last) < 6 * 3600000) continue;
-    const chk = await checkFixture(fx.id, { maxToday: AUTO_PER_DAY }); if (!chk) break;
+    const last = await lastCheckAt(fx.id); if (last && t - Date.parse(last) < gapH * 3600000) continue;
+    const chk = await checkFixture(fx.id, { maxToday: perDay }); if (!chk) break;
     checked++;
     for (const x of opp.list.filter((y: any) => y.fixtureId === o.fixtureId)) {
       const q: Record<string, { odds: number }> | undefined = chk.quotes[x.market]; if (!q) continue;
@@ -142,5 +144,6 @@ export async function reportPrice(key: string, odds: number) {
 export async function centerWithReports(source: 'metodo' | 'mie', owner?: string) {
   const c = source === 'mie' && owner ? await buildCenter('mie', owner) : await storedCenter();
   const oddsUsage = await import('./italian-odds').then(m => m.usage()).catch(() => null);
-  return { ...c, oddsUsage, opportunities: applyReports(c.opportunities, await priceReports()) };
+  const { salesGoal } = await import('./tipster-center');
+  return { ...c, oddsUsage, goal: c.performance ? salesGoal(c.performance) : null, opportunities: applyReports(c.opportunities, await priceReports()) };
 }
