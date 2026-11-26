@@ -30,8 +30,10 @@ export function LiveButton({ fixtureId, busy, onClick, at }: { fixtureId: string
     <button type="button" className="live-btn" disabled={!!busy} onClick={onClick} title="Legge adesso le quote di Lottomatica, Planet, Snai, Sisal ed Eurobet">
       <RefreshCw size={15} className={busy === fixtureId ? 'spin' : ''} />{busy === fixtureId ? 'Leggo le quote…' : tone === 'ok' ? 'Riaggiorna' : 'Aggiorna quote ora'}</button></div>;
 }
-export function FreshRow({ q, p }: { q?: Record<string, number>; p: number }) {
+// Lottomatica / Planet first and used for the value verdict; the other Italian books shown for comparison.
+export function FreshRow({ q, p, now = true }: { q?: Record<string, number>; p: number; now?: boolean }) {
   if (!q) return <p className="small-note">I bookmaker italiani non quotano adesso questo esito.</p>;
-  const best = Math.max(...Object.values(q));
-  return <div className="value-it ok fresh">{Object.entries(q).sort((a, b) => b[1] - a[1]).map(([b, v]) => <span key={b}>{b === 'Lottomatica' ? 'Lottomatica / Planet' : b} <b>{v.toFixed(2)}</b></span>)}<em>{best * p > 1 ? 'con valore adesso' : 'senza valore adesso'}</em></div>;
+  const lotto = q.Lottomatica ?? q.Planetwin365, ref = lotto ?? Math.max(...Object.values(q));
+  const others = Object.entries(q).filter(([b]) => b !== 'Lottomatica' && b !== 'Planetwin365').sort((a, b) => b[1] - a[1]);
+  return <div className="value-it ok fresh">{lotto && <span className="ref">Lottomatica / Planet <b>{lotto.toFixed(2)}</b></span>}{others.map(([b, v]) => <span key={b}>{b} <b>{v.toFixed(2)}</b></span>)}<em>{(ref * p > 1 ? 'con valore' : 'senza valore') + (now ? ' adesso' : '') + (lotto ? ' su Lottomatica / Planet' : '')}</em></div>;
 }

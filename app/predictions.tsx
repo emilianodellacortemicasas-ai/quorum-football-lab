@@ -133,7 +133,7 @@ export function PredictionsView({ onOpen, notify }: { onOpen: (fixtureId: string
           <div className="value-head"><span>{r.competition} · {when(r.kickoff)}</span><b className="edge">Fiducia {confidence(p.main.p)}</b></div>
           <h3>{r.fixture}</h3>
           <div className="value-pick"><strong>{p.main.label}</strong><span className="odds">{percent(p.main.p, 0)}</span><small>{ref ? 'quota ' + ref.bestOdds.toFixed(2) : 'quota equa ' + fair(p.main.p)}</small></div>
-          {live.fresh[r.fixture_id] ? <FreshRow q={live.fresh[r.fixture_id].quotes[p.main.key!]} p={p.main.p} /> : ref?.it && <div className="value-it ok">{Object.entries(ref.it).map(([b, q]) => <span key={b}>{b} <b>{q.toFixed(2)}</b></span>)}<em>{Object.values(ref.it).some(q => q * p.main.p > 1) ? 'con valore' : 'senza valore'}</em></div>}
+          {live.fresh[r.fixture_id] ? <FreshRow q={live.fresh[r.fixture_id].quotes[p.main.key!]} p={p.main.p} /> : ref?.it && <FreshRow q={ref.it} p={p.main.p} now={false} />}
           {r.markets?.home?.it && <LiveButton fixtureId={r.fixture_id} busy={live.busy} at={live.fresh[r.fixture_id]?.at ?? r.markets?.itAt?.Lottomatica ?? (r.markets?.itAt ? Object.values(r.markets.itAt as Record<string, string>).sort().at(-1) : null)} onClick={() => live.refresh(r.fixture_id)} />}
           <dl>
             <div><dt>Segno</dt><dd>{p.sign[0]} · {percent(p.sign[1], 0)}</dd></div>

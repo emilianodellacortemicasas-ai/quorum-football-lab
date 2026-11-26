@@ -33,10 +33,13 @@ export function toOptions(r: any): Match | null {
   const mk = r.markets || {}, opts: Opt[] = [];
   const add = (key: string, group: string, label: string) => {
     const x = mk[key]; if (!x || !Number.isFinite(x.pBlend) || !Number.isFinite(x.bestOdds)) return;
-    const it = x.it && Object.keys(x.it).length ? Object.entries<number>(x.it).sort((a, b) => b[1] - a[1]) : null;
-    const odds = it ? it[0][1] : x.bestOdds; if (!(odds > 1)) return;
+    // Reference price = Lottomatica / Planetwin365 (the books Emiliano and Valerio play on); other Italian books only when they don't quote it.
+    const it0 = x.it && Object.keys(x.it).length ? Object.entries<number>(x.it).sort((a, b) => b[1] - a[1]) : null;
+    const lotto = x.it?.Lottomatica ?? x.it?.Planetwin365;
+    const it = it0 && lotto > 1 ? it0.filter(e => e[0] === 'Lottomatica' || e[0] === 'Planetwin365').concat(it0.filter(e => e[0] !== 'Lottomatica' && e[0] !== 'Planetwin365')) : it0;
+    const odds = lotto > 1 ? lotto : it ? it[0][1] : x.bestOdds; if (!(odds > 1)) return;
     opts.push({ fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, market: key, label, group, p: x.pBlend, odds,
-      bookmaker: it ? it.filter(e => e[1] === it[0][1]).map(e => e[0]).join(' / ') : x.bookmaker, italian: !!it, se: Number.isFinite(x.se) ? x.se : Math.sqrt(x.pBlend * (1 - x.pBlend) / 40), value: x.pBlend * odds - 1 });
+      bookmaker: lotto > 1 ? 'Lottomatica / Planetwin365' : it ? it.filter(e => e[1] === it[0][1]).map(e => e[0]).join(' / ') : x.bookmaker, italian: !!it, se: Number.isFinite(x.se) ? x.se : Math.sqrt(x.pBlend * (1 - x.pBlend) / 40), value: x.pBlend * odds - 1 });
   };
   for (const [g, keys] of GROUPS) for (const k of keys) add(k, g, marketLabel(k));
   for (const k of Object.keys(mk)) {
