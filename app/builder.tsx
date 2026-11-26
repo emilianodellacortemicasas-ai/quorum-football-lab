@@ -1,5 +1,5 @@
 'use client';
-import { LiveButton } from './live-quotes';
+import { LiveButton, useLiveQuotes } from './live-quotes';
 // "Costruisci la tua schedina": every match of the week, market by market, with the playable price
 // (Lottomatica / Planetwin365 when available), the most probable outcomes and the value ones highlighted.
 // The user builds a free ticket of any size; QUORUM measures it (reliability, value, stake, potential win).
@@ -13,7 +13,7 @@ import { exactPicks, MULTIGOL, multigolP, scoreMatrix, comboSlot, customComboP, 
 
 export type Opt = { fair?: boolean; fixtureId: string; fixture: string; competition: string; kickoff: string; market: string; label: string; group: string; p: number; odds: number; bookmaker: string; italian: boolean; se: number; value: number };
 export type Player = { id: number; name: string; side: 'home' | 'away'; p: number };
-export type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string>; sc?: { home: number; away: number; p: number }[]; lh?: number; la?: number; players?: Player[] };
+export type Match = { fixtureId: string; fixture: string; competition: string; kickoff: string; opts: Opt[]; best: Set<string>; sc?: { home: number; away: number; p: number }[]; lh?: number; la?: number; players?: Player[]; itAt?: string | null };
 
 const GROUPS: [string, string[]][] = [
   ['Esito finale', ['home', 'draw', 'away']],
@@ -110,7 +110,7 @@ export function toOptions(r: any): Match | null {
   // Highlight: the two most probable outcomes with a real price (≥ 1,10) among the markets measured by the backtest.
   const measured = new Set(GROUPS.flatMap(g => g[1]));
   const best = new Set(opts.filter(o => !o.fair && o.odds >= 1.1 && measured.has(o.market)).sort((a, b) => b.p - a.p).slice(0, 2).map(o => o.market));
-  return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best, sc: sc0, lh: r.lambda_home, la: r.lambda_away, players };
+  return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best, sc: sc0, lh: r.lambda_home, la: r.lambda_away, players, itAt: mk.itAt?.Lottomatica ?? (mk.itAt ? (Object.values(mk.itAt) as string[]).sort().at(-1) : null) };
 }
 
 export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
@@ -139,6 +139,9 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
   const [comboFor, setComboFor] = useState(''), [open, setOpen] = useState<Record<string, any>>({}), [stakeText, setStakeText] = useState(''), [sheet, setSheet] = useState(false);
   useEffect(() => { try { const s = JSON.parse(localStorage.getItem(SLIP_KEY) || '[]'); if (Array.isArray(s)) setSlip(s.filter((x: Opt) => Date.parse(x.kickoff) > Date.now())); } catch { } }, []);
   useEffect(() => { try { localStorage.setItem(SLIP_KEY, JSON.stringify(slip)); } catch { } }, [slip]);
+  const live = useLiveQuotes(notify);
+  // After "Quote adesso" on a match the fresh prices are saved on the match: reload quietly, the chips show them.
+  async function quietReload() { try { const r = await fetch('/api/scanner?view=predictions', { cache: 'no-store' }); const d: any = await r.json(); if (r.ok) setMatches((d.matches || []).map(toOptions).filter(Boolean)); } catch { } }
   async function load() {
     setLoading(true); setError('');
     try { const r = await fetch('/api/scanner?view=predictions', { cache: 'no-store' }); const d: any = await r.json(); if (!r.ok) throw new Error(d.error); setMatches((d.matches || []).map(toOptions).filter(Boolean)); }
@@ -202,6 +205,7 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
           {shown.map((m, i) => <article key={m.fixtureId} className="panel builder-match">
             {(i === 0 || dayKey(shown[i - 1].kickoff) !== dayKey(m.kickoff)) && sort === 'time' && <p className="eyebrow builder-day">{dayKey(m.kickoff)}</p>}
             <div className="builder-match-head"><div><strong>{m.fixture}</strong><small>{m.competition} · {when(m.kickoff)}</small>{m.sc && <button className="combo-open" onClick={() => { setComboFor(m.fixtureId); document.getElementById('combo-maker')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>🧩 Crea una combo su questa partita</button>}</div>
+              <LiveButton fixtureId={m.fixtureId} busy={live.busy} at={m.itAt} onClick={async () => { if (await live.refresh(m.fixtureId)) quietReload(); }} />
               <div className="builder-best">{m.opts.filter(o => m.best.has(o.market)).sort((a, b) => b.p - a.p).map(o => <span key={o.market}>★ {o.label} {percent(o.p, 0)} · {o.odds.toFixed(2)}</span>)}</div></div>
             {GROUPS.map(([g, keys]) => { const os = m.opts.filter(o => o.group === g).sort((x, y) => keys.indexOf(x.market) - keys.indexOf(y.market)); return os.length ? <div className="market-row" key={g}><span>{g}</span><div>{os.map(o => <span key={o.market} className={m.best.has(o.market) ? 'starred' : ''}>{chip(o)}</span>)}</div></div> : null; })}
             {m.opts.some(o => EXTRA.includes(o.group)) && <>
