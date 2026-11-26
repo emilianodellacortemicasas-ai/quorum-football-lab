@@ -1222,3 +1222,4 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .live-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid currentColor;background:none;cursor:pointer;opacity:.85;margin:6px 0}
 .live-btn:disabled{opacity:.5;cursor:default}.live-btn .spin{animation:livespin 1s linear infinite}@keyframes livespin{to{transform:rotate(360deg)}}
 .value-it.fresh{outline:1px dashed #256b51;outline-offset:2px}
+.tcx-count-note{display:block;font-size:11px;opacity:.6;margin-top:4px}

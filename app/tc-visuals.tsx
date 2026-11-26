@@ -93,7 +93,7 @@ export function Countdown() {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   const left = Math.max(0, nextScan(now) - now), h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60, s = Math.floor(left / 1000) % 60, pct = 1 - left / (3 * 3600000);
-  return <div className="tcx-count"><span>Prossimo controllo</span><strong>{String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}</strong><i><b style={{ width: Math.max(2, pct * 100) + '%' }} /></i></div>;
+  return <div className="tcx-count"><span>Prossima analisi del mercato</span><strong>{String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}:{String(s).padStart(2, '0')}</strong><i><b style={{ width: Math.max(2, pct * 100) + '%' }} /></i><small className="tcx-count-note">Pinnacle e bookmaker europei · non usa gli aggiornamenti delle quote italiane</small></div>;
 }
 
 // Market ticker: steam and drift scrolling like a trading floor.
