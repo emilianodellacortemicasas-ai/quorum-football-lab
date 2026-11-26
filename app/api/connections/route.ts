@@ -18,7 +18,7 @@ export async function GET(request:Request){
   }catch{return reply({error:'Stato dei collegamenti non disponibile. Riprova tra poco.'},503);}
 }
 const incoming=z.union([
-  z.object({provider:z.enum(['openai','api-football','sportmonks','the-odds-api','oddspapi']),ciphertext:z.string().regex(/^[A-Za-z0-9_-]{600,800}$/),recipientId:z.string().min(8).max(100)}).strict(),
+  z.object({provider:z.enum(['openai','api-football','sportmonks','the-odds-api','oddspapi','stripe','stripe-webhook']),ciphertext:z.string().regex(/^[A-Za-z0-9_-]{600,800}$/),recipientId:z.string().min(8).max(100)}).strict(),
   // Re-check the OpenAI key already saved, without pasting it again.
   z.object({provider:z.literal('openai'),recheck:z.literal(true)}).strict(),
 ]);
@@ -61,6 +61,11 @@ export async function POST(request:Request){
       const r=await fetch('https://api.sportmonks.com/v3/football/leagues?per_page=1',{headers:{Authorization:key},signal:AbortSignal.timeout(20000)});
       if(!r.ok)return reply({error:'Sportmonks non autorizza il collegamento (HTTP '+r.status+'). Controlla token e abbonamento Football API.',saved:false},422);
       const d=await r.json() as any;if(!Array.isArray(d.data))return reply({error:'Sportmonks non ha confermato il collegamento.',saved:false},422);
+    }else if(body.provider==='stripe'){
+      const r=await fetch('https://api.stripe.com/v1/balance',{headers:{Authorization:'Bearer '+key},signal:AbortSignal.timeout(20000)});
+      if(!r.ok)return reply({error:'Stripe non accetta la chiave (HTTP '+r.status+'). Copiala di nuovo da Sviluppatori → Chiavi API.',saved:false},422);
+    }else if(body.provider==='stripe-webhook'){
+      // Format already checked; Stripe has no endpoint to test a signing secret: the first event confirms it.
     }else if(body.provider==='oddspapi'){
       const r=await fetch('https://api.oddspapi.io/v4/sports?apiKey='+encodeURIComponent(key),{signal:AbortSignal.timeout(20000)});
       if(!r.ok)return reply({error:'OddsPapi non autorizza il collegamento (HTTP '+r.status+'). Controlla la chiave nel tuo account OddsPapi.',saved:false},422);

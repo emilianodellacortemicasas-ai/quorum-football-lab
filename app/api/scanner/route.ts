@@ -12,13 +12,20 @@ import { LEAGUE_STUDY } from '../../../lib/league-study-data';
 import { tipsterRecord, dayBombs, settleIfDue, myPlays, sharedPlays, weeklyBomb, performance } from '../../../lib/settle';
 import { leagueStandings, allStandings, fixtureLineup, lineupFixtures } from '../../../lib/sportmonks';
 import { latestPicks, latestPredictions, runScan } from '../../../lib/scanner';
-const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
+let SALES=false;
+// With sales on (public mode) no link to a bookmaker's betslip leaves the server (Decreto Dignità: no redirects to gambling).
+const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data,SALES?(k,v)=>k==='link'?undefined:v:undefined),{status,headers:{'Cache-Control':'no-store','Content-Type':'application/json'}});
+async function planFor(request:Request){const who=await getIdentity(request).catch(()=>null);const {planOf}=await import('../../../lib/commerce');const p=await planOf(who?.email,await isOwner(request,who));SALES=p.sales;return p.plan;}
+const locked=(what:string)=>reply({error:what+' è incluso nel piano Pro.',locked:true,upgrade:'/prezzi'},402);
 const romeDay=(iso:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome'}).format(new Date(iso));
 const dayList=(ms:any[])=>{const c:Record<string,number>={};for(const m of ms){const d=romeDay(m.kickoff);c[d]=(c[d]||0)+1;}return Object.entries(c).sort().map(([day,n])=>({day,n}));};
 export async function GET(request:Request){
  if(!await getIdentity(request))return reply({error:'Accedi al laboratorio.'},401);
  try{
   const view=new URL(request.url).searchParams.get('view');
+  const plan=await planFor(request);
+  const {has,FREE_DAILY_OPPORTUNITIES}=await import('../../../lib/commerce');
+  if((view==='tickets'||view==='backtest'||view==='cup-backtest')&&!has(plan,view==='tickets'?'tickets':'backtest'))return locked(view==='tickets'?'Schedine pronte':'Il backtest');
   if(view==='italian-markets'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianMarkets(new URL(request.url).searchParams.get('q')||'double'));}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian-debug'&&await isOwner(request,await getIdentity(request))){try{return reply(await italianDebug());}catch(e){return reply({error:e instanceof Error?e.message:'Errore'});}}
   if(view==='italian'){try{return reply(await italianStatus());}catch(e){return reply({connected:true,error:e instanceof Error?e.message:'Errore'});}}
@@ -26,7 +33,10 @@ export async function GET(request:Request){
   if(view==='runs'&&await isOwner(request,await getIdentity(request)))return reply((await env.DB!.prepare('SELECT trigger,status,started_at,finished_at,fixtures,matched,modelled,message FROM scanner_runs ORDER BY started_at DESC LIMIT 6').all()).results);
   if(view==='tipster'){const day=new URL(request.url).searchParams.get('day');const p0=await latestPredictions(),p={...p0,matches:day?p0.matches.filter((m:any)=>romeDay(m.kickoff)===day):p0.matches},[rec]=await Promise.all([tipsterRecord().catch(()=>({}))]);return reply({run:p.run?{finished_at:p.run.finished_at}:null,...tipsterPicks(p.matches),record:rec,study:LEAGUE_STUDY,days:dayList(p0.matches),day});}
   if(view==='backtest'){const [t,perf]=await Promise.all([env.DB!.prepare("SELECT payload FROM model_state WHERE id='ticket-backtest'").first<{payload:string}>().then(r=>r?JSON.parse(r.payload):null).catch(()=>null),performance().catch(()=>null)]);return reply({backtest:t?{at:t.at,testDays:t.testDays,weeks:t.weeks,matches:t.matches,byKind:t.byKind,series:t.series||[],markets:t.markets||[]}:null,track:perf?.tickets??[]});}
-  if(view==='tipster-center'){try{const src=new URL(request.url).searchParams.get('source');const who=await getIdentity(request);return reply(await centerWithReports(src==='mie'?'mie':'metodo',who?.userId));}catch(e){return reply({error:e instanceof Error?e.message:'Centro Tipster non disponibile.'});}}
+  if(view==='tipster-center'){try{const src=new URL(request.url).searchParams.get('source');const who=await getIdentity(request);const c:any=await centerWithReports(src==='mie'?'mie':'metodo',who?.userId);
+   // Base plan: the best opportunity of the day in full, the others shown locked (fixture and grade only, no market or price).
+   if(!has(plan,'tcenter-full')){const o=c.opportunities;const lock=(x:any)=>({fixture:x.fixture,competition:x.competition,kickoff:x.kickoff,grade:x.grade,locked:true});c.opportunities={...o,list:o.list.map((x:any,i:number)=>i<FREE_DAILY_OPPORTUNITIES?x:lock(x)),doubles:[],watch:[],lockedCount:Math.max(0,o.list.length-FREE_DAILY_OPPORTUNITIES)};c.plan=plan;}
+   return reply(c);}catch(e){return reply({error:e instanceof Error?e.message:'Centro Tipster non disponibile.'});}}
   if(view==='cup-backtest'){const r=await env.DB!.prepare("SELECT payload FROM model_state WHERE id='cup-backtest'").first<{payload:string}>().catch(()=>null);return reply({backtest:r?JSON.parse(r.payload):null});}
   if(view==='standings')return reply(await allStandings());
   if(view==='lineups-list')return reply({fixtures:await lineupFixtures()});

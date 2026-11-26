@@ -13,7 +13,7 @@ export function vaultPublicConfiguration(){
 // gpt-6.2-sol (previous default) is not in OpenAI's public catalog as of Nov 2026. The diagnosis confirms availability per project.
 export const reportModel=()=>runtime().OPENAI_MODEL||'gpt-6.1-sol';
 export async function credentialExists(provider:CredentialProvider){
-  const e=runtime(),legacy=provider==='openai'?e.OPENAI_API_KEY:provider==='api-football'?e.API_FOOTBALL_KEY:provider==='sportmonks'?e.SPORTMONKS_API_KEY:provider==='oddspapi'?e.ODDSPAPI_KEY:e.ODDS_API_KEY;
+  const e=runtime(),legacy=provider==='openai'?e.OPENAI_API_KEY:provider==='api-football'?e.API_FOOTBALL_KEY:provider==='sportmonks'?e.SPORTMONKS_API_KEY:provider==='oddspapi'?e.ODDSPAPI_KEY:provider==='stripe'?e.STRIPE_SECRET_KEY:provider==='stripe-webhook'?e.STRIPE_WEBHOOK_SECRET:e.ODDS_API_KEY;
   if(legacy)return true;
   const c=vaultPublicConfiguration();if(!c)return false;
   const rows=await getDb().select({recipientId:serviceCredentials.recipientId}).from(serviceCredentials).where(eq(serviceCredentials.provider,provider));
@@ -27,7 +27,7 @@ export async function decryptIncoming(ciphertext:string,provider:CredentialProvi
   return key;
 }
 export async function credentialValue(provider:CredentialProvider){
-  const e=runtime(),legacy=provider==='openai'?e.OPENAI_API_KEY:provider==='api-football'?e.API_FOOTBALL_KEY:provider==='sportmonks'?e.SPORTMONKS_API_KEY:provider==='oddspapi'?e.ODDSPAPI_KEY:e.ODDS_API_KEY;
+  const e=runtime(),legacy=provider==='openai'?e.OPENAI_API_KEY:provider==='api-football'?e.API_FOOTBALL_KEY:provider==='sportmonks'?e.SPORTMONKS_API_KEY:provider==='oddspapi'?e.ODDSPAPI_KEY:provider==='stripe'?e.STRIPE_SECRET_KEY:provider==='stripe-webhook'?e.STRIPE_WEBHOOK_SECRET:e.ODDS_API_KEY;
   if(legacy)return legacy;
   if(!vaultPublicConfiguration())return null;
   const row=(await getDb().select().from(serviceCredentials).where(eq(serviceCredentials.provider,provider)))[0];
@@ -39,6 +39,6 @@ export async function reserveOperation(id:string,limit:number){
   return r?.count??null;
 }
 export async function connectionStatuses(){
-  const [openai,football,sportmonks,odds,oddspapi]=await Promise.all([credentialExists('openai'),credentialExists('api-football'),credentialExists('sportmonks'),credentialExists('the-odds-api'),credentialExists('oddspapi')]);
-  return {openai,football,sportmonks,odds,oddspapi,model:reportModel()};
+  const [openai,football,sportmonks,odds,oddspapi,stripe,stripeWebhook]=await Promise.all([credentialExists('openai'),credentialExists('api-football'),credentialExists('sportmonks'),credentialExists('the-odds-api'),credentialExists('oddspapi'),credentialExists('stripe'),credentialExists('stripe-webhook')]);
+  return {openai,football,sportmonks,odds,oddspapi,stripe,stripeWebhook,model:reportModel()};
 }

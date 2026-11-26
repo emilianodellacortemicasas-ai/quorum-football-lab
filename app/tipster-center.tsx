@@ -52,7 +52,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
   const [infoId, setInfoId] = useState<string | null>(null), [why, setWhy] = useState(false);
   const I = (id: string, light = false) => <button type="button" className={'tcx-i' + (light ? ' light' : '')} aria-label={'Informazioni: ' + INFO[id].title} onClick={e => { e.stopPropagation(); setInfoId(id); }}>i</button>;
   const [segTab, setSegTab] = useState('league'), [mSet, setMSet] = useState(0), [open, setOpen] = useState(''), [help, setHelp] = useState(false);
-  useEffect(() => { setD(null); setErr(''); fetch('/api/scanner?view=tipster-center' + (src === 'mie' ? '&source=mie' : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x), () => setErr('Dati non disponibili.')); }, [src, reload]);
+  useEffect(() => { setD(null); setErr(''); fetch('/api/scanner?view=tipster-center' + (src === 'mie' ? '&source=mie' : ''), { cache: 'no-store' }).then(r => r.json()).then((x: any) => x.error ? setErr(x.error) : setD(x.opportunities?.lockedCount ? { ...x, lockedOpp: x.opportunities.list.filter((o: any) => o.locked), opportunities: { ...x.opportunities, list: x.opportunities.list.filter((o: any) => !o.locked) } } : x), () => setErr('Dati non disponibili.')); }, [src, reload]);
   const cap = limitsOn ? stakeBps / 10000 : 0.02;
   const stakeOf = (units: number) => units > 0 ? Math.max(100, Math.floor(equityCents * Math.min(units / 100, cap) / 50) * 50) : 0;
   const p = d?.performance, opps = d?.opportunities?.list ?? [], nA = opps.filter((o: any) => o.grade === 'A').length, nB = opps.filter((o: any) => o.grade === 'B').length;
@@ -120,6 +120,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
             C: ['NON GIOCARE', 'Livello C · solo per trasparenza', 'Manca un controllo critico'],
           };
           return <section>
+            {d.lockedOpp?.length > 0 && <div className="tcx-locked"><strong>Altre {d.lockedOpp.length} opportunità oggi nel piano Pro</strong><ul>{d.lockedOpp.map((o: any, i: number) => <li key={i}><b>{o.grade}</b>{o.fixture}<small>{o.competition}</small></li>)}</ul><a className="primary" href="/prezzi">Vedi i piani</a></div>}
           <p className="small-note">Confrontate {d.opportunities.compared} quote italiane su {d.opportunities.matches} partite. Una giocata compare solo se la quota italiana batte la probabilità vera di almeno il 3%; poi passa la checklist.</p>
           {play.length > 0 && <div className="tcx-alert"><span className="tcx-alert-dot" /><div><small>{play.length === 1 ? '1 GIOCATA CONSIGLIATA ORA' : play.length + ' GIOCATE CONSIGLIATE ORA'}</small>
             {play.map((o: any) => <p key={o.fixtureId + o.market}><b className={'lv g-' + o.grade}>{o.grade}</b><span><b>{o.fixture}</b> · {o.label} a <b>{o.odds.toFixed(2)}</b> su {o.bookmaker.split(' / ')[0]} → punta al massimo <b>{money(stakeOf(o.units))}</b></span></p>)}</div></div>}

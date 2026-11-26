@@ -17,7 +17,7 @@ async function workspace(owner:string) {
 export async function GET(request:Request) {
   const who=await getIdentity(request),owner=who?.userId;
   if(!owner)return Response.json({authenticated:false,portfolios:previewPortfolios,bets:[],providerConnected:await hasFootballKey(),aiConnected:await credentialExists('openai')},{headers:{'Cache-Control':'no-store'}});
-  try{return Response.json({...await workspace(owner),admin:await isOwner(request,who)},{headers:{'Cache-Control':'no-store'}});}catch{return failure('Archivio non disponibile. Riprova tra poco.',503);}
+  try{const admin=await isOwner(request,who);const {planOf}=await import('../../../lib/commerce');return Response.json({...await workspace(owner),admin,plan:await planOf(who?.email,admin).catch(()=>null)},{headers:{'Cache-Control':'no-store'}});}catch{return failure('Archivio non disponibile. Riprova tra poco.',503);}
 }
 const settings=z.object({portfolioId:z.string(),stakeBps:z.number().int().min(1).max(2000),exposureBps:z.number().int().min(1).max(6000),dayBps:z.number().int().min(1).max(6000),drawdownBps:z.number().int().min(1).max(9000)});
 export async function POST(request:Request) {

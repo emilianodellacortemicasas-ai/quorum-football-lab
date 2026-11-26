@@ -1,4 +1,4 @@
-export type CredentialProvider = 'openai' | 'api-football' | 'sportmonks' | 'the-odds-api' | 'oddspapi';
+export type CredentialProvider = 'openai' | 'api-football' | 'sportmonks' | 'the-odds-api' | 'oddspapi' | 'stripe' | 'stripe-webhook';
 const labelFor=(provider:CredentialProvider,recipientId:string)=>new TextEncoder().encode('QUORUM|credentials|v1|'+provider+'|'+recipientId);
 export function toBase64Url(bytes:Uint8Array){return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 export function fromBase64Url(value:string){
@@ -19,5 +19,5 @@ export async function openCredential(ciphertext:string,privateJwk:JsonWebKey,pro
   return new TextDecoder('utf-8',{fatal:true}).decode(plain);
 }
 export function validCredential(value:string,provider:CredentialProvider){
-  return provider==='openai'?/^sk-[A-Za-z0-9_-]{20,390}$/.test(value):/^[A-Za-z0-9_.-]{12,350}$/.test(value);
+  return provider==='openai'?/^sk-[A-Za-z0-9_-]{20,390}$/.test(value):provider==='stripe'?/^(sk|rk)_(live|test)_[A-Za-z0-9]{20,250}$/.test(value):provider==='stripe-webhook'?/^whsec_[A-Za-z0-9]{20,200}$/.test(value):/^[A-Za-z0-9_.-]{12,350}$/.test(value);
 }
