@@ -71,6 +71,13 @@
       "when": 1795350000000,
       "tag": "0009_quorum_tipster_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795400000000,
+      "tag": "0010_quorum_tipster_swapped",
+      "breakpoints": true
     }
   ]
 }

@@ -30,8 +30,13 @@ async function withClosing(recs: Omit<CenterRec, 'closeP'>[]): Promise<CenterRec
 }
 
 export async function methodRecords(): Promise<CenterRec[]> {
+  // Real prices reported before kickoff by those who played the pick: if lower than the price QUORUM had read,
+  // the register uses the reported one (the price really available), so results and CLV are not flattered.
+  const reports = await priceReports().catch(() => ({} as Record<string, PriceReport>));
+  const real = (l: any) => { const r = reports[l.fixtureId + ':' + l.market]; return r && r.odds < l.odds && Date.parse(r.at) < Date.parse(l.kickoff) ? r.odds : l.odds; };
   const rows = (await db().prepare("SELECT id,kind,legs,odds,p,result,created_at FROM scanner_tickets WHERE kind IN ('tipster-singola','tipster-doppia') ORDER BY created_at DESC LIMIT 600").all<any>()).results;
-  return withClosing(rows.map(r => ({ id: r.id, kind: r.kind, legs: JSON.parse(r.legs).map((l: any) => ({ fixtureId: l.fixtureId, competition: l.competition, market: l.market, label: l.label, odds: l.odds, bookmaker: l.bookmaker, kickoff: l.kickoff })), odds: r.odds, p: r.p, result: r.result ?? null, createdAt: r.created_at })));
+  return withClosing(rows.map(r => { const legs = JSON.parse(r.legs).map((l: any) => ({ fixtureId: l.fixtureId, competition: l.competition, market: l.market, label: l.label, odds: real(l), bookmaker: l.bookmaker, kickoff: l.kickoff }));
+    return { id: r.id, kind: r.kind, legs, odds: legs.reduce((q: number, l: any) => q * l.odds, 1), p: r.p, result: r.result ?? null, createdAt: r.created_at }; }));
 }
 export async function myRecords(owner: string): Promise<CenterRec[]> {
   const rows = (await db().prepare("SELECT id,fixture_id,competition,market,odds,probability,status,snapshot,created_at FROM bets WHERE owner=? AND fixture_id NOT LIKE 'system:%' ORDER BY created_at DESC LIMIT 400").bind(owner).all<any>()).results;

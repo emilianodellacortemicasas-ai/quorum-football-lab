@@ -28,6 +28,8 @@ export function tipsterPicks(rows: Row[], now = Date.now()) {
       const best = Object.entries(it).sort((a, b) => b[1] - a[1])[0], odds = best[1];
       if (odds < 1.4 || odds > 4) continue;
       const edge = tr.p * odds - 1; compared++;
+      // Above +25% it is almost always a data error (inverted teams, wrong market, old price), never a real gift.
+      if (edge > 0.25) continue;
       if (edge < TIP_MIN_EDGE) { if (edge > -0.04) checks.push({ fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, label: LABELS[key], odds, bookmaker: best[0], fair: 1 / tr.p, edge, source: tr.source }); continue; }
       // Stale prices: the Italian price is refreshed less often than the market. A pick is valid only if
       // the price is recent (≤ 14h for Lottomatica, ≤ 74h for the others) and not far above the best European price

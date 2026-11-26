@@ -6,7 +6,7 @@ import { oddsFeed } from './odds-provider';
 import { analyzeMatch, marketLabel } from './math';
 import { calibrate, familyOf } from './calibration';
 import { loadCalibration } from './calibration-store';
-import { italianOdds, matchItalian, type ItalianFixture } from './italian-odds';
+import { italianOdds, matchItalian, sanitizeItalian, type ItalianFixture } from './italian-odds';
 import { ODDS_SPORT, SCANNED_MARKETS, evaluateOutcome, marketConsensus, matchEvent, type OddsEvent } from './scanner-contract';
 import type { Match } from './types';
 import { buildTickets } from './tickets';
@@ -131,7 +131,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
         const ml0 = lambdasFromMarket({ home: raw0.home.pMarket, draw: raw0.draw.pMarket, away: raw0.away.pMarket, over25: raw0.over25?.pMarket });
         if (ml0) { const sp = (list: any[], lam: number) => list.map((p: any) => ({ id: p.id, name: p.name, p: 1 - Math.exp(-p.share * lam * 0.85) })); fm0.context.scorers = { home: sp(fm0.context.scorerShares.home, ml0.lh), away: sp(fm0.context.scorerShares.away, ml0.la) }; }
       }
-      const x = modelled[i], consensus = mapScorers(raw0, fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {}, fit = itFor(f);
+      const x = modelled[i], consensus = mapScorers(raw0, fetched[i]), probs = x ? analyzeMatch(x.m)!.markets : null, markets: Record<string, any> = {}, fit = sanitizeItalian(itFor(f), { home: consensus.home?.pMarket, draw: consensus.draw?.pMarket, away: consensus.away?.pMarket });
       for (const key of marketKeys(consensus)) {
         const c = consensus[key]; if (!c) continue;
         const raw = Number.isFinite(c.pModel) ? c.pModel : probs && Number.isFinite(probs[key]) ? probs[key] : null;
@@ -159,7 +159,7 @@ export async function runScan(trigger: 'cron' | 'manual' | 'prematch') {
     const created = new Date().toISOString(), rows: any[] = [];
     for (const x of modelled) {
       if (!x) continue;
-      const probs = analyzeMatch(x.m)!.markets, consensus = mapScorers(marketConsensus(x.e), x.m), fit = itFor(x.m);
+      const probs = analyzeMatch(x.m)!.markets, consensus = mapScorers(marketConsensus(x.e), x.m), fit = sanitizeItalian(itFor(x.m), { home: consensus.home?.pMarket, draw: consensus.draw?.pMarket, away: consensus.away?.pMarket });
       for (const key of marketKeys(consensus)) {
         const c = consensus[key], raw = Number.isFinite(c?.pModel) ? c.pModel : probs[key]; if (!c || !Number.isFinite(raw)) continue;
         const pm = calModel(key, raw), v = evaluateOutcome(pm, c, calLive(key)), it = itBest(fit, key, v.pBlend);

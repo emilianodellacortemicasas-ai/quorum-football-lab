@@ -150,3 +150,32 @@ export async function italianMarkets(q: string) {
   return list(await api('markets?sportId=' + SOCCER, key)).filter(m => re.test(String(m.marketName ?? m.name ?? ''))).slice(0, 60)
     .map(m => ({ id: m.marketId ?? m.id, name: m.marketName ?? m.name, period: m.period, line: m.handicap ?? m.line, outcomes: list(m.outcomes).map(o => [o.outcomeId ?? o.id, o.outcomeName ?? o.name]) }));
 }
+
+// Safety check of the Italian prices against the market (Pinnacle / consensus without margin).
+// Some feeds list a fixture with home and away inverted: then "1" carries the away price and "1X" the "X2" price.
+// For each bookmaker the 1X2 is compared with the market as it is and with home/away swapped: if the swapped
+// version fits clearly better the bookmaker's markets are swapped back; if neither fits, its prices are dropped.
+const swapKey = (k: string) => {
+  const s: Record<string, string> = { home: 'away', away: 'home', homeDraw: 'drawAway', drawAway: 'homeDraw' };
+  if (s[k]) return s[k];
+  const ex = /^exact:(\d+)-(\d+)$/.exec(k); if (ex) return 'exact:' + ex[2] + '-' + ex[1];
+  return k.includes(':home:') ? k.replace(':home:', ':away:') : k.includes(':away:') ? k.replace(':away:', ':home:') : k;
+};
+export function sanitizeItalian(fx: ItalianFixture | null, market: { home?: number; draw?: number; away?: number }): ItalianFixture | null {
+  if (!fx || !(market.home && market.draw && market.away)) return fx;
+  const books = new Set(Object.values(fx.quotes).flatMap(q => Object.keys(q)));
+  const quotes: ItalianFixture['quotes'] = {};
+  for (const b of books) {
+    const h = fx.quotes.home?.[b]?.odds, d = fx.quotes.draw?.[b]?.odds, a = fx.quotes.away?.[b]?.odds;
+    let mode: 'keep' | 'swap' | 'drop' = 'keep';
+    if (h && d && a) {
+      const inv = 1 / h + 1 / d + 1 / a, ph = 1 / h / inv, pd = 1 / d / inv, pa = 1 / a / inv;
+      const err = Math.abs(ph - market.home) + Math.abs(pd - market.draw) + Math.abs(pa - market.away);
+      const errS = Math.abs(pa - market.home) + Math.abs(pd - market.draw) + Math.abs(ph - market.away);
+      if (err > 0.2 && errS < err / 2) mode = 'swap'; else if (err > 0.3) mode = 'drop';
+    }
+    if (mode === 'drop') continue;
+    for (const [k, q] of Object.entries(fx.quotes)) if (q[b]) (quotes[mode === 'swap' ? swapKey(k) : k] ??= {})[b] = q[b];
+  }
+  return { ...fx, quotes };
+}
