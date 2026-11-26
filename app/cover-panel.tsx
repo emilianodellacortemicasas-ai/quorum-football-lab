@@ -1,13 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { coverPlan, type CoverLeg, type CoverOpt } from '../lib/cover';
+import { coverPlan, coverTickets, type CoverCand, type CoverLeg, type CoverOpt, type CoverTicket } from '../lib/cover';
 import { money, percent } from '../lib/math';
 import { toOptions, type Match, type Opt } from './builder';
 import type { RecordPlay } from '../lib/types';
 
 // Shown under every slip in Costruisci: the cover bet computed automatically, with the honest trade-off.
-export function CoverPanel({ legs, stake, find, onRecordCover }: { legs: CoverLeg[]; stake: number; find: (f: string, m: string) => CoverOpt | null; onRecordCover?: (opt: CoverOpt & { fixture: string; kickoff?: string; competition?: string }, stake: number) => Promise<boolean> }) {
+export function OppositeCover({ legs, stake, find, onRecordCover }: { legs: CoverLeg[]; stake: number; find: (f: string, m: string) => CoverOpt | null; onRecordCover?: (opt: CoverOpt & { fixture: string; kickoff?: string; competition?: string }, stake: number) => Promise<boolean> }) {
   const [mode, setMode] = useState<'full' | 'half'>('full'), [busy, setBusy] = useState(false), [done, setDone] = useState(false);
   const c = coverPlan(legs, stake, find);
   const sign = (v: number) => (v > 0 ? '+' : '') + money(v);
@@ -15,7 +15,7 @@ export function CoverPanel({ legs, stake, find, onRecordCover }: { legs: CoverLe
   const x = c.cover, part = c.partial!, st = mode === 'full' ? x.stake : part.stake;
   const ifAll = mode === 'full' ? x.ifAllWin : part.ifAllWin, ifLeg = mode === 'full' ? x.ifLegFails : part.ifLegFails, ev = mode === 'full' ? x.ev : part.ev;
   return <div className={'cover-box' + (x.pointless ? ' warn' : '')}>
-    <h4><ShieldCheck size={16} />Copertura consigliata</h4>
+    <h4><ShieldCheck size={16} />Opposto dell'evento più a rischio</h4>
     <p>L'evento più a rischio è <b>{x.leg.label}</b> ({x.leg.fixture}, {percent(x.leg.p, 0)}). Copertura: <b>{x.opt.label}</b> a <b>{x.opt.odds.toFixed(2)}</b>{x.opt.bookmaker ? ' su ' + x.opt.bookmaker : ''}.</p>
     <div className="cover-modes"><button className={mode === 'full' ? 'on' : ''} onClick={() => setMode('full')}>Recupera tutta la puntata · {money(x.stake)}</button><button className={mode === 'half' ? 'on' : ''} onClick={() => setMode('half')}>Metà · {money(part.stake)}</button></div>
     <table className="cover-table"><thead><tr><th></th><th>Senza copertura</th><th>Con copertura</th></tr></thead><tbody>
@@ -31,8 +31,10 @@ export function CoverPanel({ legs, stake, find, onRecordCover }: { legs: CoverLe
 }
 
 // One line under the slip in Costruisci: the effect of the cover, with the button to the Copertura section.
-export function CoverHint({ legs, stake, find, onOpen }: { legs: CoverLeg[]; stake: number; find: (f: string, m: string) => CoverOpt | null; onOpen: () => void }) {
+export function CoverHint({ legs, stake, find, cands, onOpen }: { legs: CoverLeg[]; stake: number; find: (f: string, m: string) => CoverOpt | null; cands?: CoverCand[]; onOpen: () => void }) {
   if (!legs.length) return null;
+  const t = cands ? coverTickets(legs, stake, cands) : null, best = t?.options.slice().sort((a, b) => a.pLoseAll - b.pLoseAll)[0];
+  if (best) return <button type="button" className="cover-hint" onClick={onOpen}><ShieldCheck size={16} /><span>Copertura: probabilità di perdere tutto {percent(t!.none.pLoseAll, 0)} → {percent(best.pLoseAll, 0)} con una seconda schedina</span><b>Apri Copertura</b></button>;
   const c = coverPlan(legs, stake, find);
   return <button type="button" className="cover-hint" onClick={onOpen}><ShieldCheck size={16} /><span>{c.cover ? (c.cover.pointless ? 'Copertura: su questa schedina non conviene' : 'Copertura: probabilità di perdere tutto ' + percent(c.none.pLoseAll, 0) + ' → ' + percent(c.cover.pLoseAll, 0)) : 'Copertura: nessun evento coperibile'}</span><b>Apri Copertura</b></button>;
 }
@@ -47,7 +49,7 @@ export function CoverView({ notify, onRecord, onBuilder, onToday }: { notify: (m
   const find = (f: string, mk: string): CoverOpt | null => { const o = matches?.find(m => m.fixtureId === f)?.opts.find(x => x.market === mk); return o ? { fixtureId: f, market: mk, label: o.label, p: o.p, odds: o.odds, bookmaker: o.bookmaker } : null; };
   return <section className="cover-view">
     <div className="page-heading"><div><p className="eyebrow">COPERTURA</p><h1>Riduci il rischio della schedina<span>.</span></h1>
-      <p>QUORUM trova l’evento più a rischio della tua schedina e calcola la giocata opposta che ti restituisce la puntata se salta proprio quello. È un’assicurazione: riduce la probabilità di perdere tutto, ma costa un po’ di rendimento medio.</p></div></div>
+      <p>QUORUM ti propone una seconda schedina, su altre partite molto probabili o con valore, che se vince ti restituisce i soldi di tutte e due. Così perdi tutto solo se saltano entrambe.</p></div></div>
     <div className="section-switch"><button className="secondary" onClick={onBuilder}>Torna a Costruisci schedina</button><button className="text-button" onClick={onToday}>Valore di oggi</button></div>
     {!slip.length ? <div className="empty compact"><span className="empty-icon"><ShieldCheck /></span><h3>Nessuna schedina da coprire.</h3><p>Scegli le partite in Valore di oggi o in Costruisci: la copertura si calcola qui.</p>
       <div className="cover-links"><button className="primary" onClick={onToday}>Valore di oggi</button><button className="secondary" onClick={onBuilder}>Costruisci schedina</button></div></div>
@@ -56,8 +58,51 @@ export function CoverView({ notify, onRecord, onBuilder, onToday }: { notify: (m
         <div className="slip-total"><span>Quota totale</span><strong>{odds.toFixed(2)}</strong></div>
         <label className="slip-stake">Puntata della schedina (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value.replace(/[^0-9.,]/g, ''))} /></label>
         <button className="text-button" onClick={onBuilder}>Modifica la schedina in Costruisci</button></div>
-      <div>{matches ? <CoverPanel legs={slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }))} stake={stake} find={find}
-        onRecordCover={onRecord ? async (o, st) => { const leg = slip.find(l => l.fixtureId === o.fixtureId)!; const ok = await onRecord([{ ...leg, market: o.market, label: o.label, p: o.p, odds: o.odds }], st, 'builder', 'copertura'); notify(ok ? 'Copertura registrata come giocata separata.' : 'Copertura non registrata.'); return ok; } : undefined} /> : <p>Calcolo della copertura…</p>}</div>
+      <div>{matches ? <CoverPanel legs={slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }))} stake={stake} find={find} cands={candidatesFrom(matches)}
+        onRecord={onRecord ? async (legs, st) => { const ok = await onRecord(legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition ?? '', kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds })), st, 'builder', 'copertura'); notify(ok ? 'Copertura registrata come giocata separata.' : 'Copertura non registrata.'); return ok; } : undefined} /> : <p>Calcolo della copertura…</p>}</div>
     </div>}
   </section>;
+}
+
+const BASIC = /^(home|draw|away|homeDraw|drawAway|homeAway|over\d+|under\d+|btts|noGoal)$/;
+// Cover candidates: Lottomatica / Planet prices in the next 72 hours, very probable (≥ 60%) or with value (≥ 3%).
+export function candidatesFrom(matches: Match[] | null): CoverCand[] {
+  const t = Date.now();
+  return (matches ?? []).filter(m => Date.parse(m.kickoff) > t + 10 * 60000 && Date.parse(m.kickoff) < t + 72 * 3600000).flatMap(m => m.opts
+    .filter(o => BASIC.test(o.market) && o.bookmaker.startsWith('Lottomatica') && o.odds >= 1.15 && ((o.p >= 0.6) || (o.value >= 0.03 && o.p >= 0.4)))
+    .sort((a, b) => b.p * (1 + Math.max(0, b.value)) - a.p * (1 + Math.max(0, a.value))).slice(0, 2)
+    .map(o => ({ fixtureId: m.fixtureId, fixture: m.fixture, kickoff: m.kickoff, competition: m.competition, market: o.market, label: o.label, p: o.p, odds: o.odds, bookmaker: o.bookmaker, tag: o.value >= 0.03 ? 'valore' : undefined })));
+}
+const KIND: Record<CoverTicket['kind'], [string, string]> = {
+  valore: ['Con valore', 'La quota paga più di quanto vale: la copertura alza anche il risultato medio.'],
+  sicura: ['La più sicura', 'La probabilità di perdere tutto più bassa possibile.'],
+  equilibrata: ['Equilibrata', 'Buon taglio del rischio con un costo medio contenuto.'],
+};
+const when2 = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// Main cover: a separate ticket on other matches that gives back the money of both tickets if it wins.
+export function CoverPanel({ legs, stake, cands, find, onRecord }: { legs: CoverLeg[]; stake: number; cands: CoverCand[]; find: (f: string, m: string) => CoverOpt | null; onRecord?: (legs: CoverCand[], stake: number) => Promise<boolean> }) {
+  const [done, setDone] = useState<Record<string, boolean>>({}), [busy, setBusy] = useState('');
+  const r = coverTickets(legs, stake, cands);
+  const sign = (v: number) => (v > 0 ? '+' : '') + money(v);
+  return <div className="cover-wrap">
+    <div className="cover-intro"><b>Senza copertura</b> perdi tutto nel <b>{percent(r.none.pLoseAll, 0)}</b> dei casi. QUORUM cerca una seconda schedina su altre partite che, se vince, ti restituisce i soldi di tutte e due. Obiettivo: scendere sotto il {Math.round(r.target * 100)}%.</div>
+    {!r.options.length && <p className="small-note">Nessuna giocata adatta nelle prossime 72 ore (servono esiti molto probabili o con valore su Lottomatica / Planet). Prova la copertura sull'evento più a rischio qui sotto.</p>}
+    <div className="cover-options">{r.options.map(o => { const key = o.legs.map(l => l.fixtureId + l.market).join(); const ok = o.pLoseAll <= r.target;
+      return <article key={key} className={'cover-opt ' + o.kind}>
+        <header><b>{KIND[o.kind][0]}</b><span className={'cover-target' + (ok ? ' ok' : '')}>perdi tutto {percent(r.none.pLoseAll, 0)} → <b>{percent(o.pLoseAll, 0)}</b></span></header>
+        <small>{KIND[o.kind][1]}</small>
+        <ul>{o.legs.map(l => <li key={l.fixtureId}><b>{l.label}</b> {l.fixture}<em>{when2(l.kickoff)} · {percent(l.p, 0)} · {l.odds.toFixed(2)}{l.tag === 'valore' ? ' · valore' : ''}</em></li>)}</ul>
+        <div className="cover-nums"><span>Quota <b>{o.odds.toFixed(2)}</b></span><span>Probabilità <b>{percent(o.p, 0)}</b></span><span>Puntata <b>{money(o.stake)}</b></span><span>Totale investito <b>{money(stake + o.stake)}</b></span></div>
+        <table className="cover-table"><tbody>
+          <tr><td>Vincono tutte e due</td><td>{sign(o.bothWin)}</td></tr>
+          <tr><td>Vince solo la schedina</td><td>{sign(o.mainOnly)}</td></tr>
+          <tr><td>Vince solo la copertura</td><td><b>{sign(o.coverOnly)}</b></td></tr>
+          <tr><td>Perdono tutte e due</td><td>{sign(o.bothLose)}</td></tr>
+          <tr><td>Risultato medio atteso</td><td>{sign(r.none.ev)} → {sign(o.ev)}</td></tr>
+        </tbody></table>
+        {onRecord && <button className="primary" disabled={!!busy || done[key] || o.stake < 100} onClick={async () => { setBusy(key); const okk = await onRecord(o.legs, o.stake); setBusy(''); if (okk) setDone(d => ({ ...d, [key]: true })); }}>{done[key] ? 'Copertura registrata' : 'Registra questa copertura (' + money(o.stake) + ')'}</button>}
+      </article>; })}</div>
+    <details className="cover-more"><summary>Oppure: giocata opposta all'evento più a rischio</summary><OppositeCover legs={legs} stake={stake} find={find} /></details>
+    <p className="small-note">Le probabilità sono stime di QUORUM. Si può perdere lo stesso: la copertura riduce il rischio, non lo elimina. Controlla le quote sul tuo conto prima di giocare.</p>
+  </div>;
 }
