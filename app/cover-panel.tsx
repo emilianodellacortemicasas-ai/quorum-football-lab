@@ -126,6 +126,13 @@ export function CoverPanel({ legs, stake, cands, find, onRecord, onRecordPair, c
 
 // "Schedine coperte": every main ticket registered with its cover, side by side, with the combined result.
 export function CoveredView({ bets, onCover }: { bets: any[]; onCover: () => void }) {
+  // Mine, or the ones shared by the other users (shown only if they ticked "Condividi").
+  const [tab, setTab] = useState<'mine' | 'shared'>('mine'), [shared, setShared] = useState<any[] | null>(null);
+  useEffect(() => { if (tab === 'shared' && !shared) fetch('/api/scanner?view=shared', { cache: 'no-store' }).then(r => r.json()).then((d: any) => setShared((d.plays ?? []).filter((x: any) => !x.mine && x.cover).map((x: any) => ({ id: x.id, author: x.author, source: ':' + x.cover.role + '-' + x.cover.group, marketLabel: x.legs.map((l: any) => l.label).join(' + '), fixture: x.legs.length > 1 ? x.legs.map((l: any) => l.fixture).join(' · ') : x.name, odds: x.odds, stakeCents: x.stakeCents, status: x.status, pnlCents: x.pnlCents, createdAt: x.createdAt }))), () => setShared([])); }, [tab, shared]);
+  const src = tab === 'mine' ? bets : (shared ?? []);
+  return <CoveredList bets={src} onCover={onCover} tab={tab} setTab={setTab} loading={tab === 'shared' && !shared} />;
+}
+function CoveredList({ bets, onCover, tab, setTab, loading }: { bets: any[]; onCover: () => void; tab: 'mine' | 'shared'; setTab: (t: 'mine' | 'shared') => void; loading: boolean }) {
   const groups = new Map<string, { main: any[]; cover: any[] }>();
   for (const b of bets) { const m = /:(coperta|copertura)-([a-z0-9]{4,12})/.exec(b.source ?? '') ?? (/:copertura$/.test(b.source ?? '') ? [, 'copertura', 'solo-' + b.id] as any : null); if (!m) continue; const g = groups.get(m[2]) ?? { main: [], cover: [] }; (m[1] === 'coperta' ? g.main : g.cover).push(b); groups.set(m[2], g); }
   const list = [...groups.entries()].map(([id, g]) => ({ id, ...g, at: [...g.main, ...g.cover].map(b => b.createdAt).sort()[0] })).sort((a, b) => b.at.localeCompare(a.at));
@@ -135,12 +142,14 @@ export function CoveredView({ bets, onCover }: { bets: any[]; onCover: () => voi
   const saved = closed.filter(g => g.main.every(b => b.status === 'lost') && g.cover.some(b => b.status === 'won')).length;
   return <section className="covered">
     <div className="page-heading"><div><p className="eyebrow">SCHEDINE COPERTE</p><h1>Le tue schedine con copertura<span>.</span></h1><p>Ogni schedina accanto alla sua copertura, con il risultato delle due insieme.</p></div></div>
+    <div className="archive-tabs sub-tabs"><button className={tab === 'mine' ? 'on' : ''} onClick={() => setTab('mine')}>Le mie</button><button className={tab === 'shared' ? 'on' : ''} onClick={() => setTab('shared')}>Condivise dagli altri</button></div>
     <div className="section-switch"><button className="secondary" onClick={onCover}><ShieldCheck size={15} />Nuova copertura</button></div>
+    {loading && <p>Caricamento…</p>}
     {closed.length > 0 && <div className="covered-sum"><span>Chiuse <b>{closed.length}</b></span><span>Salvate dalla copertura <b>{saved}</b></span><span>Risultato complessivo <b className={tot < 0 ? 'negative' : 'positive'}>{(tot > 0 ? '+' : '') + money(tot)}</b></span></div>}
-    {!list.length && <div className="empty compact"><span className="empty-icon"><ShieldCheck /></span><h3>Nessuna schedina coperta.</h3><p>In Copertura premi “Registra schedina + copertura”: le due giocate compaiono qui insieme.</p></div>}
+    {!list.length && !loading && <div className="empty compact"><span className="empty-icon"><ShieldCheck /></span><h3>{tab === 'mine' ? 'Nessuna schedina coperta.' : 'Nessuna schedina coperta condivisa.'}</h3><p>{tab === 'mine' ? 'In Copertura premi “Registra schedina + copertura”: le due giocate compaiono qui insieme.' : 'Qui compaiono le schedine con copertura degli altri utenti che hanno attivato “Condividi con gli altri utenti di QUORUM”.'}</p></div>}
     <div className="covered-list">{list.map(g => { const all = [...g.main, ...g.cover], pnl = all.reduce((s, b) => s + (b.pnlCents ?? 0), 0), open = all.some(b => b.status === 'pending'), inv = all.reduce((s, b) => s + b.stakeCents, 0);
       return <article key={g.id} className="panel covered-card">
-        <header><small>{new Date(g.at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small><span>Investito <b>{money(inv)}</b></span><b className={open ? '' : pnl < 0 ? 'negative' : 'positive'}>{open ? 'In corso' : (pnl > 0 ? '+' : '') + money(pnl)}</b></header>
+        <header>{all[0]?.author && tab === 'shared' && <b className="covered-author">{all[0].author}</b>}<small>{new Date(g.at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small><span>Investito <b>{money(inv)}</b></span><b className={open ? '' : pnl < 0 ? 'negative' : 'positive'}>{open ? 'In corso' : (pnl > 0 ? '+' : '') + money(pnl)}</b></header>
         {[['Schedina', g.main], ['Copertura', g.cover]].map(([t, bs]: any) => <div key={t} className="covered-row"><span className="covered-tag">{t}</span>{bs.length ? bs.map((b: any) => { const [s, tone] = st(b); return <div key={b.id} className="covered-bet"><div><b>{b.marketLabel}</b><small>{b.fixture} · quota {Number(b.odds).toFixed(2)} · {money(b.stakeCents)}</small></div><span className={'tag ' + tone}>{s}</span></div>; }) : <small className="small-note">non registrata</small>}</div>)}
       </article>; })}</div>
   </section>;

@@ -189,13 +189,14 @@ export async function myPlays(owner: string) {
 
 // Plays that users chose to share, from everyone (own included, flagged), with each author's track record.
 export async function sharedPlays(owner: string) {
-  const rows = (await db().prepare("SELECT id,owner,author,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,snapshot,status,pnl_cents,created_at FROM bets WHERE shared=1 ORDER BY created_at DESC LIMIT 120").all<any>()).results;
+  const rows = (await db().prepare("SELECT id,owner,author,source,fixture_id,fixture,competition,market,market_label,probability,odds,stake_cents,snapshot,status,pnl_cents,created_at FROM bets WHERE shared=1 ORDER BY created_at DESC LIMIT 120").all<any>()).results;
   const plays = rows.map(r => {
     let legs: any[] = [];
     let system: any = null;
     if (/^(multi|system):/.test(String(r.fixture_id))) { try { const sn = JSON.parse(r.snapshot); legs = sn.legs || []; system = sn.system || null; } catch { } }
     else { let k = ''; try { k = JSON.parse(r.snapshot)?.legs?.[0]?.kickoff ?? ''; } catch { } legs = [{ fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, market: r.market, label: r.market_label, odds: r.odds, p: r.probability, kickoff: k }]; }
-    return { id: r.id, mine: r.owner === owner, author: r.author || 'Utente', system, name: r.fixture, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at };
+    const cv = /:(coperta|copertura)-([a-z0-9]{4,12})/.exec(String(r.source ?? ''));
+    return { id: r.id, mine: r.owner === owner, author: r.author || 'Utente', cover: cv ? { role: cv[1], group: cv[2] } : null, system, name: r.fixture, legs, odds: r.odds, p: r.probability, stakeCents: r.stake_cents, status: r.status, pnlCents: r.pnl_cents, createdAt: r.created_at };
   });
   const authors = [...new Set(plays.map(x => x.author))].map(a => {
     const c = plays.filter(x => x.author === a && (x.status === 'won' || x.status === 'lost')), st = c.reduce((s, x) => s + x.stakeCents, 0), pnl = c.reduce((s, x) => s + x.pnlCents, 0);
