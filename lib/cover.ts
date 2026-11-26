@@ -48,7 +48,7 @@ export function coverPlan(legs: CoverLeg[], stake: number, find: (fixtureId: str
 // P(lose all) = P(main fails) × P(cover fails). With a cover that has value the expected result even goes up.
 export type CoverCand = CoverOpt & { fixture: string; kickoff: string; competition?: string; tag?: string };
 export type CoverTicket = { legs: CoverCand[]; p: number; odds: number; stake: number; pLoseAll: number; ev: number; value: number;
-  bothWin: number; mainOnly: number; coverOnly: number; bothLose: number; kind: 'sicura' | 'valore' | 'economica' };
+  bothWin: number; mainOnly: number; coverOnly: number; bothLose: number; kind: 'sicura' | 'valore' | 'economica' | 'valore-sicura' | 'alternativa' };
 
 export function coverTickets(main: CoverLeg[], stake: number, cands: CoverCand[], maxRatio = 4): { none: CoverPlan['none']; options: CoverTicket[]; target: number } {
   const O = main.reduce((s, l) => s * l.odds, 1), Pm = main.reduce((s, l) => s * l.p, 1);
@@ -75,6 +75,8 @@ export function coverTickets(main: CoverLeg[], stake: number, cands: CoverCand[]
     const x = out.filter(y => !seen.has(keyOf(y)) && ok(y)).sort(f)[0]; if (x) { seen.add(keyOf(x)); options.push({ ...x, kind: k }); } };
   pick('valore', (a, b) => b.value - a.value || a.pLoseAll - b.pLoseAll, x => x.value >= 0.03);
   pick('sicura', (a, b) => a.pLoseAll - b.pLoseAll || a.stake - b.stake);
+  // If the value proposal is already the safest, the second one is just another safe alternative.
+  if (options.length > 1 && options[0].kind === 'valore' && options[0].pLoseAll <= options[1].pLoseAll) { options[0] = { ...options[0], kind: 'valore-sicura' }; options[1] = { ...options[1], kind: 'alternativa' }; }
   pick('economica', (a, b) => a.stake - b.stake || a.pLoseAll - b.pLoseAll, x => x.pLoseAll <= (1 - Pm) * 0.65 && x.value > -0.05);
   return { none, options, target: 0.3 };
 }

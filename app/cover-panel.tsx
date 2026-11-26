@@ -76,6 +76,8 @@ export function candidatesFrom(matches: Match[] | null): CoverCand[] {
 const KIND: Record<CoverTicket['kind'], [string, string]> = {
   valore: ['Con valore', 'La quota paga più di quanto vale: la copertura alza anche il risultato medio.'],
   sicura: ['La più sicura', 'La probabilità di perdere tutto più bassa possibile.'],
+  'valore-sicura': ['Con valore e la più sicura', 'Quota che paga più di quanto vale e la probabilità di perdere tutto più bassa.'],
+  alternativa: ['Alternativa sicura', 'Altre partite molto probabili, se la prima non ti convince.'],
   economica: ['La più economica', 'Puntata più bassa che taglia comunque molto il rischio, come una X2 a quota alta.'],
 };
 const when2 = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -88,7 +90,7 @@ export function CoverPanel({ legs, stake, cands, find, onRecord }: { legs: Cover
     <div className="cover-intro"><b>Senza copertura</b> perdi tutto nel <b>{percent(r.none.pLoseAll, 0)}</b> dei casi. QUORUM cerca una seconda schedina su altre partite che, se vince, ti restituisce i soldi di tutte e due. Obiettivo: scendere sotto il {Math.round(r.target * 100)}%.</div>
     {!r.options.length && <p className="small-note">Nessuna giocata adatta nelle prossime 72 ore (servono esiti molto probabili o con valore su Lottomatica / Planet). Prova la copertura sull'evento più a rischio qui sotto.</p>}
     <div className="cover-options">{r.options.map(o => { const key = o.legs.map(l => l.fixtureId + l.market).join(); const ok = o.pLoseAll <= r.target;
-      return <article key={key} className={'cover-opt ' + o.kind}>
+      return <article key={key} className={'cover-opt ' + o.kind.split('-')[0]}>
         <header><b>{KIND[o.kind][0]}</b><span className={'cover-target' + (ok ? ' ok' : '')}>perdi tutto {percent(r.none.pLoseAll, 0)} → <b>{percent(o.pLoseAll, 0)}</b></span></header>
         <small>{KIND[o.kind][1]}</small>
         <ul>{o.legs.map(l => <li key={l.fixtureId}><b>{l.label}</b> {l.fixture}<em>{when2(l.kickoff)} · {percent(l.p, 0)} · {l.odds.toFixed(2)}{l.tag === 'valore' ? ' · valore' : ''}</em></li>)}</ul>
