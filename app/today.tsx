@@ -11,7 +11,7 @@ const when = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Eur
 
 // "Valore di oggi": the matches of the next 36 hours where a Lottomatica / Planet price pays more than QUORUM's
 // probability says it is worth. The user picks and builds; the cover is computed in Costruisci.
-export function TodayView({ notify, onBuilder, onCenter }: { notify: (m: string) => void; onBuilder: () => void; onCenter: () => void }) {
+export function TodayView({ notify, onBuilder, onCenter, onCover }: { notify: (m: string) => void; onBuilder: () => void; onCenter: () => void; onCover?: () => void }) {
   const [matches, setMatches] = useState<Match[] | null>(null), [err, setErr] = useState(''), [opp, setOpp] = useState<any[]>([]);
   const [slip, setSlip] = useState<Opt[]>(() => { try { return JSON.parse(localStorage.getItem(SLIP_KEY) || '[]'); } catch { return []; } });
   const live = useLiveQuotes(notify);
@@ -33,7 +33,7 @@ export function TodayView({ notify, onBuilder, onCenter }: { notify: (m: string)
     <div className="today-steps">
       <div><b>1</b><span>Scegli le partite che ti convincono, anche una sola.</span></div>
       <div><b>2</b><span>Aggiorna le quote prima di giocare: il valore cambia durante il giorno.</span></div>
-      <div><b>3</b><span>In Costruisci QUORUM calcola da solo la <b>copertura</b>: la giocata che ti restituisce la puntata se salta l'evento più a rischio.</span></div>
+      <div><b>3</b><span>Nella sezione <b>Copertura</b> QUORUM calcola la giocata che ti restituisce la puntata se salta l'evento più a rischio.</span></div>
     </div>
     {opp.length > 0 && <div className="today-center"><strong>Il Centro Tipster ha {opp.length} {opp.length === 1 ? 'proposta' : 'proposte'} di livello A/B</strong><span>{opp.slice(0, 3).map(o => o.fixture + ' · ' + o.label).join(' — ')}</span><button className="secondary" onClick={onCenter}>Apri il Centro</button></div>}
     {err && <p className="connection-error">{err}</p>}
@@ -45,7 +45,7 @@ export function TodayView({ notify, onBuilder, onCenter }: { notify: (m: string)
       <LiveButton fixtureId={m.fixtureId} busy={live.busy} at={m.itAt} onClick={async () => { if (await live.refresh(m.fixtureId)) load(); }} />
       <button className={on ? 'primary' : 'secondary'} onClick={() => toggle(o)}>{on ? <><Check size={15} />Nella schedina</> : <><Plus size={15} />Aggiungi alla schedina</>}</button>
     </article>; })}</div>
-    {slip.length > 0 && <div className="today-bar"><span>{slip.length} {slip.length === 1 ? 'evento' : 'eventi'} in schedina</span><button className="primary" onClick={onBuilder}><ShieldCheck size={16} />Costruisci con copertura<ArrowRight size={15} /></button></div>}
+    {slip.length > 0 && <div className="today-bar"><span>{slip.length} {slip.length === 1 ? 'evento' : 'eventi'} in schedina</span><span className="today-bar-btns"><button className="secondary" onClick={onBuilder}>Costruisci la schedina<ArrowRight size={15} /></button>{onCover && <button className="primary" onClick={onCover}><ShieldCheck size={16} />Calcola la copertura</button>}</span></div>}
     <p className="small-note">Valore = probabilità di QUORUM × quota − 1. È un vantaggio medio su molte giocate, non una garanzia sulla singola partita. Gioca solo somme che puoi permetterti di perdere.</p>
   </section>;
 }
