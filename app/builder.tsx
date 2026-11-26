@@ -1,5 +1,6 @@
 'use client';
 import { LiveButton, useLiveQuotes } from './live-quotes';
+import { CoverPanel } from './cover-panel';
 // "Costruisci la tua schedina": every match of the week, market by market, with the playable price
 // (Lottomatica / Planetwin365 when available), the most probable outcomes and the value ones highlighted.
 // The user builds a free ticket of any size; QUORUM measures it (reliability, value, stake, potential win).
@@ -231,6 +232,9 @@ export function BuilderView({ equityCents, onLab, notify, onRecord }: { equityCe
         <label className="slip-stake">Puntata (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value)} placeholder={(suggested / 100).toFixed(2).replace('.', ',')} /></label>
         <p className={'stake-line ' + (ev > 0 ? 'go' : 'min')}>{ev > 0 ? 'Puntata consigliata ' + money(suggested) + ' (gestione del capitale).' : 'La quota non ripaga il rischio: se la giochi, punta il minimo (' + money(200) + ').'} Vincita potenziale: <b>{money(Math.round(stake * odds))}</b></p>
         {slip.some(l => !l.italian) && <p className="small-note">Alcuni esiti non sono quotati da Lottomatica / Planetwin365 (*): la quota reale può essere diversa.</p>}
+        <CoverPanel legs={slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }))} stake={stake}
+          find={(f, mk) => { const o = matches.find(m => m.fixtureId === f)?.opts.find(x => x.market === mk); return o ? { fixtureId: f, market: mk, label: o.label, p: o.p, odds: o.odds, bookmaker: o.bookmaker } : null; }}
+          onRecordCover={onRecord ? async (o, st) => { const leg = slip.find(l => l.fixtureId === o.fixtureId)!; const ok = await onRecord([{ ...leg, market: o.market, label: o.label, p: o.p, odds: o.odds }], st, 'builder', 'copertura'); notify(ok ? 'Copertura registrata come giocata separata.' : 'Copertura non registrata.'); return ok; } : undefined} />
         <label className="share-toggle"><input type="checkbox" checked={share} onChange={e => toggleShare(e.target.checked)} /><span>Condividi con gli altri utenti di QUORUM</span></label>
         <button className="lime-button slip-record" disabled={saving || !onRecord || stake < 100} onClick={async () => { if (!onRecord) return; setSaving(true); const ok = await onRecord(slip, stake, 'builder'); setSaving(false); if (ok) { setSlip([]); setStakeText(''); setSheet(false); notify(share ? 'Giocata registrata e condivisa: la vedono anche gli altri in Risultati.' : 'Giocata registrata: la trovi in Risultati, si regola da sola a fine partite.'); } }}><Check size={16} />{saving ? 'Registro…' : 'Registra la giocata'}</button>
         <div className="slip-actions"><button className="primary" onClick={copy}><Copy size={15} />Copia schedina</button><button className="secondary" onClick={() => onLab(slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds, competition: l.competition, kickoff: l.kickoff })))}><FlaskConical size={15} />Sistemi nel Laboratorio</button></div>
