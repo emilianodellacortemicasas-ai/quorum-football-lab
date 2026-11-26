@@ -118,6 +118,15 @@ export async function POST(request:Request) {
         // The row disappears: capital, Risultati and shared plays are recalculated without it.
         const b=z.object({id:z.string().max(80)}).parse(body);
         statement=raw.prepare('DELETE FROM bets WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(b.id,owner,portfolioId,portfolioId,revision);
+      } else if(body.action==='link-cover'){
+        // Links a cover saved on its own to the ticket it covers (same group code in the source): "Schedine coperte".
+        const b=z.object({coverId:z.string().max(80),ticketId:z.string().max(80),group:z.string().regex(/^[a-z0-9]{4,12}$/)}).parse(body);
+        const mine=await db.select().from(bets).where(and(eq(bets.owner,owner),eq(bets.portfolioId,portfolioId)));
+        const cov=mine.find(x=>x.id===b.coverId),tic=mine.find(x=>x.id===b.ticketId);
+        if(!cov||!tic||!/:copertura/.test(cov.source))return failure('Giocate non trovate.',404);
+        const base=(s:string)=>s.replace(/:(coperta|copertura)(-[a-z0-9]{4,12})?/,'');
+        await raw.batch([raw.prepare('UPDATE bets SET source=? WHERE id=? AND owner=?').bind(base(cov.source)+':copertura-'+b.group,cov.id,owner),raw.prepare('UPDATE bets SET source=? WHERE id=? AND owner=?').bind(base(tic.source)+':coperta-'+b.group,tic.id,owner)]);
+        return Response.json({ok:true,...await workspace(owner)},{headers:{'Cache-Control':'no-store'}});
       } else if(body.action==='edit'){
         // The user corrects stake and/or odds of one of their plays to match what they really played.
         // Pending plays: any type. Closed singles and multiples: the result is recalculated with the new numbers.
