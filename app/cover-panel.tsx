@@ -127,7 +127,7 @@ export function CoverPanel({ legs, stake, cands, find, onRecord, onRecordPair, c
 // "Schedine coperte": every main ticket registered with its cover, side by side, with the combined result.
 export function CoveredView({ bets, onCover }: { bets: any[]; onCover: () => void }) {
   const groups = new Map<string, { main: any[]; cover: any[] }>();
-  for (const b of bets) { const m = /:(coperta|copertura)-([a-z0-9]{4,12})/.exec(b.source ?? ''); if (!m) continue; const g = groups.get(m[2]) ?? { main: [], cover: [] }; (m[1] === 'coperta' ? g.main : g.cover).push(b); groups.set(m[2], g); }
+  for (const b of bets) { const m = /:(coperta|copertura)-([a-z0-9]{4,12})/.exec(b.source ?? '') ?? (/:copertura$/.test(b.source ?? '') ? [, 'copertura', 'solo-' + b.id] as any : null); if (!m) continue; const g = groups.get(m[2]) ?? { main: [], cover: [] }; (m[1] === 'coperta' ? g.main : g.cover).push(b); groups.set(m[2], g); }
   const list = [...groups.entries()].map(([id, g]) => ({ id, ...g, at: [...g.main, ...g.cover].map(b => b.createdAt).sort()[0] })).sort((a, b) => b.at.localeCompare(a.at));
   const st = (b: any) => b.status === 'won' ? ['VINTA', 'green'] : b.status === 'lost' ? ['PERSA', 'red'] : b.status === 'void' ? ['ANNULLATA', 'neutral'] : ['IN CORSO', 'neutral'];
   const closed = list.filter(g => [...g.main, ...g.cover].every(b => b.status !== 'pending'));
