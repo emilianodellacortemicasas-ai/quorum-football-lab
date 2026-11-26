@@ -57,6 +57,7 @@ export async function POST(request:Request){
  {const b0:any=await request.clone().json().catch(()=>({}));if(b0?.action==='price-report'){try{return reply({ok:await reportPrice(String(b0.key),Number(b0.odds))});}catch(e){return reply({error:e instanceof Error?e.message:'Segnalazione non riuscita.'},422);}}}
  if(!await isOwner(request,who))return reply({error:'Solo l’amministratore può avviare una scansione manuale.'},403);
  const body:any=await request.clone().json().catch(()=>({}));
+ if(body?.action==='it-check'){try{const m=await import('../../../lib/italian-odds');const it=await m.italianOdds();const fx=it?.find(f=>String(f.home+' '+f.away).toLowerCase().includes(String(body.q).toLowerCase()));if(!fx?.id)return reply({error:'Partita non trovata.'},404);const c=await m.checkFixture(fx.id,{maxToday:99});return reply({fixture:fx.home+' – '+fx.away,id:fx.id,ok:!!c,books:c?Object.keys(c.at):[],sample:c?{home:c.quotes.home,homeDraw:c.quotes.homeDraw,drawAway:c.quotes.drawAway}:null,usage:await m.usage()});}catch(e){return reply({error:e instanceof Error?e.message:'Controllo non riuscito.'},422);}}
  if(body?.action==='cup-backtest'){try{return reply(await refreshCupBacktest(Number(body.max)||25,!!body.force));}catch(e){return reply({error:e instanceof Error?e.message:'Backtest coppe non riuscito.'},422);}}
  try{
   await runScan('manual');return reply(await latestPicks());
