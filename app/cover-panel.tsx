@@ -48,6 +48,7 @@ export function CoverView({ notify, onRecord, onBuilder, onToday }: { notify: (m
   return <section className="cover-view">
     <div className="page-heading"><div><p className="eyebrow">COPERTURA</p><h1>Riduci il rischio della schedina<span>.</span></h1>
       <p>QUORUM trova l’evento più a rischio della tua schedina e calcola la giocata opposta che ti restituisce la puntata se salta proprio quello. È un’assicurazione: riduce la probabilità di perdere tutto, ma costa un po’ di rendimento medio.</p></div></div>
+    <div className="section-switch"><button className="secondary" onClick={onBuilder}>Torna a Costruisci schedina</button><button className="text-button" onClick={onToday}>Valore di oggi</button></div>
     {!slip.length ? <div className="empty compact"><span className="empty-icon"><ShieldCheck /></span><h3>Nessuna schedina da coprire.</h3><p>Scegli le partite in Valore di oggi o in Costruisci: la copertura si calcola qui.</p>
       <div className="cover-links"><button className="primary" onClick={onToday}>Valore di oggi</button><button className="secondary" onClick={onBuilder}>Costruisci schedina</button></div></div>
     : <div className="cover-grid">

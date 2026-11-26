@@ -1,5 +1,6 @@
 'use client';
 import { LiveButton, useLiveQuotes } from './live-quotes';
+import { ShieldCheck } from 'lucide-react';
 import { CoverHint } from './cover-panel';
 // "Costruisci la tua schedina": every match of the week, market by market, with the playable price
 // (Lottomatica / Planetwin365 when available), the most probable outcomes and the value ones highlighted.
@@ -117,7 +118,7 @@ export function toOptions(r: any): Match | null {
   return { fixtureId: r.fixture_id, fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, opts, best, sc: sc0, lh: r.lambda_home, la: r.lambda_away, players, itAt: mk.itAt?.Lottomatica ?? (mk.itAt ? (Object.values(mk.itAt) as string[]).sort().at(-1) : null) };
 }
 
-export function BuilderView({ equityCents, onLab, notify, onRecord, onCover }: { onCover?: () => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
+export function BuilderView({ equityCents, onLab, notify, onRecord, onCover, onToday }: { onToday?: () => void; onCover?: () => void; equityCents: number; onLab: (s: Selection[]) => void; notify: (m: string) => void; onRecord?: RecordPlay }) {
   const [saving, setSaving] = useState(false), [share, setShare] = useState(false);
   useEffect(() => { try { setShare(localStorage.getItem('quorum-share') === '1'); } catch { } }, []);
   const toggleShare = (v: boolean) => { setShare(v); try { localStorage.setItem('quorum-share', v ? '1' : '0'); } catch { } };
@@ -192,6 +193,7 @@ export function BuilderView({ equityCents, onLab, notify, onRecord, onCover }: {
   return <div className="builder">
     <div className="builder-main">
       <div className="page-heading"><div><p className="eyebrow">COSTRUISCI LA TUA SCHEDINA</p><h1>Scegli tu, QUORUM misura<span>.</span></h1><p>Tutte le partite della settimana con le quote di Lottomatica / Planetwin365. In evidenza gli esiti più probabili (★) e quelli con valore (bordo verde). Tocca una quota per aggiungerla: 2, 5, 10 o 20 eventi, come vuoi.</p></div>
+      {(onToday || onCover) && <div className="section-switch">{onToday && <button className="secondary" onClick={onToday}>Vedi il valore di oggi</button>}{onCover && <button className="text-button" onClick={() => { try { localStorage.setItem('quorum-slip-stake', String(stake)); } catch { } onCover(); }}><ShieldCheck size={15} />Copertura</button>}</div>}
         <button className="secondary" onClick={load}><RefreshCw size={16} className={loading ? 'spin' : ''} />Aggiorna</button></div>
       {loading ? <div className="empty"><span className="empty-icon"><RefreshCw className="spin" /></span><h3>Carico le partite…</h3></div>
         : error ? <div className="empty"><span className="empty-icon"><Info /></span><h3>Partite non disponibili</h3><p>{error}</p></div>

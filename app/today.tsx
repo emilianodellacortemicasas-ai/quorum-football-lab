@@ -30,6 +30,7 @@ export function TodayView({ notify, onBuilder, onCenter, onCover }: { notify: (m
   return <section className="today">
     <div className="page-heading"><div><p className="eyebrow">VALORE DI OGGI</p><h1>Le partite da guardare oggi<span>.</span></h1>
       <p>Qui la quota di Lottomatica / Planet paga più di quanto vale secondo QUORUM. Non sono giocate obbligate: scegli tu se farne una singola, una multipla o una combo.</p></div></div>
+    <div className="section-switch"><button className="secondary" onClick={onBuilder}>Costruisci la tua schedina con le partite che vuoi tu<ArrowRight size={15} /></button>{onCover && <button className="text-button" onClick={onCover}><ShieldCheck size={15} />Copertura</button>}</div>
     <div className="today-steps">
       <div><b>1</b><span>Scegli le partite che ti convincono, anche una sola.</span></div>
       <div><b>2</b><span>Aggiorna le quote prima di giocare: il valore cambia durante il giorno.</span></div>
