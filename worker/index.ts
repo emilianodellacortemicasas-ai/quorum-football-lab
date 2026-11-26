@@ -26,7 +26,15 @@ const worker = {
         },
       };
     }
-    return runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
+    // Pages must never be served from a cache: the app installed on the phone always loads the latest version.
+    return Promise.resolve(runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx))).then((res: Response) => {
+      const type = res.headers.get("content-type") ?? "";
+      const path = new URL(request.url).pathname;
+      if (!type.includes("text/html") && path !== "/sw.js" && path !== "/manifest.webmanifest") return res;
+      const out = new Response(res.body, res);
+      out.headers.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      return out;
+    });
   },
   // Daily value scan (see triggers in vite.config.ts). Errors are recorded in scanner_runs.
   // "40 2-23/3 * * *": full scan every 3 hours. "10 * * * *": pre-kickoff refresh (line-ups, closing odds) only when a match is about to start.

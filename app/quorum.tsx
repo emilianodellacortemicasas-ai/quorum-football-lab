@@ -67,7 +67,7 @@ export default function Quorum(){
   const notify=(message:string)=>setToast(message);
   useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),6000);return()=>clearTimeout(t);},[toast]);
   async function load(){try{const r=await fetch('/api/workspace',{cache:'no-store'});const data:any=await r.json();if(!r.ok)throw new Error(data.error);IS_ADMIN=!!data.admin;setWs(data);if(data.authenticated&&data.portfolios.length===0)setOnboarding(true);}catch(e){notify(e instanceof Error?e.message:'Archivio non disponibile.');}finally{setReady(true);}}
-  useEffect(()=>{load();if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});},[]);
+  useEffect(()=>{load();if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});},[]);
   // New version published? The app on the phone or the desktop app stays open for days: compare the scripts of the
   // page with the ones on the server when the app comes back in view (and every 10 minutes) and reload if they changed.
   const [update,setUpdate]=useState(false);
@@ -75,8 +75,12 @@ export default function Quorum(){
     // The entry chunk (…/chunks/index-<hash>.js) changes with every build.
     const entry=(t:string)=>(/\/_next\/static\/chunks\/index-[A-Za-z0-9_-]+\.js/.exec(t)||[''])[0];
     const base=entry([...document.querySelectorAll('script[src]')].map(x=>(x as HTMLScriptElement).getAttribute('src')||'').join(' '));if(!base)return;
-    const check=async()=>{try{const html=await (await fetch('/?v='+Date.now(),{cache:'no-store'})).text();const srv=entry(html);if(srv&&srv!==base){if(document.visibilityState==='hidden')location.reload();else setUpdate(true);}}catch{}};
-    const vis=()=>{if(document.visibilityState==='visible')check();};
+    const started=Date.now();
+    // Opening the app (first check, or coming back to it after a while): if there is a new version it reloads by itself.
+    // While the app is in use, a banner asks first, so nothing being typed is lost.
+    const check=async(auto=false)=>{try{const html=await (await fetch('/?v='+Date.now(),{cache:'no-store'})).text();const srv=entry(html);if(srv&&srv!==base){let tried='';try{tried=sessionStorage.getItem('quorum-reload')||'';}catch{}const once=tried!==srv;if(once&&(auto||document.visibilityState==='hidden'||Date.now()-started<20000)){try{sessionStorage.setItem('quorum-reload',srv);}catch{}location.reload();}else setUpdate(true);}}catch{}};
+    let hiddenAt=0;
+    const vis=()=>{if(document.visibilityState==='hidden')hiddenAt=Date.now();else check(hiddenAt>0&&Date.now()-hiddenAt>60000);};
     document.addEventListener('visibilitychange',vis);const t=setInterval(check,10*60000);check();
     return()=>{document.removeEventListener('visibilitychange',vis);clearInterval(t);};
   },[]);
