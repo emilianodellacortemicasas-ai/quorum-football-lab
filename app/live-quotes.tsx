@@ -20,9 +20,15 @@ export function useLiveQuotes(notify: (m: string) => void) {
   return { busy, fresh, refresh };
 }
 const hm = (s: string) => new Date(s).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
-export function LiveButton({ fixtureId, busy, onClick, at }: { fixtureId: string; busy: string; onClick: () => void; at?: string }) {
-  return <button type="button" className="live-btn" disabled={!!busy} onClick={onClick} title="Legge adesso le quote di Lottomatica, Planet, Snai, Sisal ed Eurobet per questa partita">
-    <RefreshCw size={14} className={busy === fixtureId ? 'spin' : ''} />{busy === fixtureId ? 'Leggo le quote…' : at ? 'Quote delle ' + hm(at) + ' · aggiorna' : 'Quote adesso'}</button>;
+const dm = (s: string) => { const d = new Date(s), today = new Date().toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }); const day = d.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }); return day === today ? 'alle ' + hm(s) : 'il ' + d.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short' }) + ' alle ' + hm(s); };
+// Status of the Italian prices + the refresh button, always visible.
+// Fresh (< 1 h): green. 1–6 h: amber "da aggiornare". Older or unknown: red.
+export function LiveButton({ fixtureId, busy, onClick, at }: { fixtureId: string; busy: string; onClick: () => void; at?: string | null }) {
+  const age = at ? (Date.now() - Date.parse(at)) / 3600000 : null, tone = age === null ? 'old' : age < 1 ? 'ok' : age < 6 ? 'mid' : 'old';
+  const status = age === null ? 'Quote italiane da aggiornare' : tone === 'ok' ? 'Quote aggiornate ' + dm(at!) : 'Da aggiornare · ultimo aggiornamento ' + dm(at!);
+  return <div className={'live-box ' + tone}><span className="live-status"><i />{status}</span>
+    <button type="button" className="live-btn" disabled={!!busy} onClick={onClick} title="Legge adesso le quote di Lottomatica, Planet, Snai, Sisal ed Eurobet">
+      <RefreshCw size={15} className={busy === fixtureId ? 'spin' : ''} />{busy === fixtureId ? 'Leggo le quote…' : tone === 'ok' ? 'Riaggiorna' : 'Aggiorna quote ora'}</button></div>;
 }
 export function FreshRow({ q, p }: { q?: Record<string, number>; p: number }) {
   if (!q) return <p className="small-note">I bookmaker italiani non quotano adesso questo esito.</p>;

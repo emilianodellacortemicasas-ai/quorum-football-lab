@@ -147,7 +147,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
               <ul className="tc-checks">{o.checks.map((c: any) => <li key={c.id} className={c.ok === true ? 'ok' : c.ok === false ? 'ko' : 'na'} title={c.note} role="button" tabIndex={0} onClick={() => setInfoId(CK[c.id] ?? 'opp')}><i>{c.ok === true ? <Check size={13} /> : c.ok === false ? <X size={13} /> : '?'}</i>{c.label}</li>)}</ul>
               <button className="text-button" onClick={() => setOpen(open === k ? '' : k)}>{open === k ? 'Chiudi i dettagli' : 'Perché? Vedi i dettagli dei controlli'}</button>
               {open === k && <ul className="tc-notes">{o.checks.map((c: any) => <li key={c.id}><b>{c.label}</b>: {c.note}</li>)}</ul>}
-              <LiveButton fixtureId={o.fixtureId} busy={live.busy} at={o.reported?.onDemand ? o.reported.at : undefined} onClick={async () => { if (await live.refresh(o.fixtureId)) setReload(x => x + 1); }} />
+              <LiveButton fixtureId={o.fixtureId} busy={live.busy} at={o.reported?.at ?? (o.ageH === null ? null : new Date(Date.now() - o.ageH * 3600000).toISOString())} onClick={async () => { if (await live.refresh(o.fixtureId)) setReload(x => x + 1); }} />
               {onRecord && o.grade !== 'C' && playBox({ k, suggested: st, odds: o.odds, p: o.pTrue, report: o.fixtureId + ':' + o.market, record: (c, q) => onRecord([{ fixtureId: o.fixtureId, fixture: o.fixture, competition: o.competition, kickoff: o.kickoff, market: o.market, label: o.label, p: o.pTrue, odds: q }], c, 'value', 'tipster-centro') })}
             </article>; })}</div>}
           {(d.opportunities.doubles ?? []).length > 0 && <><h3 className="day-title">🎯 Doppie del metodo</h3>

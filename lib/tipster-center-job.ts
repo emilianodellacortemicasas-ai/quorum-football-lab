@@ -188,7 +188,13 @@ export async function refreshMatch(fixtureId: string, user: string, owner: boole
     quotes[k] = Object.fromEntries(Object.entries(q).filter(([b]) => b !== 'Planetwin365').map(([b, v]) => [b, v.odds]));
     if (!reused) reports[fixtureId + ':' + k] = { odds: Math.round(odds * 100) / 100, at, book: 'agg:' + book };
   }
-  if (!reused) await saveReports(reports);
+  if (!reused) {
+    await saveReports(reports);
+    // Also written on the match itself, so Pronostici and Costruisci show the fresh prices and the time of the reading.
+    for (const [k, q] of Object.entries(quotes)) if (mk[k]) mk[k].it = { ...q, ...(q.Lottomatica ? { Planetwin365: q.Lottomatica } : {}) };
+    mk.itAt = { ...(mk.itAt ?? {}), ...chk.at };
+    await db().prepare('UPDATE scanner_matches SET markets=? WHERE fixture_id=? AND run_id=(SELECT run_id FROM scanner_matches WHERE fixture_id=? ORDER BY created_at DESC LIMIT 1)').bind(JSON.stringify(mk), fixtureId, fixtureId).run();
+  }
   const u = await usage();
   return { fixture: row.fixture, at, reused, quotes, left: Math.max(0, cap - (counts.n[user] ?? 0)), month: { used: u.n, limit: (await oddsPlan()).limit } };
 }

@@ -1219,8 +1219,14 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .launch-item span{display:grid}.launch-item small{opacity:.75;font-size:13px}.launch-item em{font-size:12px;opacity:.6;font-style:normal}.launch-item.done b{color:#256b51}.launch-dot{min-width:16px}
 .launch-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end}.launch-form label{display:grid;gap:5px;font-size:14px;font-weight:600}.launch-form input{border:1px solid #d5dfd7;border-radius:9px;padding:10px;font-size:15px}
 @media(max-width:700px){.launch-form{grid-template-columns:1fr}}
-.live-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid currentColor;background:none;cursor:pointer;opacity:.85;margin:6px 0}
-.live-btn:disabled{opacity:.5;cursor:default}.live-btn .spin{animation:livespin 1s linear infinite}@keyframes livespin{to{transform:rotate(360deg)}}
+.live-box{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:10px 0;padding:10px 12px;border-radius:12px;border:2px solid}
+.live-box.ok{border-color:#2fa36f;background:rgba(47,163,111,.10)}.live-box.mid{border-color:#e0a030;background:rgba(224,160,48,.12)}.live-box.old{border-color:#d9583b;background:rgba(217,88,59,.10)}
+.live-status{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700}.live-status i{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.live-box.ok .live-status i{background:#2fa36f}.live-box.mid .live-status i{background:#e0a030}.live-box.old .live-status i{background:#d9583b;animation:livepulse 1.4s ease-in-out infinite}
+@keyframes livepulse{50%{opacity:.3}}
+.live-btn{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:700;padding:9px 14px;border-radius:9px;border:0;background:#256b51;color:#fff;cursor:pointer;min-height:40px}
+.live-box.old .live-btn{background:#d9583b}.live-box.mid .live-btn{background:#c98a1c}
+.live-btn:disabled{opacity:.6;cursor:default}.live-btn .spin{animation:livespin 1s linear infinite}@keyframes livespin{to{transform:rotate(360deg)}}
 .value-it.fresh{outline:1px dashed #256b51;outline-offset:2px}
 .tcx-count-note{display:block;font-size:11px;opacity:.6;margin-top:4px}
 .slip-live{display:grid;gap:2px;margin:8px 0}.slip-live small{font-size:12px;opacity:.7}
