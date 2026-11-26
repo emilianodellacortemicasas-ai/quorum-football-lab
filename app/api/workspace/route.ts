@@ -118,6 +118,22 @@ export async function POST(request:Request) {
         // The row disappears: capital, Risultati and shared plays are recalculated without it.
         const b=z.object({id:z.string().max(80)}).parse(body);
         statement=raw.prepare('DELETE FROM bets WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(b.id,owner,portfolioId,portfolioId,revision);
+      } else if(body.action==='replace-leg'){
+        // Swap one match of a pending multiple (wrong match chosen when saving). The new match must not have started;
+        // its probability comes from QUORUM's latest scan, never from the client.
+        const b=z.object({id:z.string().max(80),index:z.number().int().min(0).max(29),fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(120),label:z.string().min(1).max(160),odds:z.number().min(1.01).max(1000)}).parse(body);
+        const bet=(await db.select().from(bets).where(and(eq(bets.id,b.id),eq(bets.owner,owner),eq(bets.portfolioId,portfolioId))))[0];
+        if(!bet||bet.status!=='pending'||!bet.fixtureId.startsWith('multi:'))return failure('Si possono correggere solo multiple in corso.',404);
+        if(!(Date.parse(b.kickoff)>Date.now()))return failure('La nuova partita è già iniziata.');
+        const row=await raw.prepare('SELECT markets FROM scanner_matches WHERE fixture_id=? ORDER BY created_at DESC LIMIT 1').bind(b.fixtureId).first<{markets:string}>();
+        const pq=row?Number(JSON.parse(row.markets)?.[b.market]?.pBlend):NaN;if(!(pq>0&&pq<1))return failure('QUORUM non ha la stima per questo esito.');
+        const sn=JSON.parse(bet.snapshot);if(!Array.isArray(sn.legs)||!sn.legs[b.index])return failure('Evento non trovato.');
+        if(sn.legs.some((l:any,i:number)=>i!==b.index&&l.fixtureId===b.fixtureId))return failure('Un solo esito per partita.');
+        sn.legs[b.index]={fixtureId:b.fixtureId,fixture:b.fixture,competition:b.competition,kickoff:b.kickoff,market:b.market,label:b.label,p:pq,odds:b.odds};
+        sn.kickoff=sn.legs.map((l:any)=>l.kickoff).sort()[0];
+        const odds=Math.round(sn.legs.reduce((q:number,l:any)=>q*l.odds,1)*1000)/1000,prob=sn.legs.reduce((q:number,l:any)=>q*l.p,1);
+        await raw.prepare('UPDATE bets SET snapshot=?,odds=?,probability=?,market_label=? WHERE id=? AND owner=?').bind(JSON.stringify(sn),odds,prob,sn.legs.map((l:any)=>l.label).join(' + ').slice(0,200),bet.id,owner).run();
+        return Response.json({ok:true,...await workspace(owner)},{headers:{'Cache-Control':'no-store'}});
       } else if(body.action==='played-at'){
         // Correct the time a play was placed (saved later than played): never after the first kickoff, never in the future.
         const b=z.object({id:z.string().max(80),playedAt:z.string().max(40)}).parse(body);
