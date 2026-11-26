@@ -1255,3 +1255,7 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .cover-opt ul{list-style:none;margin:0;padding:0;display:grid;gap:4px;font-size:14px}.cover-opt li em{display:block;font-style:normal;font-size:12px;opacity:.7}
 .cover-nums{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px}.cover-more summary{cursor:pointer;font-size:14px;font-weight:600}
 .cover-cap{margin:0;padding:8px 10px;border-radius:8px;background:rgba(224,160,48,.15);font-size:13px}
+.cover-opt li,.cover-legs li{display:flex!important;justify-content:space-between;align-items:center;gap:10px}.cover-opt li>div,.cover-legs li>div{display:grid}
+.cover-odds-l{display:grid;justify-items:end;gap:2px}.cover-odds-l small{font-size:11px;opacity:.65}
+.cover-odds{width:74px;padding:6px 8px;border:2px solid #256b51;border-radius:8px;font-size:15px;font-weight:700;text-align:right;background:#fff}
+.slip-odds input{border:2px solid #256b51!important;border-radius:8px!important;font-weight:700;background:#fff!important}

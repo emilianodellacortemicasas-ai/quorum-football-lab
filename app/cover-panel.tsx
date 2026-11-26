@@ -42,7 +42,7 @@ export function CoverHint({ legs, stake, find, cands, onOpen }: { legs: CoverLeg
 // Standalone section "Copertura": the slip prepared in Costruisci (or in Valore di oggi), the stake, the cover.
 export function CoverView({ notify, onRecord, onBuilder, onToday, cap }: { notify: (m: string) => void; onRecord?: RecordPlay; onBuilder: () => void; onToday: () => void; cap?: number | null }) {
   const [matches, setMatches] = useState<Match[] | null>(null);
-  const [slip] = useState<Opt[]>(() => { try { return (JSON.parse(localStorage.getItem('quorum-slip-v1') || '[]') as Opt[]).filter(x => Date.parse(x.kickoff) > Date.now()); } catch { return []; } });
+  const [slip, setSlip] = useState<Opt[]>(() => { try { return (JSON.parse(localStorage.getItem('quorum-slip-v1') || '[]') as Opt[]).filter(x => Date.parse(x.kickoff) > Date.now()); } catch { return []; } });
   const [stakeText, setStakeText] = useState(() => { try { const v = Number(localStorage.getItem('quorum-slip-stake')); return v >= 100 ? (v / 100).toFixed(2).replace('.', ',') : '2,00'; } catch { return '2,00'; } });
   useEffect(() => { fetch('/api/scanner?view=predictions', { cache: 'no-store' }).then(r => r.json()).then((d: any) => setMatches((d.matches || []).map(toOptions).filter(Boolean)), () => setMatches([])); }, []);
   const stake = Math.round(Number(stakeText.replace(',', '.')) * 100) || 0, odds = slip.reduce((s, l) => s * l.odds, 1);
@@ -54,7 +54,8 @@ export function CoverView({ notify, onRecord, onBuilder, onToday, cap }: { notif
     {!slip.length ? <div className="empty compact"><span className="empty-icon"><ShieldCheck /></span><h3>Nessuna schedina da coprire.</h3><p>Scegli le partite in Valore di oggi o in Costruisci: la copertura si calcola qui.</p>
       <div className="cover-links"><button className="primary" onClick={onToday}>Valore di oggi</button><button className="secondary" onClick={onBuilder}>Costruisci schedina</button></div></div>
     : <div className="cover-grid">
-      <div className="panel"><h3>La tua schedina</h3><ul className="cover-legs">{slip.map(l => <li key={l.fixtureId}><b>{l.label}</b><span>{l.fixture}</span><em>{percent(l.p, 0)} · {l.odds.toFixed(2)}</em></li>)}</ul>
+      <div className="panel"><h3>La tua schedina</h3><ul className="cover-legs">{slip.map(l => <li key={l.fixtureId}><div><b>{l.label}</b><span>{l.fixture}</span><em>{percent(l.p, 0)}</em></div><label className="cover-odds-l"><small>quota giocata</small><input className="cover-odds" inputMode="decimal" key={l.market + l.odds} defaultValue={l.odds.toFixed(2)} onFocus={e => e.target.select()} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={e => { const v = Number(e.target.value.replace(',', '.')); if (v > 1 && v < 1000 && Math.abs(v - l.odds) > 1e-9) { const next = slip.map(x => x.fixtureId === l.fixtureId && x.market === l.market ? { ...x, odds: v, value: x.p * v - 1, fair: false, bookmaker: 'quota inserita' } : x); setSlip(next); try { localStorage.setItem('quorum-slip-v1', JSON.stringify(next)); } catch { } } else e.target.value = l.odds.toFixed(2); }} /></label></li>)}</ul>
+        <p className="small-note">Se sul tuo conto la quota è diversa, correggila qui o sulla copertura: QUORUM ricalcola puntata e scenari.</p>
         <div className="slip-total"><span>Quota totale</span><strong>{odds.toFixed(2)}</strong></div>
         <label className="slip-stake">Puntata della schedina (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value.replace(/[^0-9.,]/g, ''))} /></label>
         <button className="text-button" onClick={onBuilder}>Modifica la schedina in Costruisci</button></div>
@@ -84,8 +85,11 @@ const when2 = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Eu
 // Main cover: a separate ticket on other matches that gives back the money of both tickets if it wins.
 export function CoverPanel({ legs, stake, cands, find, onRecord, cap }: { legs: CoverLeg[]; stake: number; cands: CoverCand[]; find: (f: string, m: string) => CoverOpt | null; onRecord?: (legs: CoverCand[], stake: number) => Promise<boolean>; cap?: number | null }) {
   const [done, setDone] = useState<Record<string, boolean>>({}), [busy, setBusy] = useState('');
-  const r = coverTickets(legs, stake, cands);
+  // Prices typed by the user (the real ones on the account) replace QUORUM's: stake and scenarios are recomputed.
+  const [own, setOwn] = useState<Record<string, number>>({});
+  const r = coverTickets(legs, stake, cands.map(c => own[c.fixtureId + ':' + c.market] ? { ...c, odds: own[c.fixtureId + ':' + c.market], tag: c.p * own[c.fixtureId + ':' + c.market] - 1 >= 0.03 ? 'valore' : undefined } : c));
   const sign = (v: number) => (v > 0 ? '+' : '') + money(v);
+  const oddsIn = (l: CoverCand) => { const k = l.fixtureId + ':' + l.market; return <input className="cover-odds" inputMode="decimal" key={k + (own[k] ?? '')} defaultValue={l.odds.toFixed(2)} title="Scrivi la quota che vedi sul tuo conto" onFocus={e => e.target.select()} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} onBlur={e => { const v = Number(e.target.value.replace(',', '.')); if (v > 1 && v < 100 && Math.abs(v - l.odds) > 1e-9) setOwn(o => ({ ...o, [k]: v })); else e.target.value = l.odds.toFixed(2); }} />; };
   return <div className="cover-wrap">
     <div className="cover-intro"><b>Senza copertura</b> perdi tutto nel <b>{percent(r.none.pLoseAll, 0)}</b> dei casi. QUORUM cerca una seconda schedina su altre partite che, se vince, ti restituisce i soldi di tutte e due. Obiettivo: scendere sotto il {Math.round(r.target * 100)}%.</div>
     {!r.options.length && <p className="small-note">Nessuna giocata adatta nelle prossime 72 ore (servono esiti molto probabili o con valore su Lottomatica / Planet). Prova la copertura sull'evento più a rischio qui sotto.</p>}
@@ -93,7 +97,7 @@ export function CoverPanel({ legs, stake, cands, find, onRecord, cap }: { legs: 
       return <article key={key} className={'cover-opt ' + o.kind.split('-')[0]}>
         <header><b>{KIND[o.kind][0]}</b><span className={'cover-target' + (ok ? ' ok' : '')}>perdi tutto {percent(r.none.pLoseAll, 0)} → <b>{percent(o.pLoseAll, 0)}</b></span></header>
         <small>{KIND[o.kind][1]}</small>
-        <ul>{o.legs.map(l => <li key={l.fixtureId}><b>{l.label}</b> {l.fixture}<em>{when2(l.kickoff)} · {percent(l.p, 0)} · {l.odds.toFixed(2)}{l.tag === 'valore' ? ' · valore' : ''}</em></li>)}</ul>
+        <ul>{o.legs.map(l => <li key={l.fixtureId}><div><b>{l.label}</b> {l.fixture}<em>{when2(l.kickoff)} · {percent(l.p, 0)}{l.tag === 'valore' ? ' · valore' : ''}{own[l.fixtureId + ':' + l.market] ? ' · quota tua' : ''}</em></div><label className="cover-odds-l"><small>quota</small>{oddsIn(l)}</label></li>)}</ul>
         <div className="cover-nums"><span>Quota <b>{o.odds.toFixed(2)}</b></span><span>Probabilità <b>{percent(o.p, 0)}</b></span><span>Puntata <b>{money(o.stake)}</b></span><span>Totale investito <b>{money(stake + o.stake)}</b></span></div>
         <table className="cover-table"><tbody>
           <tr><td>Vincono tutte e due</td><td>{sign(o.bothWin)}</td></tr>
