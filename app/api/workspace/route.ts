@@ -118,6 +118,15 @@ export async function POST(request:Request) {
         // The row disappears: capital, Risultati and shared plays are recalculated without it.
         const b=z.object({id:z.string().max(80)}).parse(body);
         statement=raw.prepare('DELETE FROM bets WHERE id=? AND owner=? AND portfolio_id=? AND (SELECT revision FROM portfolio_revisions WHERE portfolio_id=?)=?').bind(b.id,owner,portfolioId,portfolioId,revision);
+      } else if(body.action==='played-at'){
+        // Correct the time a play was placed (saved later than played): never after the first kickoff, never in the future.
+        const b=z.object({id:z.string().max(80),playedAt:z.string().max(40)}).parse(body);
+        const bet=(await db.select().from(bets).where(and(eq(bets.id,b.id),eq(bets.owner,owner),eq(bets.portfolioId,portfolioId))))[0];
+        if(!bet)return failure('Giocata non trovata.',404);
+        let first=Infinity;try{const sn=JSON.parse(bet.snapshot);first=Math.min(...(sn.legs||[]).map((l:any)=>Date.parse(l.kickoff)).filter(Number.isFinite));}catch{}
+        const t=Date.parse(b.playedAt);if(!Number.isFinite(t)||t>Date.now()||t>=first)return failure('L’orario deve essere prima del calcio d’inizio della prima partita.');
+        await raw.prepare('UPDATE bets SET created_at=?,source=? WHERE id=? AND owner=?').bind(new Date(t).toISOString(),bet.source.replace(/:tardiva$/,''),bet.id,owner).run();
+        return Response.json({ok:true,...await workspace(owner)},{headers:{'Cache-Control':'no-store'}});
       } else if(body.action==='link-cover'){
         // Links a cover saved on its own to the ticket it covers (same group code in the source): "Schedine coperte".
         const b=z.object({coverId:z.string().max(80),ticketId:z.string().max(80),group:z.string().regex(/^[a-z0-9]{4,12}$/)}).parse(body);
