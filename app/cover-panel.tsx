@@ -40,6 +40,8 @@ export function CoverHint({ legs, stake, find, cands, onOpen }: { legs: CoverLeg
 }
 
 // Standalone section "Copertura": the slip prepared in Costruisci (or in Valore di oggi), the stake, the cover.
+const gid = () => Math.random().toString(36).slice(2, 10);
+const asLeg = (l: CoverCand) => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition ?? '', kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds });
 export function CoverView({ notify, onRecord, onBuilder, onToday, cap }: { notify: (m: string) => void; onRecord?: RecordPlay; onBuilder: () => void; onToday: () => void; cap?: number | null }) {
   const [matches, setMatches] = useState<Match[] | null>(null);
   const [slip, setSlip] = useState<Opt[]>(() => { try { return (JSON.parse(localStorage.getItem('quorum-slip-v1') || '[]') as Opt[]).filter(x => Date.parse(x.kickoff) > Date.now()); } catch { return []; } });
@@ -60,7 +62,14 @@ export function CoverView({ notify, onRecord, onBuilder, onToday, cap }: { notif
         <label className="slip-stake">Puntata della schedina (€)<input inputMode="decimal" value={stakeText} onChange={e => setStakeText(e.target.value.replace(/[^0-9.,]/g, ''))} /></label>
         <button className="text-button" onClick={onBuilder}>Modifica la schedina in Costruisci</button></div>
       <div>{matches ? <CoverPanel legs={slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, market: l.market, label: l.label, p: l.p, odds: l.odds }))} stake={stake} find={find} cands={candidatesFrom(matches)} cap={cap}
-        onRecord={onRecord ? async (legs, st) => { const ok = await onRecord(legs.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition ?? '', kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds })), st, 'builder', 'copertura'); if (ok) notify('Copertura registrata come giocata separata.'); return ok; } : undefined} /> : <p>Calcolo della copertura…</p>}</div>
+        onRecord={onRecord ? async (legs, st) => { const ok = await onRecord(legs.map(asLeg), st, 'builder', 'copertura-' + gid()); if (ok) notify('Copertura registrata. La trovi in Schedine coperte.'); return ok; } : undefined}
+        onRecordPair={onRecord ? async (legs, st) => { const g = gid();
+          const a = await onRecord(slip.map(l => ({ fixtureId: l.fixtureId, fixture: l.fixture, competition: l.competition || '', kickoff: l.kickoff, market: l.market, label: l.label, p: l.p, odds: l.odds })), stake, 'builder', 'coperta-' + g);
+          if (!a) return false;
+          const b = await onRecord(legs.map(asLeg), st, 'builder', 'copertura-' + g);
+          if (!b) { notify('Schedina registrata, ma la copertura no: leggi il motivo e riprova con “salva solo la copertura”.'); return false; }
+          try { localStorage.removeItem('quorum-slip-v1'); } catch { }
+          notify('Schedina e copertura registrate insieme. Le trovi in Schedine coperte.'); return true; } : undefined} /> : <p>Calcolo della copertura…</p>}</div>
     </div>}
   </section>;
 }
@@ -83,7 +92,7 @@ const KIND: Record<CoverTicket['kind'], [string, string]> = {
 };
 const when2 = (s: string) => new Date(s).toLocaleString('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 // Main cover: a separate ticket on other matches that gives back the money of both tickets if it wins.
-export function CoverPanel({ legs, stake, cands, find, onRecord, cap }: { legs: CoverLeg[]; stake: number; cands: CoverCand[]; find: (f: string, m: string) => CoverOpt | null; onRecord?: (legs: CoverCand[], stake: number) => Promise<boolean>; cap?: number | null }) {
+export function CoverPanel({ legs, stake, cands, find, onRecord, onRecordPair, cap }: { legs: CoverLeg[]; stake: number; cands: CoverCand[]; find: (f: string, m: string) => CoverOpt | null; onRecord?: (legs: CoverCand[], stake: number) => Promise<boolean>; onRecordPair?: (legs: CoverCand[], stake: number) => Promise<boolean>; cap?: number | null }) {
   const [done, setDone] = useState<Record<string, boolean>>({}), [busy, setBusy] = useState('');
   // Prices typed by the user (the real ones on the account) replace QUORUM's: stake and scenarios are recomputed.
   const [own, setOwn] = useState<Record<string, number>>({});
@@ -107,9 +116,32 @@ export function CoverPanel({ legs, stake, cands, find, onRecord, cap }: { legs: 
           <tr><td>Risultato medio atteso</td><td>{sign(r.none.ev)} → {sign(o.ev)}</td></tr>
         </tbody></table>
         {cap && o.stake > cap ? <p className="cover-cap">Oltre la tua regola di capitale: massimo {money(cap)} a giocata. Abbassa la puntata della schedina o cambia regola nel Portafoglio.</p> : null}
-        {onRecord && <button className="primary" disabled={!!busy || done[key] || o.stake < 100 || (!!cap && o.stake > cap)} onClick={async () => { setBusy(key); const okk = await onRecord(o.legs, o.stake); setBusy(''); if (okk) setDone(d => ({ ...d, [key]: true })); }}>{done[key] ? 'Copertura registrata' : 'Registra questa copertura (' + money(o.stake) + ')'}</button>}
+        {onRecordPair && <button className="primary" disabled={!!busy || done[key] || o.stake < 100 || (!!cap && (o.stake > cap || stake > cap))} onClick={async () => { setBusy(key); const okk = await onRecordPair(o.legs, o.stake); setBusy(''); if (okk) setDone(d => ({ ...d, [key]: true })); }}>{done[key] ? 'Schedina e copertura registrate' : 'Registra schedina + copertura (' + money(stake) + ' + ' + money(o.stake) + ')'}</button>}
+        {onRecord && !done[key] && <button className="text-button" disabled={!!busy || o.stake < 100 || (!!cap && o.stake > cap)} onClick={async () => { setBusy(key); const okk = await onRecord(o.legs, o.stake); setBusy(''); if (okk) setDone(d => ({ ...d, [key]: true })); }}>La schedina l’ho già registrata: salva solo la copertura</button>}
       </article>; })}</div>
     <details className="cover-more"><summary>Oppure: giocata opposta all'evento più a rischio</summary><OppositeCover legs={legs} stake={stake} find={find} /></details>
     <p className="small-note">Le probabilità sono stime di QUORUM. Si può perdere lo stesso: la copertura riduce il rischio, non lo elimina. Controlla le quote sul tuo conto prima di giocare.</p>
   </div>;
+}
+
+// "Schedine coperte": every main ticket registered with its cover, side by side, with the combined result.
+export function CoveredView({ bets, onCover }: { bets: any[]; onCover: () => void }) {
+  const groups = new Map<string, { main: any[]; cover: any[] }>();
+  for (const b of bets) { const m = /:(coperta|copertura)-([a-z0-9]{4,12})/.exec(b.source ?? ''); if (!m) continue; const g = groups.get(m[2]) ?? { main: [], cover: [] }; (m[1] === 'coperta' ? g.main : g.cover).push(b); groups.set(m[2], g); }
+  const list = [...groups.entries()].map(([id, g]) => ({ id, ...g, at: [...g.main, ...g.cover].map(b => b.createdAt).sort()[0] })).sort((a, b) => b.at.localeCompare(a.at));
+  const st = (b: any) => b.status === 'won' ? ['VINTA', 'green'] : b.status === 'lost' ? ['PERSA', 'red'] : b.status === 'void' ? ['ANNULLATA', 'neutral'] : ['IN CORSO', 'neutral'];
+  const closed = list.filter(g => [...g.main, ...g.cover].every(b => b.status !== 'pending'));
+  const tot = closed.reduce((t, g) => t + [...g.main, ...g.cover].reduce((s, b) => s + (b.pnlCents ?? 0), 0), 0);
+  const saved = closed.filter(g => g.main.every(b => b.status === 'lost') && g.cover.some(b => b.status === 'won')).length;
+  return <section className="covered">
+    <div className="page-heading"><div><p className="eyebrow">SCHEDINE COPERTE</p><h1>Le tue schedine con copertura<span>.</span></h1><p>Ogni schedina accanto alla sua copertura, con il risultato delle due insieme.</p></div></div>
+    <div className="section-switch"><button className="secondary" onClick={onCover}><ShieldCheck size={15} />Nuova copertura</button></div>
+    {closed.length > 0 && <div className="covered-sum"><span>Chiuse <b>{closed.length}</b></span><span>Salvate dalla copertura <b>{saved}</b></span><span>Risultato complessivo <b className={tot < 0 ? 'negative' : 'positive'}>{(tot > 0 ? '+' : '') + money(tot)}</b></span></div>}
+    {!list.length && <div className="empty compact"><span className="empty-icon"><ShieldCheck /></span><h3>Nessuna schedina coperta.</h3><p>In Copertura premi “Registra schedina + copertura”: le due giocate compaiono qui insieme.</p></div>}
+    <div className="covered-list">{list.map(g => { const all = [...g.main, ...g.cover], pnl = all.reduce((s, b) => s + (b.pnlCents ?? 0), 0), open = all.some(b => b.status === 'pending'), inv = all.reduce((s, b) => s + b.stakeCents, 0);
+      return <article key={g.id} className="panel covered-card">
+        <header><small>{new Date(g.at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small><span>Investito <b>{money(inv)}</b></span><b className={open ? '' : pnl < 0 ? 'negative' : 'positive'}>{open ? 'In corso' : (pnl > 0 ? '+' : '') + money(pnl)}</b></header>
+        {[['Schedina', g.main], ['Copertura', g.cover]].map(([t, bs]: any) => <div key={t} className="covered-row"><span className="covered-tag">{t}</span>{bs.length ? bs.map((b: any) => { const [s, tone] = st(b); return <div key={b.id} className="covered-bet"><div><b>{b.marketLabel}</b><small>{b.fixture} · quota {Number(b.odds).toFixed(2)} · {money(b.stakeCents)}</small></div><span className={'tag ' + tone}>{s}</span></div>; }) : <small className="small-note">non registrata</small>}</div>)}
+      </article>; })}</div>
+  </section>;
 }

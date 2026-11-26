@@ -1259,3 +1259,8 @@ details.mm-sim summary strong:after{content:' ▾';color:var(--muted)}details.mm
 .cover-odds-l{display:grid;justify-items:end;gap:2px}.cover-odds-l small{font-size:11px;opacity:.65}
 .cover-odds{width:74px;padding:6px 8px;border:2px solid #256b51;border-radius:8px;font-size:15px;font-weight:700;text-align:right;background:#fff}
 .slip-odds input{border:2px solid #256b51!important;border-radius:8px!important;font-weight:700;background:#fff!important}
+.covered-sum{display:flex;flex-wrap:wrap;gap:8px 22px;padding:12px 14px;border-radius:12px;background:rgba(37,107,81,.07);margin-bottom:14px;font-size:14px}
+.covered-list{display:grid;gap:12px}.covered-card{display:grid;gap:10px}.covered-card header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.covered-row{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;align-items:start}.covered-tag{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:.7;padding-top:3px}
+.covered-bet{display:flex;justify-content:space-between;gap:10px;align-items:center}.covered-bet>div{display:grid}.covered-bet small{opacity:.7}
+.covered-row .covered-bet+.covered-bet{grid-column:2}
