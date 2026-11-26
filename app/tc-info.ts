@@ -12,6 +12,12 @@ export const WHY = {
 };
 
 export const INFO: Record<string, InfoItem> = {
+  ready: { group: 'Prestazioni', title: 'Pronto per le quote in tempo reale?',
+    come: 'Tre controlli: almeno 100 singole del metodo chiuse, CLV medio sopra +1% e almeno 1.500 € giocati da te negli ultimi 30 giorni. Oggi le quote italiane arrivano dal piano gratuito (250 richieste al mese): Lottomatica/Planet ogni 12 ore, gli altri ogni 5 giorni, più un ricontrollo automatico 1–3,5 ore prima delle partite proposte (massimo 3 al giorno).',
+    obiettivo: 'Dirti quando un abbonamento a quote in tempo reale (circa 45 € al mese) si ripaga davvero, invece di diventare un costo fisso che svuota il capitale.',
+    leggere: 'Ogni controllo è verde quando è superato. La barra sotto mostra quante richieste del mese sono già state usate.',
+    interpretare: 'Con 1.500 € al mese giocati e un rendimento del 3% guadagni circa 45 €: è il pareggio dell’abbonamento. Sotto quella soglia pagheresti i dati più di quanto rendono.',
+    lungo: 'Prima si dimostra il vantaggio con dati gratuiti, poi si investe per ampliarlo. È la stessa logica di un’azienda: non si assume prima di avere i clienti.' },
   core: { group: 'Sala di controllo', title: 'Il nucleo: CLV medio e verdetto',
     come: 'Per ogni giocata registrata QUORUM confronta la quota presa con la probabilità vera al calcio d’inizio (Pinnacle senza margine all’ultima scansione prima della partita). CLV = probabilità di chiusura × quota presa − 1. Il nucleo mostra la media di tutte le giocate misurate e, sotto, il verdetto statistico.',
     obiettivo: 'Dirti in un colpo d’occhio se il metodo (o il tuo gioco) compra prezzi migliori del mercato finale, cioè se ha un vantaggio vero.',
@@ -155,4 +161,4 @@ export const INFO: Record<string, InfoItem> = {
     leggere: '“Tipica” = quello che succede di solito; “rara (5%)” = la soglia oltre la quale è anomalo.', interpretare: 'Se sei sotto la soglia rara, è varianza: non cambiare nulla e soprattutto non aumentare le puntate. Se la superi, fermati e controlla “Dove guadagno”.',
     lungo: 'È lo scudo contro la ludopatia: sapere che 6–7 perse di fila sono normali toglie la voglia di rincorrere le perdite.' },
 };
-export const INFO_ORDER = ['core', 'verdict', 'sources', 'countdown', 'ticker', 'tOpp', 'tUnits', 'tSteam', 'tMargin', 'gSignal', 'gCurve', 'gBeat', 'opp', 'ckValue', 'ckSharp', 'ckFresh', 'ckMove', 'ckModel', 'ckNews', 'ckHistory', 'units', 'watch', 'pKpi', 'pYield', 'pClv', 'seg', 'moves', 'margins', 'streaks'];
+export const INFO_ORDER = ['core', 'verdict', 'sources', 'countdown', 'ticker', 'tOpp', 'tUnits', 'tSteam', 'tMargin', 'gSignal', 'gCurve', 'gBeat', 'opp', 'ckValue', 'ckSharp', 'ckFresh', 'ckMove', 'ckModel', 'ckNews', 'ckHistory', 'units', 'watch', 'pKpi', 'pYield', 'pClv', 'ready', 'seg', 'moves', 'margins', 'streaks'];

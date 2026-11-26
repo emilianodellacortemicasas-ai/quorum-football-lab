@@ -28,7 +28,7 @@ const VERDICT: Record<string, [string, string]> = {
 };
 
 type Center = any;
-export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notify, onOpen, initialTab }: { equityCents: number; stakeBps: number; limitsOn: boolean; onRecord?: RecordPlay; notify: (m: string) => void; onOpen: (id: string) => void; initialTab?: string }) {
+export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notify, onOpen, initialTab, monthStakeCents = 0 }: { monthStakeCents?: number; equityCents: number; stakeBps: number; limitsOn: boolean; onRecord?: RecordPlay; notify: (m: string) => void; onOpen: (id: string) => void; initialTab?: string }) {
   const [src, setSrc] = useState<'metodo' | 'mie'>('metodo'), [tab, setTab] = useState(initialTab || 'opp'), [d, setD] = useState<Center | null>(null), [err, setErr] = useState('');
   // "L'ho giocata": amount and price chosen by the user (prefilled with QUORUM's suggestion).
   const [playAmt, setPlayAmt] = useState<Record<string, string>>({}), [playOdds, setPlayOdds] = useState<Record<string, string>>({}), [saved, setSaved] = useState<Record<string, boolean>>({});
@@ -131,7 +131,7 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
           {!list.length ? <div className="empty compact"><span className="empty-icon"><ListChecks /></span><h3>Nessuna opportunità in questo momento.</h3><p>È normale: un tipster gioca poco. Il prossimo controllo arriva con la scansione tra meno di 3 ore. Intanto guarda la lista “in osservazione” qui sotto.</p></div>
             : <div className="tc-opps">{list.map((o: any) => { const k = o.fixtureId + o.market, st = stakeOf(o.units), g = GRADE[o.grade], f = failed(o); return <article key={k} className={'tc-opp g-' + o.grade}>
               <div className={'tcx-ribbon g-' + o.grade}><b>{o.grade}</b><div><strong>{g[0]}</strong><small>{g[1]}</small></div>{I('opp')}</div>
-              {o.reported && <p className="tcx-reported">Quota aggiornata alle {hm(o.reported.at)}: {o.reported.odds.toFixed(2)} (QUORUM aveva letto {o.reported.before.toFixed(2)}). Livello e valore ricalcolati.</p>}
+              {o.reported && <p className="tcx-reported">{o.reported.auto ? 'Ricontrollata in automatico su Lottomatica/Planet' : 'Quota aggiornata'} alle {hm(o.reported.at)}: {o.reported.odds.toFixed(2)} (QUORUM aveva letto {o.reported.before.toFixed(2)}). Livello e valore ricalcolati.</p>}
               <div className="tc-opp-top"><div><small>{o.competition} · {when(o.kickoff)}</small><strong>{o.fixture}</strong></div><span className="tip-edge" title="Valore: quanto la quota paga più del giusto">valore {sg(o.edge)}</span></div>
               <div className="tcx-pick"><span className="tcx-esito"><small>Esito da giocare</small><b>{o.label}</b></span>
                 <span><small>Quota</small><b>{o.odds.toFixed(2)}</b><em>{o.bookmaker}</em></span>
@@ -160,6 +160,10 @@ export function TipsterCenter({ equityCents, stakeBps, limitsOn, onRecord, notif
 
         {tab === 'perf' && (() => { const p = d.performance, v = VERDICT[p.verdict] ?? VERDICT.nessuna; return <section>
           <div className={'tc-verdict v-' + p.verdict}><GaugeIcon size={22} /><div><strong>{v[0]}</strong><p>{v[1]}{p.needed ? ' Con questo CLV servono ancora circa ' + p.needed + ' giocate per averne la certezza statistica.' : ''}</p></div></div>
+          {(() => { const u = d.oddsUsage, checks = [{ ok: p.n >= 100, t: 'Singole del metodo chiuse', v: p.n + ' / 100' }, { ok: p.clvN >= 20 && p.clv >= 0.01, t: 'CLV medio sopra +1%', v: (p.clv >= 0 ? '+' : '') + (p.clv * 100).toFixed(1).replace('.', ',') + '%' }, { ok: monthStakeCents >= 150000, t: 'Giocato da te negli ultimi 30 giorni', v: money(monthStakeCents) + ' / 1.500 €' }], all = checks.every(c => c.ok);
+            return <div className={'tcx-ready' + (all ? ' on' : '')}><div className="tcx-ready-h"><strong>{all ? 'Pronto: le quote in tempo reale si ripagano' : 'Quote in tempo reale: non ancora'}</strong>{I('ready')}</div>
+              <ul>{checks.map(c => <li key={c.t} className={c.ok ? 'ok' : ''}><span>{c.ok ? '✓' : '○'}</span>{c.t}<b>{c.v}</b></li>)}</ul>
+              {u && <small>Richieste OddsPapi questo mese: {u.n} / 250 · ricontrolli automatici: {u.targeted}</small>}</div>; })()}
           <div className="tcx-secinfo">{I('pKpi')}<small>Giocate e vinte</small>{I('pYield')}<small>Rendimento</small>{I('pClv')}<small>CLV e forza</small></div>
           <div className="tc-kpis">
             <div><span>Giocate chiuse</span><b>{p.n}</b><small>{p.pending} in attesa</small></div>

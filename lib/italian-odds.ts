@@ -9,9 +9,11 @@ const db = () => env.DB!;
 const BASE = 'https://api.oddspapi.io/v4/';
 const SOCCER = 10;
 // Lottomatica (= Planetwin365, same prices) every 12h; Snai, Sisal and Eurobet every 72h for the comparison.
-// Requests per month (free plan 250): 2 calls per refresh (≤ 5 tournaments each) → 120 + 3 × 20 + catalogue ≈ 187.
+// Requests per month (free plan 250): 2 calls per refresh (≤ 5 tournaments each) → 120 + 3 × 12 + catalogue ≈ 162.
+// The rest (≈ 80) goes to targeted checks: one call per match proposed by the Centro, 1–3.5 h before kickoff,
+// which returns every bookmaker for that match. A monthly counter keeps the total under the plan.
 export const IT_BOOKS = [{ key: 'lottomatica', label: 'Lottomatica', re: /lottomatica/i, age: 12 }, { key: 'planetwin', label: 'Planetwin365', re: /planet ?win/i, age: 12 },
-  { key: 'snai', label: 'Snai', re: /snai/i, age: 72 }, { key: 'sisal', label: 'Sisal', re: /sisal/i, age: 72 }, { key: 'eurobet', label: 'Eurobet', re: /eurobet/i, age: 72 }] as const;
+  { key: 'snai', label: 'Snai', re: /snai/i, age: 120 }, { key: 'sisal', label: 'Sisal', re: /sisal/i, age: 120 }, { key: 'eurobet', label: 'Eurobet', re: /eurobet/i, age: 120 }] as const;
 const COMPS: Record<string, { cat: string; names: string[] }> = {
   'Serie A': { cat: 'italy', names: ['serie a'] }, 'Serie B': { cat: 'italy', names: ['serie b'] }, 'Championship': { cat: 'england', names: ['championship'] },
   'Champions League': { cat: '', names: ['uefa champions league', 'champions league'] }, 'Europa League': { cat: '', names: ['uefa europa league', 'europa league'] },
@@ -21,7 +23,21 @@ const COMPS: Record<string, { cat: string; names: string[] }> = {
 const MINOR = ['Serie B', 'Championship', 'Champions League', 'Europa League'];
 const norm = (s: unknown) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-async function api(path: string, key: string) {
+// Monthly request counter (UTC month): every call to OddsPapi is counted, targeted checks stop well before the plan limit.
+export const PLAN_LIMIT = 250, TARGETED_CEILING = 238;
+const month = () => new Date().toISOString().slice(0, 7);
+export async function usage(): Promise<{ month: string; n: number; targeted: number; day: string; today: number }> {
+  const row = await db().prepare("SELECT payload FROM model_state WHERE id='oddspapi:usage'").first<{ payload: string }>().catch(() => null);
+  const u = row ? JSON.parse(row.payload) : null, d = new Date().toISOString().slice(0, 10);
+  if (!u || u.month !== month()) return { month: month(), n: 0, targeted: 0, day: d, today: 0 };
+  return u.day === d ? u : { ...u, day: d, today: 0 };
+}
+async function count(targeted: boolean) {
+  const u = await usage(); u.n++; if (targeted) { u.targeted++; u.today++; }
+  await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('oddspapi:usage',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(new Date().toISOString(), JSON.stringify(u)).run().catch(() => undefined);
+}
+async function api(path: string, key: string, targeted = false) {
+  await count(targeted);
   const r = await fetch(BASE + path + (path.includes('?') ? '&' : '?') + 'apiKey=' + encodeURIComponent(key), { signal: AbortSignal.timeout(25000) });
   if (!r.ok) { const body = (await r.text().catch(() => '')).replace(/apiKey=[^&\s"]+/g, 'apiKey=***').slice(0, 300); throw new Error(r.status === 429 ? 'OddsPapi: limite di richieste raggiunto.' : 'OddsPapi HTTP ' + r.status + ' su ' + path.split('?')[0] + ': ' + body); }
   return r.json() as Promise<any>;
@@ -72,7 +88,7 @@ async function meta(key: string): Promise<Meta> {
   });
 }
 
-export type ItalianFixture = { home: string; away: string; start: string; comp: string; quotes: Record<string, Record<string, { odds: number; link: string | null }>>; at?: Record<string, string> };
+export type ItalianFixture = { id?: string; home: string; away: string; start: string; comp: string; quotes: Record<string, Record<string, { odds: number; link: string | null }>>; at?: Record<string, string> };
 export async function italianOdds(): Promise<ItalianFixture[] | null> {
   const key = await credentialValue('oddspapi'); if (!key) return null;
   const m = await meta(key);
@@ -97,7 +113,7 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
         const at = lastAt.get('oddspapi:' + b.key + ':' + g) ?? new Date().toISOString();
         for (const f of rows) {
           const fid = String(f.fixtureId), board = f.board; if (!board) continue;
-          const fx: ItalianFixture = byFixture.get(fid) ?? { home: f.participant1Name ?? m.teams[String(f.participant1Id)], away: f.participant2Name ?? m.teams[String(f.participant2Id)], start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
+          const fx: ItalianFixture = byFixture.get(fid) ?? { id: fid, home: f.participant1Name ?? m.teams[String(f.participant1Id)], away: f.participant2Name ?? m.teams[String(f.participant2Id)], start: f.startTime, comp: compOf(Number(f.tournamentId)), quotes: {} };
           for (const [mid, mk] of Object.entries<any>(board.markets ?? {})) {
             const omap = MARKETS[mid]; if (!omap) continue;
             for (const [oid, o] of Object.entries<any>(mk.outcomes ?? {})) {
@@ -111,6 +127,17 @@ export async function italianOdds(): Promise<ItalianFixture[] | null> {
           byFixture.set(fid, fx);
         }
       } catch (e) { firstError ??= e; }
+    }
+  }
+  // Targeted checks (one match, all bookmakers) override the broad refresh when they are newer.
+  const checks = await targetedStore();
+  for (const [fid, c] of Object.entries(checks)) {
+    const fx = byFixture.get(fid); if (!fx) continue;
+    for (const [book, when] of Object.entries(c.at)) {
+      if (fx.at?.[book] && Date.parse(fx.at[book]) >= Date.parse(when)) continue;
+      for (const q of Object.values(fx.quotes)) delete q[book];
+      for (const [k, q] of Object.entries(c.quotes)) if (q[book]) (fx.quotes[k] ??= {})[book] = q[book];
+      (fx.at ??= {})[book] = when;
     }
   }
   const out = [...byFixture.values()].filter(f => f.home && f.away && Object.keys(f.quotes).length);
@@ -178,4 +205,47 @@ export function sanitizeItalian(fx: ItalianFixture | null, market: { home?: numb
     for (const [k, q] of Object.entries(fx.quotes)) if (q[b]) (quotes[mode === 'swap' ? swapKey(k) : k] ??= {})[b] = q[b];
   }
   return { ...fx, quotes };
+}
+
+// ---- Targeted checks: one request per match, every bookmaker (GET /v4/odds?fixtureId=…). ----
+type Check = { quotes: ItalianFixture['quotes']; at: Record<string, string> };
+async function targetedStore(): Promise<Record<string, Check>> {
+  const row = await db().prepare("SELECT payload FROM model_state WHERE id='oddspapi:checks'").first<{ payload: string }>().catch(() => null);
+  return row ? JSON.parse(row.payload) : {};
+}
+function parseBoard(board: any, label: string, quotes: ItalianFixture['quotes']) {
+  for (const [mid, mk] of Object.entries<any>(board?.markets ?? {})) {
+    const omap = MARKETS[mid]; if (!omap) continue;
+    for (const [oid, o] of Object.entries<any>(mk.outcomes ?? {})) {
+      const q = omap[oid], p = o?.players?.['0'] ?? o?.players?.[0];
+      if (!q || !p || p.active === false || !Number.isFinite(p.price) || p.price <= 1) continue;
+      (quotes[q] ??= {})[label] = { odds: p.price, link: typeof p.betslip === 'string' ? p.betslip : typeof board.fixturePath === 'string' ? board.fixturePath : null };
+    }
+  }
+}
+// Returns the Italian quotes of one match read right now, or null if the budget is spent / the call fails.
+export async function checkFixture(fid: string, opts: { maxToday: number }): Promise<Check | null> {
+  const key = await credentialValue('oddspapi'); if (!key) return null;
+  const u = await usage(); if (u.n >= TARGETED_CEILING || u.today >= opts.maxToday) return null;
+  const m = await meta(key);
+  let raw: any;
+  try { raw = await api('odds?fixtureId=' + encodeURIComponent(fid) + '&oddsFormat=decimal', key, true); } catch { return null; }
+  const f = Array.isArray(raw) ? raw[0] : Array.isArray(raw?.data) ? raw.data[0] : raw?.data ?? raw;
+  const boards = f?.bookmakerOdds; if (!boards || typeof boards !== 'object') return null;
+  const now = new Date().toISOString(), out: Check = { quotes: {}, at: {} };
+  for (const b of IT_BOOKS) {
+    if (b.key === 'planetwin' && m.books.lottomatica) continue;
+    const slug = m.books[b.key]; if (!slug || !boards[slug]) continue;
+    parseBoard(boards[slug], b.label, out.quotes); out.at[b.label] = now;
+    if (b.key === 'lottomatica') { for (const q of Object.values(out.quotes)) if (q.Lottomatica) q.Planetwin365 = q.Lottomatica; out.at.Planetwin365 = now; }
+  }
+  if (!Object.keys(out.at).length) return null;
+  const all = await targetedStore();
+  for (const [k, v] of Object.entries(all)) if (Date.now() - Date.parse(Object.values(v.at)[0] ?? now) > 2 * 86400000) delete all[k];
+  all[fid] = out;
+  await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('oddspapi:checks',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(now, JSON.stringify(all)).run();
+  return out;
+}
+export async function lastCheckAt(fid: string): Promise<string | null> {
+  const c = (await targetedStore())[fid]; return c ? Object.values(c.at)[0] ?? null : null;
 }

@@ -32,7 +32,7 @@ const worker = {
   // "40 2-23/3 * * *": full scan every 3 hours. "10 * * * *": pre-kickoff refresh (line-ups, closing odds) only when a match is about to start.
   async scheduled(controller: ScheduledController, _env: Cloudflare.Env, ctx: ExecutionContext) {
     // Every hour: settle finished matches (fast), then the pre-kickoff refresh when a match is about to start.
-    if (controller.cron === "10 * * * *") ctx.waitUntil(settleAll(120).catch(() => undefined).then(() => prematchDue()).then(due => (due ? runScan("prematch") : undefined)).catch(() => undefined));
+    if (controller.cron === "10 * * * *") ctx.waitUntil(settleAll(120).catch(() => undefined).then(() => prematchDue()).then(due => (due ? runScan("prematch") : undefined)).catch(() => undefined).then(() => import("../lib/tipster-center-job").then(m => m.autoCheckPrices())).catch(() => undefined));
     else ctx.waitUntil(refreshBacktest().catch(() => undefined).then(() => refreshCupBacktest(25)).catch(() => undefined).then(() => runScan("cron")).catch(() => undefined));
   },
 };

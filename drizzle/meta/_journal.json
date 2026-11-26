@@ -78,6 +78,13 @@
       "when": 1795400000000,
       "tag": "0010_quorum_tipster_swapped",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795450000000,
+      "tag": "0011_quorum_oddspapi_usage",
+      "breakpoints": true
     }
   ]
 }

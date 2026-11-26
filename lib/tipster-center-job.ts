@@ -2,6 +2,7 @@
 // the earlier scans, then runs the pure analysis of tipster-center.ts. Refreshed after every scan (every 3 hours).
 import { env } from 'cloudflare:workers';
 import { latestPredictions } from './scanner';
+import { checkFixture, italianOdds, lastCheckAt, matchItalian } from './italian-odds';
 import { applyReports, margins, movements, opportunities, performance, segments, streaks, type CenterRec, type PriceReport } from './tipster-center';
 
 const db = () => env.DB!;
@@ -92,6 +93,44 @@ export async function priceReports(): Promise<Record<string, PriceReport>> {
   const row = await db().prepare("SELECT payload FROM model_state WHERE id='it-reports'").first<{ payload: string }>().catch(() => null);
   return row ? JSON.parse(row.payload) : {};
 }
+async function saveReports(all: Record<string, PriceReport>) {
+  const now = Date.now();
+  for (const [k, v] of Object.entries(all)) if (now - Date.parse(v.at) > 3 * 86400000) delete all[k];
+  await db().prepare("INSERT INTO model_state (id,built_at,payload) VALUES ('it-reports',?,?) ON CONFLICT(id) DO UPDATE SET built_at=excluded.built_at,payload=excluded.payload").bind(new Date().toISOString(), JSON.stringify(all)).run();
+}
+
+// Targeted pre-kickoff check (hourly cron): for the Centro's A/B proposals starting in 1–3.5 hours, re-reads the
+// Italian prices of that match (one request, every bookmaker) and writes them as price reports. The opportunity
+// is then re-graded: if the price has dropped below value it becomes C ("non giocare"); the method's register
+// uses the lower price, the one really available. Never more than AUTO_PER_DAY requests a day.
+export const AUTO_PER_DAY = 3;
+export async function autoCheckPrices(t = Date.now()) {
+  const c = await storedCenter();
+  const opp = applyReports(c.opportunities, await priceReports());
+  const due = opp.list.filter((o: any) => o.grade !== 'C' && Date.parse(o.kickoff) - t > 3600000 && Date.parse(o.kickoff) - t < 3.5 * 3600000);
+  if (!due.length) return { checked: 0 };
+  const it = await italianOdds().catch(() => null); if (!it) return { checked: 0 };
+  const reports = await priceReports(); let checked = 0;
+  const seen = new Set<string>();
+  for (const o of due) {
+    const [home, away] = String(o.fixture).split(' – ');
+    const fx = matchItalian({ home, away, kickoff: o.kickoff, competition: o.competition }, it);
+    if (!fx?.id || seen.has(fx.id)) continue; seen.add(fx.id);
+    const last = await lastCheckAt(fx.id); if (last && t - Date.parse(last) < 6 * 3600000) continue;
+    const chk = await checkFixture(fx.id, { maxToday: AUTO_PER_DAY }); if (!chk) break;
+    checked++;
+    for (const x of opp.list.filter((y: any) => y.fixtureId === o.fixtureId)) {
+      const q: Record<string, { odds: number }> | undefined = chk.quotes[x.market]; if (!q) continue;
+      const book = q.Lottomatica ? 'Lottomatica' : Object.keys(q)[0]; const odds = q[book]?.odds; if (!(odds > 1)) continue;
+      // Same safety as the scan: a price far from the true probability is a feed error, not a real offer.
+      const edge = x.pTrue * odds - 1; if (edge > 0.25 || edge < -0.4) continue;
+      reports[x.fixtureId + ':' + x.market] = { odds: Math.round(odds * 100) / 100, at: new Date(t).toISOString(), book: 'auto:' + book };
+    }
+  }
+  if (checked) await saveReports(reports);
+  return { checked };
+}
+
 export async function reportPrice(key: string, odds: number) {
   if (!/^sm-\d{1,12}:[A-Za-z0-9]{2,20}$/.test(key) || !(odds > 1 && odds < 1000)) throw new Error('Segnalazione non valida.');
   const all = await priceReports(), now = Date.now();
@@ -102,5 +141,6 @@ export async function reportPrice(key: string, odds: number) {
 }
 export async function centerWithReports(source: 'metodo' | 'mie', owner?: string) {
   const c = source === 'mie' && owner ? await buildCenter('mie', owner) : await storedCenter();
-  return { ...c, opportunities: applyReports(c.opportunities, await priceReports()) };
+  const oddsUsage = await import('./italian-odds').then(m => m.usage()).catch(() => null);
+  return { ...c, oddsUsage, opportunities: applyReports(c.opportunities, await priceReports()) };
 }

@@ -32,10 +32,10 @@ export function tipsterPicks(rows: Row[], now = Date.now()) {
       if (edge > 0.25) continue;
       if (edge < TIP_MIN_EDGE) { if (edge > -0.04) checks.push({ fixture: r.fixture, competition: r.competition, kickoff: r.kickoff, label: LABELS[key], odds, bookmaker: best[0], fair: 1 / tr.p, edge, source: tr.source }); continue; }
       // Stale prices: the Italian price is refreshed less often than the market. A pick is valid only if
-      // the price is recent (≤ 14h for Lottomatica, ≤ 74h for the others) and not far above the best European price
+      // the price is recent (≤ 14h for Lottomatica, ≤ 122h for the others) and not far above the best European price
       // (an Italian book paying 4% more than every European book is almost always an old quote).
       const at = (r.markets.itAt as Record<string, string> | undefined)?.[best[0]], ageH = at ? (now - Date.parse(at)) / 3600000 : null;
-      if (ageH !== null && ageH > (best[0] === 'Lottomatica' || best[0] === 'Planetwin365' ? 14 : 74)) continue;
+      if (ageH !== null && ageH > (best[0] === 'Lottomatica' || best[0] === 'Planetwin365' ? 14 : 122)) continue;
       const eu = r.markets[key]?.bestOdds; if (Number.isFinite(eu) && odds > eu * 1.04) continue;
       const pB = r.markets[key]?.pBlend;
       // Without Pinnacle the average of the market is weaker: the model must agree too.
