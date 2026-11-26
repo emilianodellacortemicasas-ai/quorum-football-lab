@@ -123,7 +123,9 @@ export async function POST(request:Request) {
         // its probability comes from QUORUM's latest scan, never from the client.
         const b=z.object({id:z.string().max(80),index:z.number().int().min(0).max(29),fixtureId:z.string().regex(/^sm-\d{1,12}$/),fixture:z.string().min(3).max(120),competition:z.string().max(60),kickoff:z.string().max(40),market:z.string().min(2).max(120),label:z.string().min(1).max(160),odds:z.number().min(1.01).max(1000)}).parse(body);
         const bet=(await db.select().from(bets).where(and(eq(bets.id,b.id),eq(bets.owner,owner),eq(bets.portfolioId,portfolioId))))[0];
-        if(!bet||bet.status!=='pending'||!bet.fixtureId.startsWith('multi:'))return failure('Si possono correggere solo multiple in corso.',404);
+        // A multiple already lost on another match can be corrected too: the swapped match has not started, so the result stays.
+        const sn0=bet?JSON.parse(bet.snapshot):null,oldK=sn0?.legs?.[b.index]?Date.parse(sn0.legs[b.index].kickoff):NaN;
+        if(!bet||!bet.fixtureId.startsWith('multi:')||!(bet.status==='pending'||(bet.status==='lost'&&bet.settledAt&&Date.parse(bet.settledAt)<oldK+105*60000)))return failure('Si possono correggere solo multiple in corso o già perse su un’altra partita.',404);
         if(!(Date.parse(b.kickoff)>Date.now()))return failure('La nuova partita è già iniziata.');
         const row=await raw.prepare('SELECT markets FROM scanner_matches WHERE fixture_id=? ORDER BY created_at DESC LIMIT 1').bind(b.fixtureId).first<{markets:string}>();
         const pq=row?Number(JSON.parse(row.markets)?.[b.market]?.pBlend):NaN;if(!(pq>0&&pq<1))return failure('QUORUM non ha la stima per questo esito.');
